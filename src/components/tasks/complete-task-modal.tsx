@@ -1,0 +1,113 @@
+'use client';
+
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { Task, useCompleteTask } from '../../hooks/use-tasks';
+
+const completeTaskSchema = z.object({
+  result: z.string().min(3, 'Укажите результат выполнения'),
+});
+
+type CompleteTaskFormValues = z.infer<typeof completeTaskSchema>;
+
+type CompleteTaskModalProps = {
+  task: Task | null;
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+export function CompleteTaskModal({
+  task,
+  isOpen,
+  onClose,
+}: CompleteTaskModalProps) {
+  const completeTask = useCompleteTask();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CompleteTaskFormValues>({
+    resolver: zodResolver(completeTaskSchema),
+    defaultValues: { result: '' },
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      reset();
+    }
+  }, [isOpen, reset]);
+
+  if (!isOpen || !task) {
+    return null;
+  }
+
+  const onSubmit = async (values: CompleteTaskFormValues): Promise<void> => {
+    await completeTask.mutateAsync({
+      id: task.id,
+      result: values.result,
+    });
+
+    reset();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
+      <div className="w-full max-w-md rounded border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-slate-950">
+            Завершить задачу
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">{task.title}</p>
+        </div>
+
+        <form
+          onSubmit={(event) => {
+            void handleSubmit(onSubmit)(event);
+          }}
+          className="space-y-4"
+        >
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">
+              Результат
+            </span>
+            <textarea
+              rows={4}
+              className="w-full resize-none rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+              {...register('result')}
+            />
+            {errors.result ? (
+              <span className="mt-1 block text-sm text-red-600">
+                {errors.result.message}
+              </span>
+            ) : null}
+          </label>
+
+          {completeTask.isError ? (
+            <p className="text-sm text-red-600">Не удалось завершить задачу</p>
+          ) : null}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={completeTask.isPending}
+              className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
+            >
+              Завершить
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
