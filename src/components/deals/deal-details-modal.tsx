@@ -6,20 +6,33 @@ import {
   Deal,
   DealItem,
   DealOffer,
+  isHplCalculatorDeal,
   useAddDealOffer,
   useDeal,
 } from "../../hooks/use-deals";
+import { SupplierOrderPanel } from "./supplier-order-panel";
 import { TaskStatus, useTasks } from "../../hooks/use-tasks";
+import { formatDateTime } from "../../lib/format";
+import { formatMoney } from "../../lib/currency";
+import { FileUpload } from "../ui/file-upload";
+import {
+  dealStageLabels,
+  enumLabel,
+  formatSupplierName,
+  taskStatusLabels,
+  taskTypeLabels,
+} from "../../lib/labels";
 
 type DealDetailsModalProps = {
   dealId: string | null;
   onClose: () => void;
 };
 
-type TabId = "items" | "offers" | "history" | "tasks";
+type TabId = "items" | "supplier" | "offers" | "history" | "tasks";
 
 const tabs: { id: TabId; label: string }[] = [
   { id: "items", label: "Позиции HPL" },
+  { id: "supplier", label: "Заказ поставщику" },
   { id: "offers", label: "КП" },
   { id: "history", label: "История этапов" },
   { id: "tasks", label: "Открытые задачи" },
@@ -27,38 +40,16 @@ const tabs: { id: TabId; label: string }[] = [
 
 const openTaskStatuses: TaskStatus[] = ["PENDING", "IN_PROGRESS"];
 
-function formatMoney(value?: string | number | null): string {
-  if (value === undefined || value === null || value === "") {
-    return "-";
+function formatDealItemSize(item: DealItem): string {
+  if (item.panelSize?.label) {
+    return item.panelSize.label;
   }
 
-  return new Intl.NumberFormat("ru-RU", {
-    maximumFractionDigits: 2,
-  }).format(Number(value));
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) {
-    return "-";
+  if (item.panelSize?.width && item.panelSize.length) {
+    return `${item.panelSize.width} × ${item.panelSize.length}`;
   }
 
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function calculateAreaFromSheets(item: DealItem): string {
-  const sheetArea = Number(item.product?.sheetArea ?? 0);
-
-  if (!sheetArea) {
-    return formatMoney(item.quantityM2);
-  }
-
-  return formatMoney(sheetArea * item.quantitySheets);
+  return "—";
 }
 
 function OfferRow({ offer }: { offer: DealOffer }) {
@@ -74,7 +65,7 @@ function OfferRow({ offer }: { offer: DealOffer }) {
         {formatMoney(offer.amount)}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-        {formatDate(offer.validUntil)}
+        {formatDateTime(offer.validUntil)}
       </td>
       <td className="whitespace-nowrap px-3 py-2">
         <span
@@ -84,7 +75,7 @@ function OfferRow({ offer }: { offer: DealOffer }) {
               : "border-slate-200 bg-slate-50 text-slate-700"
           }`}
         >
-          {offer.isApproved ? "APPROVED" : "DRAFT"}
+          {offer.isApproved ? "Согласовано" : "Черновик"}
         </span>
       </td>
     </tr>
@@ -95,6 +86,7 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
   const { hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>("items");
   const [validUntil, setValidUntil] = useState("");
+  const [offerFileId, setOfferFileId] = useState<string | null>(null);
   const dealQuery = useDeal(dealId);
   const addOffer = useAddDealOffer();
   const tasksQuery = useTasks({
@@ -123,12 +115,14 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
     await addOffer.mutateAsync({
       dealId: deal.id,
       validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
+      pdfFileId: offerFileId ?? undefined,
     });
     setValidUntil("");
+    setOfferFileId(null);
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/30 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
       <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded border border-slate-200 bg-white shadow-sm">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div className="min-w-0">
@@ -137,7 +131,7 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
             </h2>
             <div className="mt-1 truncate text-sm text-slate-600">
               {deal?.client?.name ?? deal?.clientId ?? "-"} ·{" "}
-              {deal?.stage ?? "-"}
+              {deal ? enumLabel(dealStageLabels, deal.stage) : "—"}
             </div>
             {canSeePurchasePrice ? (
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -197,18 +191,24 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                     <thead className="bg-slate-50">
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Товар
+                          Тип панели
+                        </th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">
+                          Поставщик
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
+                          Размер
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
+                          Толщина
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
                           Листы
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
-                          м2
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
                           Цена
                         </th>
-                        {canSeePurchasePrice ? (
+                        {canSeePurchasePrice && !isHplCalculatorDeal(deal) ? (
                           <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
                             Закупочная цена
                           </th>
@@ -221,24 +221,38 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                     <tbody className="divide-y divide-slate-200">
                       {(deal.items ?? []).map((item) => (
                         <tr key={item.id}>
-                          <td className="min-w-56 px-3 py-2">
+                          <td className="min-w-40 px-3 py-2">
                             <div className="font-medium text-slate-950">
-                              {item.product?.name ?? item.productId}
+                              {item.panelType?.name ??
+                                item.product?.name ??
+                                "—"}
                             </div>
-                            <div className="text-xs text-slate-600">
-                              {item.product?.sku ?? "-"}
-                            </div>
+                            {item.product?.sku && !isHplCalculatorDeal(deal) ? (
+                              <div className="text-xs text-slate-600">
+                                {item.product.sku}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2 text-slate-700">
+                            {formatSupplierName(
+                              item.supplier?.code ?? deal.supplier?.code,
+                              item.supplier?.name ?? deal.supplier?.name,
+                              "—",
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2 text-slate-700">
+                            {formatDealItemSize(item)}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2 text-slate-700">
+                            {item.thickness ? `${item.thickness} мм` : "—"}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">
                             {item.quantitySheets}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-                            {calculateAreaFromSheets(item)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2 text-slate-700">
                             {formatMoney(item.unitPrice)}
                           </td>
-                          {canSeePurchasePrice ? (
+                          {canSeePurchasePrice && !isHplCalculatorDeal(deal) ? (
                             <td className="whitespace-nowrap px-3 py-2 text-slate-700">
                               {formatMoney(item.purchasePriceSnapshot)}
                             </td>
@@ -256,6 +270,10 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                     </div>
                   ) : null}
                 </div>
+              ) : null}
+
+              {activeTab === "supplier" ? (
+                <SupplierOrderPanel dealId={deal.id} deal={deal} />
               ) : null}
 
               {activeTab === "offers" ? (
@@ -277,6 +295,24 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                     >
                       Создать версию КП
                     </button>
+                    <FileUpload
+                      relatedType="DEAL"
+                      relatedId={deal.id}
+                      onSuccess={setOfferFileId}
+                    />
+                    {offerFileId ? (
+                      <span className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                        PDF прикреплён к новой версии КП
+                        <button
+                          type="button"
+                          onClick={() => setOfferFileId(null)}
+                          className="ml-1 text-emerald-800 hover:text-emerald-950"
+                          title="Открепить файл"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="overflow-x-auto rounded border border-slate-200">
@@ -318,12 +354,13 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                       className="rounded border border-slate-200 bg-white p-3 text-sm"
                     >
                       <div className="font-medium text-slate-950">
-                        {history.oldStage} → {history.newStage}
+                        {enumLabel(dealStageLabels, history.oldStage)} →{" "}
+                        {enumLabel(dealStageLabels, history.newStage)}
                       </div>
                       <div className="mt-1 text-xs text-slate-600">
-                        {formatDate(history.createdAt)}
+                        {formatDateTime(history.createdAt)}
                         {history.isException
-                          ? ` · exception approved by ${
+                          ? ` · исключение согласовано: ${
                               history.approvedBy?.email ??
                               history.approvedById ??
                               "-"
@@ -357,11 +394,12 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                           {task.title}
                         </div>
                         <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                          {task.status}
+                          {enumLabel(taskStatusLabels, task.status)}
                         </span>
                       </div>
                       <div className="mt-1 text-xs text-slate-600">
-                        {task.type} · срок {formatDate(task.dueDate)}
+                        {enumLabel(taskTypeLabels, task.type)} · срок{" "}
+                        {formatDateTime(task.dueDate)}
                       </div>
                     </div>
                   ))}

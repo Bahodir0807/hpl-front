@@ -1,7 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
+import { getErrorMessage } from "../lib/errors";
+import { showError, showSuccess } from "../lib/toast";
 
 export type RoleName =
   "ADMIN" | "HEAD" | "MANAGER" | "STOREKEEPER" | "OBSERVER";
@@ -20,6 +23,13 @@ export type User = {
   roles?: { role?: { name: RoleName } }[];
 };
 
+export type UsersListResponse =
+  | {
+      items: User[];
+      total: number;
+    }
+  | User[];
+
 export type CreateUserPayload = {
   email: string;
   password: string;
@@ -36,15 +46,44 @@ export type UpdateUserPayload = {
   isActive: boolean;
 };
 
-export function useUsers() {
+export function normalizeUsersList(data?: UsersListResponse): User[] {
+  if (!data) {
+    return [];
+  }
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+export function useUsers(enabled = true) {
   return useQuery({
     queryKey: ["users"],
-    queryFn: async (): Promise<User[]> => {
-      const response = await apiClient.get<User[]>("/users");
+    queryFn: async (): Promise<UsersListResponse> => {
+      const response = await apiClient.get<UsersListResponse>("/users");
 
       return response.data;
     },
+    enabled,
+    staleTime: 10 * 60 * 1000,
   });
+}
+
+export function useUsersList() {
+  const query = useUsers();
+  const users = useMemo(() => normalizeUsersList(query.data), [query.data]);
+  const usersById = useMemo(
+    () => new Map(users.map((user) => [user.id, user])),
+    [users],
+  );
+
+  return {
+    ...query,
+    users,
+    usersById,
+  };
 }
 
 export function useCreateUser() {
@@ -57,7 +96,11 @@ export function useCreateUser() {
       return response.data;
     },
     onSuccess: () => {
+      showSuccess("Сотрудник создан");
       void queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -76,8 +119,16 @@ export function useUpdateUser() {
 
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (updatedUser) => {
+      showSuccess(
+        updatedUser.isActive
+          ? "Доступ сотрудника активирован"
+          : "Доступ сотрудника заблокирован",
+      );
       void queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }

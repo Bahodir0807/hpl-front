@@ -1,30 +1,49 @@
 'use client';
 
+import { Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../context/auth-context';
+import { enumLabel, roleLabels } from '../../lib/labels';
 
 const sectionTitles: Record<string, string> = {
-  '/tasks': 'Мой день',
+  '/tasks': 'Задачи',
   '/leads': 'Лиды',
   '/deals': 'Сделки',
   '/clients': 'Клиенты и Контакты',
   '/orders': 'Заказы',
-  '/products': 'Каталог HPL и Остатки',
+  '/products': 'Склад',
   '/receipts': 'Ожидаемые приходы',
+  '/references': 'Справочники',
   '/reports': 'Отчеты и KPI',
   '/users': 'Команда и Доступы',
 };
 
-export function Header() {
+type HeaderProps = {
+  onMenuOpen: () => void;
+};
+
+export function Header({ onMenuOpen }: HeaderProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const title = getSectionTitle(pathname);
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6">
-      <div>
-        <div className="text-xs text-slate-500">CRM HPL</div>
-        <h1 className="text-sm font-semibold text-slate-950">{title}</h1>
+    <header className="flex h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 lg:px-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={onMenuOpen}
+          className="rounded p-1 text-slate-600 hover:bg-slate-100 lg:hidden"
+          title="Открыть меню"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="min-w-0">
+          <div className="text-xs text-slate-500">CRM HPL</div>
+          <h1 className="truncate text-sm font-semibold text-slate-950">
+            {title}
+          </h1>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -40,7 +59,7 @@ export function Header() {
                     key={role}
                     className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
                   >
-                    {role}
+                    {enumLabel(roleLabels, role)}
                   </span>
                 ))}
               </div>

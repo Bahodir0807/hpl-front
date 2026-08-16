@@ -1,15 +1,20 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo, useRef } from "react";
+import { Controller, Resolver, useForm } from "react-hook-form";
 import { z } from "zod";
+import { SearchCombobox } from "../ui/search-combobox";
 import {
   RoleName,
   User,
   useCreateUser,
   useUpdateUser,
+  useUsersList,
 } from "../../hooks/use-users";
+import { formatPersonName } from "../../lib/display-names";
+import { roleLabels } from "../../lib/labels";
+import { optionalPhoneSchema } from "../../lib/validations/phone";
 
 const roles: RoleName[] = [
   "ADMIN",
@@ -27,18 +32,35 @@ const optionalUuid = z
     message: "Укажите корректный UUID",
   });
 
-const userSchema = z.object({
+const userBaseSchema = z.object({
   email: z.string().trim().email("Некорректный email"),
-  password: z.string().min(8, "Минимум 8 символов").optional(),
   firstName: z.string().trim().min(1, "Укажите имя"),
   lastName: z.string().trim().min(1, "Укажите фамилию"),
-  phone: z.string().trim().optional(),
+  phone: optionalPhoneSchema,
   managerId: optionalUuid,
   roleName: z.enum(["ADMIN", "HEAD", "MANAGER", "STOREKEEPER", "OBSERVER"]),
   isActive: z.boolean(),
 });
 
-type UserFormValues = z.infer<typeof userSchema>;
+const userFormSchema = userBaseSchema.extend({
+  password: z.string(),
+});
+
+const createUserSchema = userFormSchema.superRefine((values, ctx) => {
+  if (values.password.length < 8) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["password"],
+      message: "Минимум 8 символов",
+    });
+  }
+});
+
+type UserFormValues = z.infer<typeof userFormSchema>;
+
+function getUserFormResolver(isEditing: boolean): Resolver<UserFormValues> {
+  return zodResolver(isEditing ? userFormSchema : createUserSchema);
+}
 
 type UserModalProps = {
   user: User | null;
@@ -49,18 +71,34 @@ type UserModalProps = {
 export function UserModal({ user, isOpen, onClose }: UserModalProps) {
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
+  const { users } = useUsersList();
   const isEditing = Boolean(user);
+  const isEditingRef = useRef(isEditing);
+  isEditingRef.current = isEditing;
+  const managerOptions = useMemo(
+    () =>
+      users
+        .filter((item) => item.id !== user?.id)
+        .map((item) => ({
+          value: item.id,
+          label: formatPersonName(item, item.email),
+          description: item.email,
+        })),
+    [user?.id, users],
+  );
   const {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isValid },
   } = useForm<UserFormValues>({
-    resolver: zodResolver(userSchema),
+    resolver: (values, context, options) =>
+      getUserFormResolver(isEditingRef.current)(values, context, options),
     mode: "onChange",
     defaultValues: {
       email: "",
-      password: "Password123!",
+      password: "",
       firstName: "",
       lastName: "",
       phone: "",
@@ -78,7 +116,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
 
     reset({
       email: user?.email ?? "",
-      password: user ? undefined : "Password123!",
+      password: "",
       firstName: user?.firstName ?? "",
       lastName: user?.lastName ?? "",
       phone: user?.phone ?? "",
@@ -101,7 +139,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
     } else {
       await createUser.mutateAsync({
         email: values.email,
-        password: values.password ?? "Password123!",
+        password: values.password,
         firstName: values.firstName,
         lastName: values.lastName,
         phone: values.phone || undefined,
@@ -168,9 +206,15 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
               <input
                 disabled={isEditing}
                 type="password"
+                autoComplete="new-password"
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
                 {...register("password")}
               />
+              {!isEditing ? (
+                <span className="mt-1 block text-xs text-slate-500">
+                  Минимум 8 символов
+                </span>
+              ) : null}
               {errors.password ? (
                 <span className="mt-1 block text-sm text-red-600">
                   {errors.password.message}
@@ -202,6 +246,23 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
+                Телефон
+              </span>
+              <input
+                disabled={isEditing}
+                type="tel"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                {...register("phone")}
+              />
+              {errors.phone ? (
+                <span className="mt-1 block text-sm text-red-600">
+                  {errors.phone.message}
+                </span>
+              ) : null}
+            </label>
+
+            <label>
+              <span className="mb-1 block text-sm font-medium text-slate-700">
                 Роль
               </span>
               <select
@@ -211,7 +272,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
               >
                 {roles.map((role) => (
                   <option key={role} value={role}>
-                    {role}
+                    {roleLabels[role]}
                   </option>
                 ))}
               </select>
@@ -221,11 +282,20 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
               <span className="mb-1 block text-sm font-medium text-slate-700">
                 Руководитель
               </span>
-              <input
-                disabled={isEditing}
-                placeholder="UUID руководителя"
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                {...register("managerId")}
+              <Controller
+                name="managerId"
+                control={control}
+                render={({ field }) => (
+                  <SearchCombobox
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    options={managerOptions}
+                    placeholder="Выберите руководителя"
+                    searchPlaceholder="Поиск сотрудника"
+                    emptyLabel="Сотрудники не найдены"
+                    disabled={isEditing}
+                  />
+                )}
               />
               {errors.managerId ? (
                 <span className="mt-1 block text-sm text-red-600">

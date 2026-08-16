@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../../../context/auth-context";
 import {
   FunnelStageMetric,
   KpiManagerMetric,
@@ -10,6 +12,9 @@ import {
   useReportsKpi,
   useReportsOverdues,
 } from "../../../hooks/use-reports";
+import { formatNumber } from "../../../lib/format";
+import { dealStageLabels, enumLabel } from "../../../lib/labels";
+import { canManagerViewReports } from "../../../lib/role-access";
 
 type TabId = "funnel" | "overdues" | "kpi";
 
@@ -18,12 +23,6 @@ const tabs: { id: TabId; label: string }[] = [
   { id: "overdues", label: "Просрочки" },
   { id: "kpi", label: "KPI менеджеров" },
 ];
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("ru-RU", {
-    maximumFractionDigits: 2,
-  }).format(value);
-}
 
 function exportCsv(filename: string, rows: string[][]): void {
   const csv = rows
@@ -40,24 +39,43 @@ function exportCsv(filename: string, rows: string[][]): void {
   URL.revokeObjectURL(url);
 }
 
-function EmptyReport({ isError }: { isError: boolean }) {
-  if (!isError) {
-    return (
-      <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
-        Данных для отчета нет.
-      </div>
-    );
-  }
-
+function ReportLoading() {
   return (
-    <div className="rounded border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
-      Отчетный backend endpoint пока недоступен. Интерфейс готов к данным
-      /reports.
+    <div className="flex items-center justify-center py-10">
+      <div
+        className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900"
+        aria-label="Загрузка"
+      />
+    </div>
+  );
+}
+
+function ReportError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="py-10 text-center">
+      <p className="text-sm text-red-700">Ошибка загрузки данных</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-3 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+      >
+        Повторить
+      </button>
+    </div>
+  );
+}
+
+function ReportEmpty() {
+  return (
+    <div className="rounded border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+      Данных для отчета нет.
     </div>
   );
 }
 
 export default function ReportsPage() {
+  const router = useRouter();
+  const { user, isInitialized } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>("funnel");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -70,9 +88,11 @@ export default function ReportsPage() {
     }),
     [dateFrom, dateTo, managerId],
   );
-  const funnelQuery = useReportsFunnel(filters);
-  const overduesQuery = useReportsOverdues(filters);
-  const kpiQuery = useReportsKpi(filters);
+  const canAccess =
+    isInitialized && canManagerViewReports(user?.roles ?? []);
+  const funnelQuery = useReportsFunnel(filters, canAccess);
+  const overduesQuery = useReportsOverdues(filters, canAccess);
+  const kpiQuery = useReportsKpi(filters, canAccess);
   const funnelStages = funnelQuery.data?.stages ?? [];
   const overdueManagers = overduesQuery.data?.managers ?? [];
   const kpiManagers = kpiQuery.data?.managers ?? [];
@@ -86,7 +106,7 @@ export default function ReportsPage() {
       exportCsv("funnel.csv", [
         ["Этап", "Количество", "Сумма", "Конверсия"],
         ...funnelStages.map((stage: FunnelStageMetric) => [
-          stage.stage,
+          enumLabel(dealStageLabels, stage.stage),
           String(stage.count),
           String(stage.amount),
           String(stage.conversionPercent),
@@ -129,6 +149,24 @@ export default function ReportsPage() {
       ]),
     ]);
   };
+
+  useEffect(() => {
+    if (isInitialized && !canAccess) {
+      router.replace("/leads");
+    }
+  }, [canAccess, isInitialized, router]);
+
+  if (!isInitialized) {
+    return null;
+  }
+
+  if (!canAccess) {
+    return (
+      <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        Нет доступа к отчётам и KPI.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -191,15 +229,23 @@ export default function ReportsPage() {
 
         <div className="p-4">
           {activeTab === "funnel" ? (
+            funnelQuery.isLoading ? (
+              <ReportLoading />
+            ) : funnelQuery.isError ? (
+              <ReportError
+                onRetry={() => {
+                  void funnelQuery.refetch();
+                }}
+              />
+            ) : funnelStages.length === 0 ? (
+              <ReportEmpty />
+            ) : (
             <div className="space-y-3">
-              {funnelStages.length === 0 ? (
-                <EmptyReport isError={funnelQuery.isError} />
-              ) : null}
               {funnelStages.map((stage) => (
                 <div key={stage.stage}>
                   <div className="mb-1 flex justify-between text-sm">
                     <span className="font-medium text-slate-900">
-                      {stage.stage}
+                      {enumLabel(dealStageLabels, stage.stage)}
                     </span>
                     <span className="text-slate-600">
                       {stage.count} · {formatNumber(stage.conversionPercent)}%
@@ -222,13 +268,22 @@ export default function ReportsPage() {
                 </div>
               ) : null}
             </div>
+            )
           ) : null}
 
           {activeTab === "overdues" ? (
-            overdueManagers.length === 0 ? (
-              <EmptyReport isError={overduesQuery.isError} />
+            overduesQuery.isLoading ? (
+              <ReportLoading />
+            ) : overduesQuery.isError ? (
+              <ReportError
+                onRetry={() => {
+                  void overduesQuery.refetch();
+                }}
+              />
+            ) : overdueManagers.length === 0 ? (
+              <ReportEmpty />
             ) : (
-              <div className="overflow-hidden rounded border border-slate-200">
+              <div className="overflow-x-auto rounded border border-slate-200">
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50">
                     <tr>
@@ -258,10 +313,18 @@ export default function ReportsPage() {
           ) : null}
 
           {activeTab === "kpi" ? (
-            kpiManagers.length === 0 ? (
-              <EmptyReport isError={kpiQuery.isError} />
+            kpiQuery.isLoading ? (
+              <ReportLoading />
+            ) : kpiQuery.isError ? (
+              <ReportError
+                onRetry={() => {
+                  void kpiQuery.refetch();
+                }}
+              />
+            ) : kpiManagers.length === 0 ? (
+              <ReportEmpty />
             ) : (
-              <div className="overflow-hidden rounded border border-slate-200">
+              <div className="overflow-x-auto rounded border border-slate-200">
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50">
                     <tr>

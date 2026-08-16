@@ -1,32 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { UserModal } from "../../../components/users/user-modal";
 import { useAuth } from "../../../context/auth-context";
-import { RoleName, User, useUsers } from "../../../hooks/use-users";
+import { User, normalizeUsersList, useUsers } from "../../../hooks/use-users";
+import { resolveUserName } from "../../../lib/display-names";
+import { enumLabel, roleLabels } from "../../../lib/labels";
 
 function userName(user: User): string {
   return `${user.firstName} ${user.lastName}`.trim();
 }
 
-function userRole(user: User): RoleName | "-" {
-  return user.roles?.[0]?.role?.name ?? "-";
+function userRole(user: User): string {
+  const role = user.roles?.[0]?.role?.name;
+
+  return role ? enumLabel(roleLabels, role) : "—";
 }
 
 function canAccessUsers(roles: string[], hasReadPermission: boolean): boolean {
+  if (roles.length === 0 && !hasReadPermission) {
+    return false;
+  }
+
   return hasReadPermission || roles.includes("ADMIN") || roles.includes("HEAD");
 }
 
 export default function UsersPage() {
-  const { user: currentUser, hasPermission } = useAuth();
-  const usersQuery = useUsers();
+  const router = useRouter();
+  const { user: currentUser, hasPermission, isInitialized } = useAuth();
+  const canAccess =
+    isInitialized &&
+    canAccessUsers(currentUser?.roles ?? [], hasPermission("users:read"));
+  const usersQuery = useUsers(canAccess);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const canAccess = canAccessUsers(
-    currentUser?.roles ?? [],
-    hasPermission("users:read"),
-  );
-  const users = usersQuery.data ?? [];
+  const rawUsers = usersQuery.data;
+  const usersList = normalizeUsersList(rawUsers);
+  const usersById = new Map(usersList.map((user) => [user.id, user]));
+
+  useEffect(() => {
+    if (isInitialized && !canAccess) {
+      router.replace("/leads");
+    }
+  }, [canAccess, isInitialized, router]);
+
+  if (!isInitialized) {
+    return null;
+  }
 
   if (!canAccess) {
     return (
@@ -57,14 +78,29 @@ export default function UsersPage() {
           </button>
         </div>
 
+        {usersQuery.isError ? (
+          <div className="rounded border border-red-200 bg-red-50 py-10 text-center">
+            <p className="text-sm text-red-700">Ошибка загрузки данных</p>
+            <button
+              type="button"
+              onClick={() => {
+                void usersQuery.refetch();
+              }}
+              className="mt-3 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+            >
+              Повторить
+            </button>
+          </div>
+        ) : null}
+
         {usersQuery.isLoading ? (
           <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
             Загрузка пользователей...
           </div>
         ) : null}
 
-        {!usersQuery.isLoading ? (
-          <div className="overflow-hidden rounded border border-slate-200 bg-white">
+        {!usersQuery.isLoading && !usersQuery.isError ? (
+          <div className="overflow-x-auto rounded border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50">
                 <tr>
@@ -89,7 +125,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {users.map((item) => (
+                {usersList.map((item) => (
                   <tr key={item.id}>
                     <td className="px-3 py-3 font-medium text-slate-950">
                       {userName(item)}
@@ -98,10 +134,14 @@ export default function UsersPage() {
                     <td className="px-3 py-3 text-slate-700">
                       {userRole(item)}
                     </td>
-                    <td className="px-3 py-3">
-                      <span className="font-mono text-xs text-slate-700">
-                        {item.managerId ?? "-"}
-                      </span>
+                    <td className="px-3 py-3 text-slate-700">
+                      {resolveUserName(
+                        item.managerId
+                          ? usersById.get(item.managerId)
+                          : undefined,
+                        item.managerId,
+                        usersById,
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <span
@@ -128,7 +168,7 @@ export default function UsersPage() {
               </tbody>
             </table>
 
-            {users.length === 0 ? (
+            {usersList.length === 0 ? (
               <div className="p-8 text-center text-sm text-slate-600">
                 Пользователи не найдены.
               </div>

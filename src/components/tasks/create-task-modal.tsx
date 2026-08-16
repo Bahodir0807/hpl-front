@@ -1,10 +1,20 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useMemo } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { TaskPriority, TaskType, useCreateTask } from '../../hooks/use-tasks';
+import { SearchCombobox } from '../ui/search-combobox';
+import { useClients } from '../../hooks/use-clients';
+import { useDeals } from '../../hooks/use-deals';
+import { useLeads } from '../../hooks/use-leads';
+import { useOrders } from '../../hooks/use-orders';
+import {
+  TaskPriority,
+  TaskType,
+  useCreateTask,
+} from '../../hooks/use-tasks';
+import { taskPriorityLabels, taskTypeLabels } from '../../lib/labels';
 
 const taskTypes: TaskType[] = [
   'FIRST_CONTACT',
@@ -22,14 +32,16 @@ const taskTypes: TaskType[] = [
 
 const taskPriorities: TaskPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
+const relatedTypes = ['Lead', 'Deal', 'Client', 'Order'] as const;
+
 const createTaskSchema = z.object({
   title: z.string().min(3, 'Название должно быть не короче 3 символов'),
   description: z.string().optional(),
   type: z.enum(taskTypes),
   priority: z.enum(taskPriorities),
   dueDate: z.string().min(1, 'Укажите срок'),
-  relatedType: z.string().min(1, 'Укажите тип объекта'),
-  relatedId: z.uuid('Укажите UUID объекта'),
+  relatedType: z.enum(relatedTypes),
+  relatedId: z.string().uuid('Выберите связанный объект'),
 });
 
 type CreateTaskFormValues = z.infer<typeof createTaskSchema>;
@@ -50,6 +62,9 @@ export function CreateTaskModal({
     register,
     handleSubmit,
     reset,
+    control,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<CreateTaskFormValues>({
     resolver: zodResolver(createTaskSchema),
@@ -59,16 +74,69 @@ export function CreateTaskModal({
       type: 'CALL',
       priority: 'MEDIUM',
       dueDate: '',
-      relatedType: 'Task',
+      relatedType: 'Lead',
       relatedId: '',
     },
   });
+  const relatedType = watch('relatedType');
+  const leadsQuery = useLeads({ limit: 100 });
+  const dealsQuery = useDeals({ limit: 100 });
+  const clientsQuery = useClients({ limit: 100 });
+  const ordersQuery = useOrders({ limit: 100 });
+
+  const relatedOptions = useMemo(() => {
+    if (relatedType === 'Lead') {
+      return (leadsQuery.data?.items ?? []).map((lead) => ({
+        value: lead.id,
+        label: lead.title,
+        description: lead.source,
+      }));
+    }
+
+    if (relatedType === 'Deal') {
+      return (dealsQuery.data?.items ?? []).map((deal) => ({
+        value: deal.id,
+        label: deal.title,
+        description: deal.client?.name ?? undefined,
+      }));
+    }
+
+    if (relatedType === 'Client') {
+      return (clientsQuery.data?.items ?? []).map((client) => ({
+        value: client.id,
+        label: client.name,
+        description: client.inn ?? undefined,
+      }));
+    }
+
+    return (ordersQuery.data?.items ?? []).map((order) => ({
+      value: order.id,
+      label: order.orderNumber,
+      description: order.deal?.client?.name ?? undefined,
+    }));
+  }, [
+    clientsQuery.data?.items,
+    dealsQuery.data?.items,
+    leadsQuery.data?.items,
+    ordersQuery.data?.items,
+    relatedType,
+  ]);
+
+  const isRelatedLoading =
+    (relatedType === 'Lead' && leadsQuery.isFetching) ||
+    (relatedType === 'Deal' && dealsQuery.isFetching) ||
+    (relatedType === 'Client' && clientsQuery.isFetching) ||
+    (relatedType === 'Order' && ordersQuery.isFetching);
 
   useEffect(() => {
     if (!isOpen) {
       reset();
     }
   }, [isOpen, reset]);
+
+  useEffect(() => {
+    setValue('relatedId', '');
+  }, [relatedType, setValue]);
 
   if (!isOpen) {
     return null;
@@ -131,7 +199,7 @@ export function CreateTaskModal({
             >
               {taskTypes.map((type) => (
                 <option key={type} value={type}>
-                  {type}
+                  {taskTypeLabels[type]}
                 </option>
               ))}
             </select>
@@ -147,7 +215,7 @@ export function CreateTaskModal({
             >
               {taskPriorities.map((priority) => (
                 <option key={priority} value={priority}>
-                  {priority}
+                  {taskPriorityLabels[priority]}
                 </option>
               ))}
             </select>
@@ -173,11 +241,15 @@ export function CreateTaskModal({
             <span className="mb-1 block text-sm font-medium text-slate-700">
               Тип объекта
             </span>
-            <input
-              type="text"
+            <select
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
               {...register('relatedType')}
-            />
+            >
+              <option value="Lead">Лид</option>
+              <option value="Deal">Сделка</option>
+              <option value="Client">Клиент</option>
+              <option value="Order">Заказ</option>
+            </select>
             {errors.relatedType ? (
               <span className="mt-1 block text-sm text-red-600">
                 {errors.relatedType.message}
@@ -187,12 +259,22 @@ export function CreateTaskModal({
 
           <label className="col-span-2 block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              UUID объекта
+              Связанный объект
             </span>
-            <input
-              type="text"
-              className="w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-slate-500"
-              {...register('relatedId')}
+            <Controller
+              name="relatedId"
+              control={control}
+              render={({ field }) => (
+                <SearchCombobox
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={relatedOptions}
+                  placeholder="Выберите объект"
+                  searchPlaceholder="Поиск по названию"
+                  emptyLabel="Объекты не найдены"
+                  loading={isRelatedLoading}
+                />
+              )}
             />
             {errors.relatedId ? (
               <span className="mt-1 block text-sm text-red-600">

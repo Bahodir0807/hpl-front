@@ -1,6 +1,5 @@
 'use client';
 
-import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 import {
   createContext,
@@ -9,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { apiClient } from '../lib/api-client';
@@ -22,16 +22,11 @@ export type AuthUser = {
   permissions: string[];
 };
 
-type AuthTokens = {
-  accessToken: string;
-  refreshToken: string;
-};
-
 type AuthContextValue = {
   user: AuthUser | null;
   isInitialized: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   hasPermission: (slug: string) => boolean;
 };
 
@@ -41,38 +36,62 @@ export function AuthContextProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const profileRequestId = useRef(0);
 
   const loadProfile = useCallback(async (): Promise<AuthUser> => {
+    const requestId = ++profileRequestId.current;
     const response = await apiClient.get<AuthUser>('/auth/me');
-    setUser(response.data);
+
+    if (requestId === profileRequestId.current) {
+      setUser(response.data);
+      setIsInitialized(true);
+    }
+
     return response.data;
   }, []);
 
   const login = useCallback(
     async (email: string, password: string): Promise<void> => {
-      const response = await apiClient.post<AuthTokens>('/auth/login', {
-        email,
-        password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
       });
 
-      Cookies.set('accessToken', response.data.accessToken, {
-        sameSite: 'lax',
-      });
-      Cookies.set('refreshToken', response.data.refreshToken, {
-        sameSite: 'lax',
-      });
+      if (!response.ok) {
+        let message = 'Не удалось войти. Проверьте email и пароль.';
+
+        try {
+          const errorBody = (await response.json()) as { message?: string };
+          if (errorBody.message) {
+            message = errorBody.message;
+          }
+        } catch {
+          // ignore parse errors
+        }
+
+        throw new Error(message);
+      }
 
       await loadProfile();
     },
     [loadProfile],
   );
 
-  const logout = useCallback((): void => {
-    Cookies.remove('accessToken');
-    Cookies.remove('refreshToken');
-    setUser(null);
-    setIsInitialized(true);
-    router.push('/login');
+  const logout = useCallback(async (): Promise<void> => {
+    profileRequestId.current += 1;
+
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } finally {
+      setUser(null);
+      setIsInitialized(true);
+      router.push('/login');
+    }
   }, [router]);
 
   const hasPermission = useCallback(
@@ -81,39 +100,40 @@ export function AuthContextProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    const token = Cookies.get('accessToken');
+    const requestId = ++profileRequestId.current;
 
-    if (!token) {
-      setIsInitialized(true);
-      return;
-    }
+    async function bootstrap(): Promise<void> {
+      try {
+        const sessionResponse = await fetch('/api/auth/session', {
+          credentials: 'include',
+        });
+        const session = (await sessionResponse.json()) as {
+          hasSession?: boolean;
+        };
 
-    let isMounted = true;
+        if (!session.hasSession) {
+          if (requestId === profileRequestId.current) {
+            setUser(null);
+          }
+          return;
+        }
 
-    apiClient
-      .get<AuthUser>('/auth/me')
-      .then((response) => {
-        if (isMounted) {
+        const response = await apiClient.get<AuthUser>('/auth/me');
+        if (requestId === profileRequestId.current) {
           setUser(response.data);
         }
-      })
-      .catch(() => {
-        Cookies.remove('accessToken');
-        Cookies.remove('refreshToken');
-
-        if (isMounted) {
+      } catch {
+        if (requestId === profileRequestId.current) {
           setUser(null);
         }
-      })
-      .finally(() => {
-        if (isMounted) {
+      } finally {
+        if (requestId === profileRequestId.current) {
           setIsInitialized(true);
         }
-      });
+      }
+    }
 
-    return () => {
-      isMounted = false;
-    };
+    void bootstrap();
   }, []);
 
   const value = useMemo<AuthContextValue>(

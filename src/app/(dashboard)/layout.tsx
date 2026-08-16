@@ -1,38 +1,29 @@
-"use client";
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { ReactNode } from 'react';
+import { DashboardAuthGate } from '@/components/layout/dashboard-auth-gate';
+import { DashboardShell } from '@/components/layout/dashboard-shell';
+import {
+  ACCESS_TOKEN_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+} from '@/lib/auth-cookies';
 
-import { useRouter } from "next/navigation";
-import { ReactNode, useEffect } from "react";
-import { Header } from "../../components/layout/header";
-import { Sidebar } from "../../components/layout/sidebar";
-import { useAuth } from "../../context/auth-context";
+export default async function DashboardLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+  const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const { user, isInitialized } = useAuth();
-
-  useEffect(() => {
-    if (isInitialized && user === null) {
-      router.push("/login");
-    }
-  }, [isInitialized, router, user]);
-
-  if (!isInitialized || user === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-600">
-        Загрузка
-      </div>
-    );
+  if (!accessToken && !refreshToken) {
+    redirect('/login');
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pl-60">
-      <Sidebar />
-      <div className="flex min-h-screen min-w-0 flex-col">
-        <Header />
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
-          {children}
-        </main>
-      </div>
-    </div>
+    <DashboardAuthGate>
+      <DashboardShell>{children}</DashboardShell>
+    </DashboardAuthGate>
   );
 }

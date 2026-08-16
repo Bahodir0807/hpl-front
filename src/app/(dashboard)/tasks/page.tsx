@@ -3,20 +3,25 @@
 import { useMemo, useState } from 'react';
 import { CreateTaskModal } from '../../../components/tasks/create-task-modal';
 import { TasksTable } from '../../../components/tasks/tasks-table';
+import { Pagination } from '../../../components/ui/pagination';
 import { useAuth } from '../../../context/auth-context';
 import {
   TaskComputedStatus,
   TaskStatus,
   useTasks,
 } from '../../../hooks/use-tasks';
+import {
+  taskComputedStatusLabels,
+  taskStatusLabels,
+} from '../../../lib/labels';
 
 type StatusFilter = 'ALL' | Extract<TaskStatus, 'PENDING' | 'COMPLETED'>;
 type ComputedStatusFilter = 'ALL' | 'OVERDUE' | 'CRITICAL_OVERDUE';
 
 const statusOptions: { value: StatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Все статусы' },
-  { value: 'PENDING', label: 'PENDING' },
-  { value: 'COMPLETED', label: 'COMPLETED' },
+  { value: 'PENDING', label: taskStatusLabels.PENDING },
+  { value: 'COMPLETED', label: taskStatusLabels.COMPLETED },
 ];
 
 const computedStatusOptions: {
@@ -24,8 +29,11 @@ const computedStatusOptions: {
   label: string;
 }[] = [
   { value: 'ALL', label: 'Все сроки' },
-  { value: 'OVERDUE', label: 'OVERDUE' },
-  { value: 'CRITICAL_OVERDUE', label: 'CRITICAL_OVERDUE' },
+  { value: 'OVERDUE', label: taskComputedStatusLabels.OVERDUE },
+  {
+    value: 'CRITICAL_OVERDUE',
+    label: taskComputedStatusLabels.CRITICAL_OVERDUE,
+  },
 ];
 
 export default function TasksPage() {
@@ -34,6 +42,7 @@ export default function TasksPage() {
   const [computedStatus, setComputedStatus] =
     useState<ComputedStatusFilter>('ALL');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const filters = useMemo(
     () => ({
       status: status === 'ALL' ? undefined : status,
@@ -41,11 +50,15 @@ export default function TasksPage() {
         computedStatus === 'ALL'
           ? undefined
           : (computedStatus as TaskComputedStatus),
+      page,
+      limit: 20,
     }),
-    [computedStatus, status],
+    [computedStatus, page, status],
   );
   const tasksQuery = useTasks(filters);
   const tasks = tasksQuery.data?.items ?? [];
+  const total = tasksQuery.data?.total ?? 0;
+  const totalPages = Math.ceil(total / 20);
 
   return (
     <>
@@ -74,9 +87,10 @@ export default function TasksPage() {
             <span className="font-medium">Статус</span>
             <select
               value={status}
-              onChange={(event) =>
-                setStatus(event.target.value as StatusFilter)
-              }
+              onChange={(event) => {
+                setStatus(event.target.value as StatusFilter);
+                setPage(1);
+              }}
               className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-slate-500"
             >
               {statusOptions.map((option) => (
@@ -91,9 +105,10 @@ export default function TasksPage() {
             <span className="font-medium">Просрочка</span>
             <select
               value={computedStatus}
-              onChange={(event) =>
-                setComputedStatus(event.target.value as ComputedStatusFilter)
-              }
+              onChange={(event) => {
+                setComputedStatus(event.target.value as ComputedStatusFilter);
+                setPage(1);
+              }}
               className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-slate-500"
             >
               {computedStatusOptions.map((option) => (
@@ -131,6 +146,13 @@ export default function TasksPage() {
         {!tasksQuery.isLoading && !tasksQuery.isError && tasks.length > 0 ? (
           <TasksTable tasks={tasks} />
         ) : null}
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
 
       {user ? (

@@ -1,13 +1,32 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { OrderDetailsModal } from "../../../components/orders/order-details-modal";
+import { Pagination } from "../../../components/ui/pagination";
+import { SearchCombobox } from "../../../components/ui/search-combobox";
 import {
   OrderStatus,
   PaymentStatus,
   useCreateOrderFromDeal,
   useOrders,
 } from "../../../hooks/use-orders";
+import { useDeals } from "../../../hooks/use-deals";
+import { getErrorMessage } from "../../../lib/errors";
+import { formatDate } from "../../../lib/format";
+import { formatMoney } from "../../../lib/currency";
+import {
+  enumLabel,
+  orderStatusLabels,
+  paymentStatusLabels,
+} from "../../../lib/labels";
+
+const OrderDetailsModal = dynamic(
+  () =>
+    import("@/components/orders/order-details-modal").then(
+      (m) => m.OrderDetailsModal,
+    ),
+  { ssr: false },
+);
 
 type OrderStatusFilter = "ALL" | OrderStatus;
 type PaymentStatusFilter = "ALL" | PaymentStatus;
@@ -29,22 +48,12 @@ const paymentStatuses: PaymentStatusFilter[] = [
   "PAID",
 ];
 
-function formatMoney(value?: string | number | null): string {
-  if (value === undefined || value === null || value === "") {
-    return "-";
-  }
-
-  return new Intl.NumberFormat("ru-RU", {
-    maximumFractionDigits: 2,
-  }).format(Number(value));
+function orderStatusFilterLabel(value: OrderStatusFilter): string {
+  return value === "ALL" ? "Все статусы" : enumLabel(orderStatusLabels, value);
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));
+function paymentStatusFilterLabel(value: PaymentStatusFilter): string {
+  return value === "ALL" ? "Все" : enumLabel(paymentStatusLabels, value);
 }
 
 export default function OrdersPage() {
@@ -54,17 +63,31 @@ export default function OrdersPage() {
   const [dealId, setDealId] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const filters = useMemo(
     () => ({
       status: status === "ALL" ? undefined : status,
       paymentStatus: paymentStatus === "ALL" ? undefined : paymentStatus,
-      limit: 50,
+      page,
+      limit: 20,
     }),
-    [paymentStatus, status],
+    [page, paymentStatus, status],
   );
   const ordersQuery = useOrders(filters);
+  const wonDealsQuery = useDeals({ stage: "WON", limit: 100 });
   const createOrder = useCreateOrderFromDeal();
+  const dealOptions = useMemo(
+    () =>
+      (wonDealsQuery.data?.items ?? []).map((deal) => ({
+        value: deal.id,
+        label: deal.title,
+        description: deal.client?.name ?? undefined,
+      })),
+    [wonDealsQuery.data?.items],
+  );
   const orders = ordersQuery.data?.items ?? [];
+  const total = ordersQuery.data?.total ?? 0;
+  const totalPages = Math.ceil(total / 20);
 
   const submitCreateOrder = async (): Promise<void> => {
     if (!dealId.trim()) {
@@ -97,14 +120,15 @@ export default function OrdersPage() {
               </span>
               <select
                 value={status}
-                onChange={(event) =>
-                  setStatus(event.target.value as OrderStatusFilter)
-                }
+                onChange={(event) => {
+                  setStatus(event.target.value as OrderStatusFilter);
+                  setPage(1);
+                }}
                 className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
               >
                 {orderStatuses.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {orderStatusFilterLabel(item)}
                   </option>
                 ))}
               </select>
@@ -116,14 +140,15 @@ export default function OrdersPage() {
               </span>
               <select
                 value={paymentStatus}
-                onChange={(event) =>
-                  setPaymentStatus(event.target.value as PaymentStatusFilter)
-                }
+                onChange={(event) => {
+                  setPaymentStatus(event.target.value as PaymentStatusFilter);
+                  setPage(1);
+                }}
                 className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
               >
                 {paymentStatuses.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {paymentStatusFilterLabel(item)}
                   </option>
                 ))}
               </select>
@@ -131,11 +156,14 @@ export default function OrdersPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
-            <input
+            <SearchCombobox
               value={dealId}
-              onChange={(event) => setDealId(event.target.value)}
-              placeholder="UUID WON-сделки"
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              onChange={setDealId}
+              options={dealOptions}
+              placeholder="Выберите выигранную сделку"
+              searchPlaceholder="Поиск сделки"
+              emptyLabel="Сделки не найдены"
+              loading={wonDealsQuery.isFetching}
             />
             <input
               value={deliveryAddress}
@@ -158,7 +186,25 @@ export default function OrdersPage() {
 
         {createOrder.isError ? (
           <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            Заказ можно создать только из выигранной сделки с позициями.
+            {getErrorMessage(
+              createOrder.error,
+              "Заказ можно создать только из выигранной сделки с позициями.",
+            )}
+          </div>
+        ) : null}
+
+        {ordersQuery.isError ? (
+          <div className="rounded border border-red-200 bg-red-50 py-10 text-center">
+            <p className="text-sm text-red-700">Ошибка загрузки данных</p>
+            <button
+              type="button"
+              onClick={() => {
+                void ordersQuery.refetch();
+              }}
+              className="mt-3 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+            >
+              Повторить
+            </button>
           </div>
         ) : null}
 
@@ -168,8 +214,8 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
-        {!ordersQuery.isLoading ? (
-          <div className="overflow-hidden rounded border border-slate-200 bg-white">
+        {!ordersQuery.isLoading && !ordersQuery.isError ? (
+          <div className="overflow-x-auto rounded border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50">
                 <tr>
@@ -203,11 +249,18 @@ export default function OrdersPage() {
                       {order.orderNumber}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {order.deal?.client?.name ?? order.dealId}
+                      {order.deal?.client?.name ?? "—"}
+                      {order.deal?.title ? (
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          {order.deal.title}
+                        </div>
+                      ) : null}
                     </td>
-                    <td className="px-3 py-3 text-slate-700">{order.status}</td>
                     <td className="px-3 py-3 text-slate-700">
-                      {order.paymentStatus}
+                      {enumLabel(orderStatusLabels, order.status)}
+                    </td>
+                    <td className="px-3 py-3 text-slate-700">
+                      {enumLabel(paymentStatusLabels, order.paymentStatus)}
                     </td>
                     <td className="px-3 py-3 font-medium text-slate-950">
                       {formatMoney(order.totalAmount)}
@@ -235,6 +288,15 @@ export default function OrdersPage() {
               </div>
             ) : null}
           </div>
+        ) : null}
+
+        {!ordersQuery.isLoading && !ordersQuery.isError ? (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            onPageChange={setPage}
+          />
         ) : null}
       </div>
 

@@ -60,7 +60,7 @@ export type KpiReport = {
   managers: KpiManagerMetric[];
 };
 
-export function useReportsFunnel(filters: ReportsFilter) {
+export function useReportsFunnel(filters: ReportsFilter, enabled = true) {
   return useQuery({
     queryKey: ["reports", "funnel", filters],
     queryFn: async (): Promise<FunnelReport> => {
@@ -70,11 +70,12 @@ export function useReportsFunnel(filters: ReportsFilter) {
 
       return response.data;
     },
+    enabled,
     retry: false,
   });
 }
 
-export function useReportsOverdues(filters: ReportsFilter) {
+export function useReportsOverdues(filters: ReportsFilter, enabled = true) {
   return useQuery({
     queryKey: ["reports", "overdues", filters],
     queryFn: async (): Promise<OverduesReport> => {
@@ -87,11 +88,12 @@ export function useReportsOverdues(filters: ReportsFilter) {
 
       return response.data;
     },
+    enabled,
     retry: false,
   });
 }
 
-export function useReportsKpi(filters: ReportsFilter) {
+export function useReportsKpi(filters: ReportsFilter, enabled = true) {
   return useQuery({
     queryKey: ["reports", "kpi", filters],
     queryFn: async (): Promise<KpiReport> => {
@@ -101,6 +103,7 @@ export function useReportsKpi(filters: ReportsFilter) {
 
       return response.data;
     },
+    enabled,
     retry: false,
   });
 }

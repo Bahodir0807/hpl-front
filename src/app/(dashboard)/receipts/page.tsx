@@ -1,20 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../../../context/auth-context";
 import {
   ExpectedReceipt,
   useCreateExpectedReceipt,
   useExpectedReceipts,
   useReceiveExpectedReceipt,
 } from "../../../hooks/use-inventory";
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));
-}
+import { useSuppliers } from "../../../hooks/use-panels";
+import { formatDate } from "../../../lib/format";
+import {
+  enumLabel,
+  expectedReceiptStatusLabels,
+  formatSupplierName,
+} from "../../../lib/labels";
+import { canManagerViewExpectedReceipts } from "../../../lib/role-access";
 
 function itemsText(receipt: ExpectedReceipt): string {
   return receipt.items
@@ -26,7 +28,12 @@ function itemsText(receipt: ExpectedReceipt): string {
 }
 
 export default function ReceiptsPage() {
-  const receiptsQuery = useExpectedReceipts();
+  const router = useRouter();
+  const { user, isInitialized } = useAuth();
+  const canAccess =
+    isInitialized && canManagerViewExpectedReceipts(user?.roles ?? []);
+  const receiptsQuery = useExpectedReceipts(canAccess);
+  const suppliersQuery = useSuppliers(canAccess);
   const createReceipt = useCreateExpectedReceipt();
   const receiveReceipt = useReceiveExpectedReceipt();
   const [supplierId, setSupplierId] = useState("");
@@ -74,6 +81,24 @@ export default function ReceiptsPage() {
     setReceivedQuantities({});
   };
 
+  useEffect(() => {
+    if (isInitialized && !canAccess) {
+      router.replace("/leads");
+    }
+  }, [canAccess, isInitialized, router]);
+
+  if (!isInitialized) {
+    return null;
+  }
+
+  if (!canAccess) {
+    return (
+      <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        Нет доступа к ожидаемым приходам.
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="space-y-4">
@@ -91,12 +116,18 @@ export default function ReceiptsPage() {
             Создать ожидаемый приход
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
-            <input
+            <select
               value={supplierId}
               onChange={(event) => setSupplierId(event.target.value)}
-              placeholder="UUID поставщика"
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
-            />
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+            >
+              <option value="">Поставщик</option>
+              {(suppliersQuery.data ?? []).map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {formatSupplierName(supplier.code, supplier.name)}
+                </option>
+              ))}
+            </select>
             <input
               type="date"
               value={expectedDate}
@@ -140,7 +171,7 @@ export default function ReceiptsPage() {
         ) : null}
 
         {!receiptsQuery.isError ? (
-          <div className="overflow-hidden rounded border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50">
                 <tr>
@@ -168,10 +199,14 @@ export default function ReceiptsPage() {
                       {formatDate(receipt.expectedDate)}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {receipt.supplier?.name ?? receipt.supplierId ?? "-"}
+                      {formatSupplierName(
+                        receipt.supplier?.code,
+                        receipt.supplier?.name,
+                        receipt.supplierId ?? "-",
+                      )}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {receipt.status}
+                      {enumLabel(expectedReceiptStatusLabels, receipt.status)}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
                       {itemsText(receipt)}

@@ -2,28 +2,37 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { SearchCombobox } from '../ui/search-combobox';
 import { useAuth } from '../../context/auth-context';
+import { Contact, useCreateClient } from '../../hooks/use-clients';
 import {
   DuplicateMatch,
   useCheckDuplicates,
   useCreateLead,
 } from '../../hooks/use-leads';
+import { useUsersList } from '../../hooks/use-users';
+import { apiClient } from '../../lib/api-client';
+import { formatPersonName } from '../../lib/display-names';
+import { optionalInnSchema } from '../../lib/validations/inn';
+import { optionalPhoneSchema } from '../../lib/validations/phone';
+import { getErrorMessage } from '../../lib/errors';
+import { isHeadOrAbove, isManagerOnly } from '../../lib/role-access';
 
 const optionalUuid = z
   .string()
   .trim()
   .optional()
   .refine((value) => !value || z.string().uuid().safeParse(value).success, {
-    message: 'Укажите корректный UUID',
+    message: 'Выберите сотрудника из списка',
   });
 
 const createLeadSchema = z.object({
   title: z.string().trim().min(3, 'Укажите название лида'),
   source: z.string().trim().min(2, 'Укажите источник'),
   ownerId: optionalUuid,
-  phone: z.string().trim().optional(),
+  phone: optionalPhoneSchema,
   email: z
     .string()
     .trim()
@@ -31,7 +40,7 @@ const createLeadSchema = z.object({
     .refine((value) => !value || z.string().email().safeParse(value).success, {
       message: 'Некорректный email',
     }),
-  inn: z.string().trim().optional(),
+  inn: optionalInnSchema,
   contactName: z.string().trim().optional(),
 });
 
@@ -50,17 +59,48 @@ function pickDuplicateQuery(values: CreateLeadFormValues): string {
   return values.inn || values.phone || values.email || '';
 }
 
+function splitPersonName(
+  fullName: string,
+): { firstName: string; lastName?: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const firstName = parts[0] ?? fullName.trim();
+  const lastName = parts.slice(1).join(' ') || undefined;
+
+  return { firstName, lastName };
+}
+
+function optionalText(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
   const { user } = useAuth();
+  const hideOwnerField = isManagerOnly(user);
+  const canAssignOwner = isHeadOrAbove(user);
+  const { users } = useUsersList();
   const createLead = useCreateLead();
+  const createClient = useCreateClient();
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [duplicateQuery, setDuplicateQuery] = useState('');
   const [selectedDuplicate, setSelectedDuplicate] =
     useState<DuplicateMatch | null>(null);
+  const ownerOptions = useMemo(
+    () =>
+      users.map((item) => ({
+        value: item.id,
+        label: formatPersonName(item, item.email),
+        description: item.email,
+      })),
+    [users],
+  );
   const {
     register,
     handleSubmit,
     reset,
     watch,
+    control,
     formState: { errors, isValid },
   } = useForm<CreateLeadFormValues>({
     resolver: zodResolver(createLeadSchema),
@@ -106,6 +146,8 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
       });
       setDuplicateQuery('');
       setSelectedDuplicate(null);
+      setFormError(null);
+      setIsSubmitting(false);
     }
   }, [isOpen, reset, user?.id]);
 
@@ -114,16 +156,66 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
   }
 
   const onSubmit = async (values: CreateLeadFormValues): Promise<void> => {
-    await createLead.mutateAsync({
-      title: values.title,
-      source: values.source,
-      ownerId: values.ownerId || undefined,
-      clientId: selectedDuplicate?.client.id,
-    });
+    setFormError(null);
+    setIsSubmitting(true);
 
-    reset();
-    setSelectedDuplicate(null);
-    onClose();
+    try {
+      const phone = optionalText(values.phone);
+      const email = optionalText(values.email);
+      const inn = optionalText(values.inn);
+      const contactName = optionalText(values.contactName);
+      let clientId = selectedDuplicate?.client.id;
+      let contactId: string | undefined;
+
+      if (!clientId && (phone || email || inn || contactName)) {
+        const createdClient = await createClient.mutateAsync({
+          type: inn ? 'COMPANY' : 'INDIVIDUAL',
+          name: contactName || values.title,
+          inn,
+          phone,
+          email,
+          source: values.source,
+          contacts: contactName
+            ? [
+                {
+                  ...splitPersonName(contactName),
+                  phone,
+                  email,
+                  isPrimary: true,
+                },
+              ]
+            : undefined,
+        });
+        clientId = createdClient.id;
+        contactId = createdClient.contacts?.[0]?.id;
+      } else if (clientId && contactName) {
+        const contactResponse = await apiClient.post<Contact>(
+          `/clients/${clientId}/contacts`,
+          {
+            ...splitPersonName(contactName),
+            phone,
+            email,
+          },
+        );
+        contactId = contactResponse.data.id;
+      }
+
+      await createLead.mutateAsync({
+        title: values.title,
+        source: values.source,
+        ownerId: hideOwnerField ? user?.id : values.ownerId || undefined,
+        clientId,
+        contactId,
+      });
+
+      reset();
+      setSelectedDuplicate(null);
+      onClose();
+    } catch (error) {
+      setFormError(getErrorMessage(error, 'Не удалось создать лид.'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -185,31 +277,48 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
               ) : null}
             </label>
 
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">
-                Ответственный
-              </span>
-              <input
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-                placeholder="UUID менеджера"
-                {...register('ownerId')}
-              />
-              {errors.ownerId ? (
-                <span className="mt-1 block text-sm text-red-600">
-                  {errors.ownerId.message}
+            {canAssignOwner ? (
+              <label>
+                <span className="mb-1 block text-sm font-medium text-slate-700">
+                  Ответственный
                 </span>
-              ) : null}
-            </label>
+                <Controller
+                  name="ownerId"
+                  control={control}
+                  render={({ field }) => (
+                    <SearchCombobox
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      options={ownerOptions}
+                      placeholder="Выберите сотрудника"
+                      searchPlaceholder="Поиск по имени или email"
+                      emptyLabel="Сотрудники не найдены"
+                    />
+                  )}
+                />
+                {errors.ownerId ? (
+                  <span className="mt-1 block text-sm text-red-600">
+                    {errors.ownerId.message}
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
                 Телефон
               </span>
               <input
+                type="tel"
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 placeholder="+7 999 111-22-33"
                 {...register('phone')}
               />
+              {errors.phone ? (
+                <span className="mt-1 block text-sm text-red-600">
+                  {errors.phone.message}
+                </span>
+              ) : null}
             </label>
 
             <label>
@@ -236,6 +345,11 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 {...register('inn')}
               />
+              {errors.inn ? (
+                <span className="mt-1 block text-sm text-red-600">
+                  {errors.inn.message}
+                </span>
+              ) : null}
             </label>
 
             <label>
@@ -290,7 +404,11 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
             </div>
           ) : null}
 
-          {createLead.isError ? (
+          {formError ? (
+            <p className="text-sm text-red-600">{formError}</p>
+          ) : null}
+
+          {createLead.isError && !formError ? (
             <p className="text-sm text-red-600">Не удалось создать лид.</p>
           ) : null}
 
@@ -304,10 +422,10 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
             </button>
             <button
               type="submit"
-              disabled={!isValid || createLead.isPending}
+              disabled={!isValid || isSubmitting || createLead.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              Создать лид
+              {isSubmitting ? 'Создание...' : 'Создать лид'}
             </button>
           </div>
         </form>

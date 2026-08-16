@@ -1,21 +1,37 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { CreateLeadModal } from '../../../components/leads/create-lead-modal';
-import { QualifyLeadModal } from '../../../components/leads/qualify-lead-modal';
 import { UnqualifyLeadModal } from '../../../components/leads/unqualify-lead-modal';
 import { Lead, LeadStatus, useLeads } from '../../../hooks/use-leads';
+import { useUsersList } from '../../../hooks/use-users';
+import { formatDateTime } from '../../../lib/format';
+import { formatMoney } from '../../../lib/currency';
+import {
+  resolveEntityName,
+  resolveUserName,
+} from '../../../lib/display-names';
+import { leadStatusLabels } from '../../../lib/labels';
+
+const QualifyLeadModal = dynamic(
+  () =>
+    import('@/components/leads/qualify-lead-modal').then(
+      (m) => m.QualifyLeadModal,
+    ),
+  { ssr: false },
+);
 
 type StatusFilter = 'ALL' | LeadStatus;
 
 const statusOptions: { value: StatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Все статусы' },
-  { value: 'NEW', label: 'NEW' },
-  { value: 'IN_PROGRESS', label: 'IN_PROGRESS' },
-  { value: 'QUALIFIED', label: 'QUALIFIED' },
-  { value: 'UNQUALIFIED', label: 'UNQUALIFIED' },
-  { value: 'CONVERTED', label: 'CONVERTED' },
+  { value: 'NEW', label: leadStatusLabels.NEW },
+  { value: 'IN_PROGRESS', label: leadStatusLabels.IN_PROGRESS },
+  { value: 'QUALIFIED', label: leadStatusLabels.QUALIFIED },
+  { value: 'UNQUALIFIED', label: leadStatusLabels.UNQUALIFIED },
+  { value: 'CONVERTED', label: leadStatusLabels.CONVERTED },
 ];
 
 const statusClassName: Record<LeadStatus, string> = {
@@ -26,32 +42,12 @@ const statusClassName: Record<LeadStatus, string> = {
   CONVERTED: 'bg-green-50 text-green-700 border-green-200',
 };
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
-
-function formatMoney(value?: string | number | null): string {
-  if (value === undefined || value === null || value === '') {
-    return '—';
-  }
-
-  return new Intl.NumberFormat('ru-RU', {
-    maximumFractionDigits: 2,
-  }).format(Number(value));
-}
-
 function StatusBadge({ status }: { status: LeadStatus }) {
   return (
     <span
       className={`inline-flex rounded border px-2 py-0.5 text-xs font-semibold ${statusClassName[status]}`}
     >
-      {status}
+      {leadStatusLabels[status] ?? status}
     </span>
   );
 }
@@ -68,6 +64,7 @@ export default function LeadsPage() {
     [status],
   );
   const leadsQuery = useLeads(filters);
+  const { usersById } = useUsersList();
   const leads = leadsQuery.data?.items ?? [];
 
   return (
@@ -133,7 +130,7 @@ export default function LeadsPage() {
         ) : null}
 
         {!leadsQuery.isLoading && !leadsQuery.isError && leads.length > 0 ? (
-          <div className="overflow-hidden rounded border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50">
                 <tr>
@@ -171,21 +168,22 @@ export default function LeadsPage() {
                     <td className="px-3 py-3">
                       <StatusBadge status={lead.status} />
                     </td>
-                    <td className="px-3 py-3">
-                      <span className="font-mono text-xs text-slate-700">
-                        {lead.ownerId}
-                      </span>
+                    <td className="px-3 py-3 text-slate-700">
+                      {resolveUserName(lead.owner, lead.ownerId, usersById)}
                     </td>
                     <td className="px-3 py-3">
-                      <div className="font-mono text-xs text-slate-700">
-                        {lead.projectObjectId ?? '—'}
+                      <div className="text-slate-700">
+                        {resolveEntityName(
+                          lead.projectObject,
+                          lead.projectObjectId,
+                        )}
                       </div>
                       <div className="mt-0.5 text-xs text-slate-600">
                         {formatMoney(lead.estimatedAmount)}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {formatDate(lead.createdAt)}
+                      {formatDateTime(lead.createdAt)}
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex justify-end gap-2">

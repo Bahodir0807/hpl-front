@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { useAuth } from "../../context/auth-context";
 import {
   ChangeDealStagePayload,
   DealStage,
   useChangeDealStage,
+  useDeal,
 } from "../../hooks/use-deals";
+import {
+  hasApproverRole,
+  localizeStageRequirementMessage,
+} from "../../lib/display-names";
+import { dealStageLabels, enumLabel } from "../../lib/labels";
 
 type StageExceptionModalProps = {
   dealId: string | null;
@@ -15,39 +24,72 @@ type StageExceptionModalProps = {
   onClose: () => void;
 };
 
+const stageExceptionSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, "Укажите причину пропуска этапа"),
+});
+
+type StageExceptionFormValues = z.infer<typeof stageExceptionSchema>;
+
 export function StageExceptionModal({
   dealId,
   newStage,
   serverMessage,
   onClose,
 }: StageExceptionModalProps) {
-  const { hasPermission } = useAuth();
+  const { user } = useAuth();
+  const dealQuery = useDeal(dealId);
   const changeStage = useChangeDealStage();
-  const [isException, setIsException] = useState(false);
-  const [reason, setReason] = useState("");
-  const canApprove = hasPermission("deals:stage_exception");
+  const canApprove =
+    hasApproverRole(user?.roles ?? []) ||
+    dealQuery.data?._permissions?.canBypassStageValidation === true;
+  const localizedMessage = localizeStageRequirementMessage(serverMessage);
   const isOpen = Boolean(dealId && newStage);
-  const canSubmit = canApprove && isException && reason.trim().length >= 5;
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<StageExceptionFormValues>({
+    resolver: zodResolver(stageExceptionSchema),
+    mode: "onChange",
+    defaultValues: {
+      reason: "",
+    },
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      reset({
+        reason: "",
+      });
+    }
+  }, [isOpen, reset]);
 
   if (!isOpen || !dealId || !newStage) {
     return null;
   }
 
-  const submitException = async (): Promise<void> => {
-    if (!canSubmit) {
+  const onSubmit = async (
+    values: StageExceptionFormValues,
+  ): Promise<void> => {
+    if (!canApprove) {
       return;
     }
 
     const payload: ChangeDealStagePayload = {
       id: dealId,
       newStage,
-      reason: reason.trim(),
+      reason: values.reason.trim(),
       isException: true,
     };
 
     await changeStage.mutateAsync(payload);
-    setIsException(false);
-    setReason("");
+    reset({
+      reason: "",
+    });
     onClose();
   };
 
@@ -59,77 +101,87 @@ export function StageExceptionModal({
             Требуется согласование руководителя
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Переход на этап {newStage} отклонен бизнес-правилами сделки.
+            Переход на этап «{enumLabel(dealStageLabels, newStage)}» отклонён
+            бизнес-правилами сделки.
           </p>
-          {serverMessage ? (
-            <p className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {serverMessage}
+          {canApprove && localizedMessage ? (
+            <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {localizedMessage}
             </p>
           ) : null}
         </div>
 
-        {!canApprove ? (
-          <div className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
-            У пользователя нет права deals:stage_exception.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
-              <input
-                type="checkbox"
-                checked={isException}
-                onChange={(event) => setIsException(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300"
-              />
-              Оформить как исключение
-            </label>
+        {dealQuery.isLoading ? (
+          <div className="text-sm text-slate-600">Загрузка данных сделки...</div>
+        ) : null}
 
+        {!dealQuery.isLoading && !canApprove ? (
+          <div className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
+            Для пропуска требований этапа требуется согласование РОПа или
+            Администратора. Обратитесь к руководителю отдела продаж.
+          </div>
+        ) : null}
+
+        {canApprove && !dealQuery.isLoading ? (
+          <form
+            onSubmit={(event) => {
+              void handleSubmit(onSubmit)(event);
+            }}
+            className="space-y-4"
+          >
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-slate-700">
                 Причина исключения
               </span>
               <textarea
                 rows={4}
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
+                {...register("reason")}
+                placeholder="Опишите, почему этап можно перевести досрочно"
                 className="w-full resize-none rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
               />
-              {isException &&
-              reason.trim().length > 0 &&
-              reason.trim().length < 5 ? (
+              {errors.reason ? (
                 <span className="mt-1 block text-sm text-red-600">
-                  Причина должна быть не короче 5 символов
+                  {errors.reason.message}
                 </span>
               ) : null}
             </label>
 
             {changeStage.isError ? (
               <p className="text-sm text-red-600">
-                Не удалось оформить исключение.
+                Не удалось согласовать переход этапа.
               </p>
             ) : null}
-          </div>
-        )}
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Отмена
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void submitException();
-            }}
-            disabled={!canSubmit || changeStage.isPending}
-            className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
-          >
-            Согласовать
-          </button>
-        </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={!isValid || changeStage.isPending || isSubmitting}
+                className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
+              >
+                Согласовать и перевести
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {!canApprove && !dealQuery.isLoading ? (
+          <div className="mt-5 flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Закрыть
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

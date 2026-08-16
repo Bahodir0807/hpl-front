@@ -8,6 +8,13 @@ import {
   TaskPriority,
   TaskType,
 } from '../../hooks/use-tasks';
+import { formatDateTime } from '../../lib/format';
+import {
+  enumLabel,
+  relatedTypeLabels,
+  taskComputedStatusLabels,
+  taskPriorityLabels,
+} from '../../lib/labels';
 import { CompleteTaskModal } from './complete-task-modal';
 import { RescheduleTaskModal } from './reschedule-task-modal';
 
@@ -59,7 +66,7 @@ export function TasksTable({ tasks }: TasksTableProps) {
 
   return (
     <>
-      <div className="overflow-hidden rounded border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
           <thead className="bg-slate-50">
             <tr>
@@ -90,11 +97,11 @@ export function TasksTable({ tasks }: TasksTableProps) {
                   <div className="font-medium text-slate-900">
                     {formatDateTime(task.dueDate)}
                   </div>
-                  <span
-                    className={`mt-1 inline-flex rounded border px-2 py-0.5 text-xs ${computedStatusClassNames[task.computedStatus]}`}
-                  >
-                    {task.computedStatus}
-                  </span>
+                    <span
+                      className={`mt-1 inline-flex rounded border px-2 py-0.5 text-xs ${computedStatusClassNames[task.computedStatus]}`}
+                    >
+                      {enumLabel(taskComputedStatusLabels, task.computedStatus)}
+                    </span>
                 </td>
                 <td className="px-3 py-3">
                   <div className="font-medium text-slate-950">{task.title}</div>
@@ -103,23 +110,25 @@ export function TasksTable({ tasks }: TasksTableProps) {
                   </div>
                 </td>
                 <td className="px-3 py-3">
-                  <div className="text-slate-700">{task.relatedType}</div>
+                  <div className="text-slate-700">
+                    {enumLabel(relatedTypeLabels, task.relatedType.toLowerCase())}
+                  </div>
                   {getRelatedHref(task.relatedType, task.relatedId) ? (
                     <Link
                       href={getRelatedHref(task.relatedType, task.relatedId)}
-                      className="font-mono text-xs text-blue-700 hover:underline"
+                      className="text-sm text-blue-700 hover:underline"
                     >
-                      {task.relatedId}
+                      {getRelatedLabel(task)}
                     </Link>
                   ) : (
-                    <div className="font-mono text-xs text-slate-500">
-                      {task.relatedId}
+                    <div className="text-sm text-slate-700">
+                      {getRelatedLabel(task)}
                     </div>
                   )}
                 </td>
                 <td className="px-3 py-3">
                   <span className={priorityClassNames[task.priority]}>
-                    {task.priority}
+                    {enumLabel(taskPriorityLabels, task.priority)}
                   </span>
                 </td>
                 <td className="px-3 py-3">
@@ -172,6 +181,10 @@ export function TasksTable({ tasks }: TasksTableProps) {
   );
 }
 
+function getRelatedLabel(task: Task): string {
+  return task.relatedEntity?.title ?? task.relatedId;
+}
+
 function getRelatedHref(relatedType: string, relatedId: string): string {
   const normalizedType = relatedType.toLowerCase();
 
@@ -188,14 +201,4 @@ function getRelatedHref(relatedType: string, relatedId: string): string {
   }
 
   return '';
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
 }

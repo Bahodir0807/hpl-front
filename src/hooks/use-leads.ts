@@ -2,9 +2,41 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
+import { getErrorMessage } from '../lib/errors';
+import { showError, showSuccess } from '../lib/toast';
 
 export type LeadStatus =
   'NEW' | 'IN_PROGRESS' | 'QUALIFIED' | 'UNQUALIFIED' | 'CONVERTED';
+
+export type LeadUser = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+};
+
+export type LeadClient = {
+  id: string;
+  name: string;
+};
+
+export type LeadProjectObject = {
+  id: string;
+  name: string;
+};
+
+export type LeadContact = {
+  id: string;
+  firstName: string;
+  lastName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+};
+
+export type LeadDeal = {
+  id: string;
+  title: string;
+};
 
 export type Lead = {
   id: string;
@@ -24,6 +56,11 @@ export type Lead = {
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  owner?: LeadUser | null;
+  client?: LeadClient | null;
+  projectObject?: LeadProjectObject | null;
+  contact?: LeadContact | null;
+  deal?: LeadDeal | null;
 };
 
 export type LeadsFilter = {
@@ -79,6 +116,11 @@ export type QualifyLeadPayload = {
 export type UnqualifyLeadPayload = {
   id: string;
   reason: string;
+};
+
+export type AssignLeadOwnerPayload = {
+  id: string;
+  ownerId: string;
 };
 
 export function useLeads(filters: LeadsFilter) {
@@ -138,7 +180,11 @@ export function useCreateLead() {
       return response.data;
     },
     onSuccess: () => {
+      showSuccess('Лид создан');
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -154,9 +200,13 @@ export function useQualifyLead() {
       return response.data;
     },
     onSuccess: (_lead, payload) => {
+      showSuccess('Лид квалифицирован, сделка создана');
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
       void queryClient.invalidateQueries({ queryKey: ['deals'] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -176,8 +226,38 @@ export function useUnqualifyLead() {
       return response.data;
     },
     onSuccess: (_lead, payload) => {
+      showSuccess('Лид переведён в неквалифицированные');
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useAssignLeadOwner() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: AssignLeadOwnerPayload): Promise<Lead> => {
+      const response = await apiClient.post<Lead>(
+        `/leads/${payload.id}/assign`,
+        { newOwnerId: payload.ownerId },
+      );
+
+      return response.data;
+    },
+    onSuccess: (_lead, payload) => {
+      showSuccess('Менеджер назначен');
+      void queryClient.invalidateQueries({ queryKey: ['leads'] });
+      void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', payload.id],
+      });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }

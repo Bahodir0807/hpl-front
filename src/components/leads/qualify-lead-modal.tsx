@@ -1,23 +1,28 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { SearchCombobox } from '../ui/search-combobox';
+import { MoneyInput } from '../ui/money-input';
 import { apiClient } from '../../lib/api-client';
+import { useClient, useClients } from '../../hooks/use-clients';
+import { useDebouncedValue } from '../../hooks/use-debounced-value';
 import { Lead, useQualifyLead } from '../../hooks/use-leads';
+import { formatContactName } from '../../lib/display-names';
 
 const optionalUuid = z
   .string()
   .trim()
   .optional()
   .refine((value) => !value || z.string().uuid().safeParse(value).success, {
-    message: 'Укажите корректный UUID',
+    message: 'Выберите значение из списка',
   });
 
 const qualifyLeadSchema = z
   .object({
-    clientId: z.string().trim().uuid('Укажите UUID клиента'),
+    clientId: z.string().trim().uuid('Выберите клиента'),
     projectObjectId: optionalUuid,
     newObjectName: z.string().trim().optional(),
     contactId: optionalUuid,
@@ -27,15 +32,16 @@ const qualifyLeadSchema = z
       .trim()
       .min(5, 'Потребность должна быть не короче 5 символов'),
     estimatedAmount: z.coerce.number().positive('Сумма должна быть больше 0'),
+    estimatedAmountCurrency: z.enum(['USD', 'UZS']),
     targetDate: z.string().trim().min(1, 'Укажите срок реализации'),
     decisionMakerContact: z.string().trim().min(1, 'Укажите ЛПР'),
   })
   .refine((value) => Boolean(value.projectObjectId || value.newObjectName), {
-    message: 'Укажите UUID объекта или название нового объекта',
+    message: 'Выберите объект или укажите название нового',
     path: ['projectObjectId'],
   })
   .refine((value) => Boolean(value.contactId || value.contactName), {
-    message: 'Укажите контакт или данные контакта',
+    message: 'Выберите контакт или укажите данные контакта',
     path: ['contactId'],
   });
 
@@ -45,6 +51,20 @@ type QualifyLeadFormInput = z.input<typeof qualifyLeadSchema>;
 type ProjectObjectResponse = {
   id: string;
 };
+
+type ContactResponse = {
+  id: string;
+};
+
+function splitPersonName(
+  fullName: string,
+): { firstName: string; lastName?: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const firstName = parts[0] ?? fullName.trim();
+  const lastName = parts.slice(1).join(' ') || undefined;
+
+  return { firstName, lastName };
+}
 
 type QualifyLeadModalProps = {
   lead: Lead | null;
@@ -59,10 +79,22 @@ export function QualifyLeadModal({
 }: QualifyLeadModalProps) {
   const qualifyLead = useQualifyLead();
   const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreatingObject, setIsCreatingObject] = useState(false);
+  const submitLockRef = useRef(false);
+  const [clientSearch, setClientSearch] = useState('');
+  const debouncedClientSearch = useDebouncedValue(clientSearch, 300);
+  const clientsQuery = useClients({
+    search: debouncedClientSearch.trim() || undefined,
+    limit: 50,
+  });
   const {
     register,
     handleSubmit,
     reset,
+    control,
+    watch,
+    setValue,
     formState: { errors, isValid },
   } = useForm<QualifyLeadFormInput, unknown, QualifyLeadFormValues>({
     resolver: zodResolver(qualifyLeadSchema),
@@ -75,10 +107,86 @@ export function QualifyLeadModal({
       contactName: '',
       needDescription: '',
       estimatedAmount: 0,
+      estimatedAmountCurrency: 'UZS',
       targetDate: '',
       decisionMakerContact: '',
     },
   });
+  const selectedClientId = watch('clientId');
+  const clientDetailsQuery = useClient(
+    typeof selectedClientId === 'string' && selectedClientId
+      ? selectedClientId
+      : null,
+  );
+
+  const clientOptions = useMemo(() => {
+    const items = (clientsQuery.data?.items ?? []).map((client) => ({
+      value: client.id,
+      label: client.name,
+      description: [client.inn, client.phone, client.email]
+        .filter(Boolean)
+        .join(' · '),
+    }));
+
+    if (lead?.client && !items.some((item) => item.value === lead.client?.id)) {
+      return [
+        {
+          value: lead.client.id,
+          label: lead.client.name,
+        },
+        ...items,
+      ];
+    }
+
+    return items;
+  }, [clientsQuery.data?.items, lead?.client]);
+
+  const projectObjectOptions = useMemo(() => {
+    const items = (clientDetailsQuery.data?.projectObjects ?? [])
+      .filter((object) => object.stage !== 'ARCHIVED')
+      .map((object) => ({
+        value: object.id,
+        label: object.name,
+        description: object.address ?? undefined,
+      }));
+
+    if (
+      lead?.projectObject &&
+      !items.some((item) => item.value === lead.projectObject?.id)
+    ) {
+      return [
+        {
+          value: lead.projectObject.id,
+          label: lead.projectObject.name,
+        },
+        ...items,
+      ];
+    }
+
+    return items;
+  }, [clientDetailsQuery.data?.projectObjects, lead?.projectObject]);
+
+  const contactOptions = useMemo(() => {
+    const items = (clientDetailsQuery.data?.contacts ?? []).map((contact) => ({
+      value: contact.id,
+      label: formatContactName(contact),
+      description: [contact.position, contact.phone, contact.email]
+        .filter(Boolean)
+        .join(' · '),
+    }));
+
+    if (lead?.contact && !items.some((item) => item.value === lead.contact?.id)) {
+      return [
+        {
+          value: lead.contact.id,
+          label: formatContactName(lead.contact),
+        },
+        ...items,
+      ];
+    }
+
+    return items;
+  }, [clientDetailsQuery.data?.contacts, lead?.contact]);
 
   useEffect(() => {
     if (isOpen && lead) {
@@ -90,36 +198,71 @@ export function QualifyLeadModal({
         contactName: '',
         needDescription: lead.needDescription ?? '',
         estimatedAmount: Number(lead.estimatedAmount ?? 0),
+        estimatedAmountCurrency: 'UZS',
         targetDate: lead.targetDate ? lead.targetDate.slice(0, 10) : '',
         decisionMakerContact: lead.decisionMakerContact ?? '',
       });
+      setClientSearch('');
       setFormError(null);
+      setIsSubmitting(false);
+      setIsCreatingObject(false);
+      submitLockRef.current = false;
     }
   }, [isOpen, lead, reset]);
+
+  useEffect(() => {
+    setValue('projectObjectId', '');
+    setValue('contactId', '');
+  }, [selectedClientId, setValue]);
 
   if (!isOpen || !lead) {
     return null;
   }
 
   const onSubmit = async (values: QualifyLeadFormValues): Promise<void> => {
+    if (submitLockRef.current) {
+      return;
+    }
+
+    submitLockRef.current = true;
     setFormError(null);
+    setIsSubmitting(true);
 
     try {
       let projectObjectId = values.projectObjectId;
+      let contactId = values.contactId || undefined;
 
       if (!projectObjectId && values.newObjectName) {
-        const objectResponse = await apiClient.post<ProjectObjectResponse>(
-          `/clients/${values.clientId}/objects`,
-          {
-            name: values.newObjectName,
-          },
-        );
-        projectObjectId = objectResponse.data.id;
+        setIsCreatingObject(true);
+        try {
+          const objectResponse = await apiClient.post<ProjectObjectResponse>(
+            `/clients/${values.clientId}/objects`,
+            {
+              name: values.newObjectName,
+            },
+          );
+          projectObjectId = objectResponse.data.id;
+        } finally {
+          setIsCreatingObject(false);
+        }
       }
 
       if (!projectObjectId) {
         setFormError('Не удалось определить объект проекта.');
         return;
+      }
+
+      if (!contactId && values.contactName) {
+        const contactResponse = await apiClient.post<ContactResponse>(
+          `/clients/${values.clientId}/contacts`,
+          splitPersonName(values.contactName),
+        );
+        contactId = contactResponse.data.id;
+      }
+
+      // QualifyLeadDto does not accept contactId; UpdateLeadDto does.
+      if (contactId) {
+        await apiClient.patch(`/leads/${lead.id}`, { contactId });
       }
 
       await qualifyLead.mutateAsync({
@@ -136,6 +279,9 @@ export function QualifyLeadModal({
       onClose();
     } catch {
       setFormError('Не удалось квалифицировать лид.');
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -169,10 +315,21 @@ export function QualifyLeadModal({
               <span className="mb-1 block text-sm font-medium text-slate-700">
                 Клиент
               </span>
-              <input
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-                placeholder="UUID клиента"
-                {...register('clientId')}
+              <Controller
+                name="clientId"
+                control={control}
+                render={({ field }) => (
+                  <SearchCombobox
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    options={clientOptions}
+                    placeholder="Выберите клиента"
+                    searchPlaceholder="Поиск по названию, ИНН, телефону"
+                    emptyLabel="Клиенты не найдены"
+                    loading={clientsQuery.isFetching}
+                    onSearchChange={setClientSearch}
+                  />
+                )}
               />
               {errors.clientId ? (
                 <span className="mt-1 block text-sm text-red-600">
@@ -185,10 +342,25 @@ export function QualifyLeadModal({
               <span className="mb-1 block text-sm font-medium text-slate-700">
                 Объект
               </span>
-              <input
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-                placeholder="UUID объекта"
-                {...register('projectObjectId')}
+              <Controller
+                name="projectObjectId"
+                control={control}
+                render={({ field }) => (
+                  <SearchCombobox
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    options={projectObjectOptions}
+                    placeholder={
+                      selectedClientId
+                        ? 'Выберите объект'
+                        : 'Сначала выберите клиента'
+                    }
+                    searchPlaceholder="Поиск объекта"
+                    emptyLabel="Объекты не найдены"
+                    disabled={!selectedClientId}
+                    loading={clientDetailsQuery.isFetching}
+                  />
+                )}
               />
               {errors.projectObjectId ? (
                 <span className="mt-1 block text-sm text-red-600">
@@ -212,10 +384,25 @@ export function QualifyLeadModal({
               <span className="mb-1 block text-sm font-medium text-slate-700">
                 Контакт
               </span>
-              <input
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-                placeholder="UUID контакта"
-                {...register('contactId')}
+              <Controller
+                name="contactId"
+                control={control}
+                render={({ field }) => (
+                  <SearchCombobox
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    options={contactOptions}
+                    placeholder={
+                      selectedClientId
+                        ? 'Выберите контакт'
+                        : 'Сначала выберите клиента'
+                    }
+                    searchPlaceholder="Поиск контакта"
+                    emptyLabel="Контакты не найдены"
+                    disabled={!selectedClientId}
+                    loading={clientDetailsQuery.isFetching}
+                  />
+                )}
               />
               {errors.contactId ? (
                 <span className="mt-1 block text-sm text-red-600">
@@ -255,11 +442,32 @@ export function QualifyLeadModal({
               <span className="mb-1 block text-sm font-medium text-slate-700">
                 Оценка суммы
               </span>
-              <input
-                type="number"
-                step="0.01"
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-                {...register('estimatedAmount')}
+              <Controller
+                name="estimatedAmount"
+                control={control}
+                render={({ field: amountField }) => (
+                  <Controller
+                    name="estimatedAmountCurrency"
+                    control={control}
+                    render={({ field: currencyField }) => (
+                      <MoneyInput
+                        value={
+                          amountField.value === '' ||
+                          amountField.value === undefined
+                            ? ''
+                            : String(amountField.value)
+                        }
+                        currency={currencyField.value}
+                        onValueChange={(nextValue) =>
+                          amountField.onChange(
+                            nextValue === '' ? '' : Number(nextValue),
+                          )
+                        }
+                        onCurrencyChange={currencyField.onChange}
+                      />
+                    )}
+                  />
+                )}
               />
               {errors.estimatedAmount ? (
                 <span className="mt-1 block text-sm text-red-600">
@@ -314,10 +522,22 @@ export function QualifyLeadModal({
             </button>
             <button
               type="submit"
-              disabled={!isValid || qualifyLead.isPending}
-              className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
+              disabled={
+                !isValid ||
+                isSubmitting ||
+                isCreatingObject ||
+                qualifyLead.isPending
+              }
+              className="inline-flex items-center gap-2 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-500 disabled:opacity-60"
             >
-              Квалифицировать
+              {isSubmitting || isCreatingObject || qualifyLead.isPending ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-white" />
+                  Сохранение...
+                </>
+              ) : (
+                'Квалифицировать'
+              )}
             </button>
           </div>
         </form>

@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
+import { getErrorMessage } from "../lib/errors";
+import { showError, showSuccess } from "../lib/toast";
 import { Deal } from "./use-deals";
 import { Product } from "./use-inventory";
 
@@ -59,6 +61,14 @@ export type Delivery = {
   createdAt: string;
 };
 
+export type OrderPermissions = {
+  canEdit: boolean;
+  canDelete: boolean;
+  canAddPayment: boolean;
+  canConfirmPayment: boolean;
+  canCreateDelivery: boolean;
+};
+
 export type Order = {
   id: string;
   orderNumber: string;
@@ -78,6 +88,7 @@ export type Order = {
   items?: OrderItem[];
   payments?: Payment[];
   deliveries?: Delivery[];
+  _permissions?: OrderPermissions;
 };
 
 export type OrdersFilter = {
@@ -161,8 +172,12 @@ export function useCreateOrderFromDeal() {
       return response.data;
     },
     onSuccess: () => {
+      showSuccess("Заказ успешно создан");
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({ queryKey: ["stock-balances"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -175,20 +190,25 @@ export function useAddPayment() {
       const response = await apiClient.post<Payment>(
         `/orders/${payload.orderId}/payments`,
         {
-          amount: payload.amount,
-          paymentDate: payload.paymentDate,
-          comment: payload.comment,
-          fileId: payload.fileId,
+          orderId: payload.orderId,
+          amount: payload.amount.toFixed(2),
+          ...(payload.paymentDate ? { paymentDate: payload.paymentDate } : {}),
+          ...(payload.comment ? { comment: payload.comment } : {}),
+          ...(payload.fileId ? { fileId: payload.fileId } : {}),
         },
       );
 
       return response.data;
     },
     onSuccess: (_payment, payload) => {
+      showSuccess("Платёж зарегистрирован");
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({
         queryKey: ["orders", payload.orderId],
       });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -206,8 +226,12 @@ export function useConfirmPayment() {
       return response.data;
     },
     onSuccess: (order) => {
+      showSuccess("Статус платежа обновлён");
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({ queryKey: ["orders", order.id] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -220,9 +244,12 @@ export function useCreateDelivery() {
       const response = await apiClient.post<Delivery>(
         `/orders/${payload.orderId}/deliveries`,
         {
+          orderId: payload.orderId,
           deliveryDate: payload.deliveryDate,
-          recipient: payload.recipient,
-          trackingNumber: payload.trackingNumber,
+          ...(payload.recipient ? { recipient: payload.recipient } : {}),
+          ...(payload.trackingNumber
+            ? { trackingNumber: payload.trackingNumber }
+            : {}),
           items: payload.items,
         },
       );
@@ -230,11 +257,15 @@ export function useCreateDelivery() {
       return response.data;
     },
     onSuccess: (_delivery, payload) => {
+      showSuccess("Отгрузка создана");
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({
         queryKey: ["orders", payload.orderId],
       });
       void queryClient.invalidateQueries({ queryKey: ["stock-balances"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }

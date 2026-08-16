@@ -5,6 +5,11 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'CRM HPL',
   description: 'CRM HPL MVP',
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: { index: false, follow: false },
+  },
 };
 
 export default function RootLayout({

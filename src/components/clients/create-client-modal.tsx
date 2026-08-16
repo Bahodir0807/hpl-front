@@ -10,6 +10,9 @@ import {
   useCheckClientDuplicates,
   useCreateClient,
 } from "../../hooks/use-clients";
+import { clientSegmentLabels } from "../../lib/labels";
+import { optionalInnSchema } from "../../lib/validations/inn";
+import { optionalPhoneSchema } from "../../lib/validations/phone";
 
 const clientSegments: ClientSegment[] = [
   "DEALER",
@@ -22,8 +25,8 @@ const clientSegments: ClientSegment[] = [
 const createClientSchema = z.object({
   type: z.enum(["COMPANY", "INDIVIDUAL"]),
   name: z.string().trim().min(2, "Укажите название клиента"),
-  inn: z.string().trim().optional(),
-  phone: z.string().trim().optional(),
+  inn: optionalInnSchema,
+  phone: optionalPhoneSchema,
   email: z
     .string()
     .trim()
@@ -40,7 +43,7 @@ const createClientSchema = z.object({
   comment: z.string().trim().optional(),
   contactFirstName: z.string().trim().optional(),
   contactLastName: z.string().trim().optional(),
-  contactPhone: z.string().trim().optional(),
+  contactPhone: optionalPhoneSchema,
   contactEmail: z
     .string()
     .trim()
@@ -209,7 +212,7 @@ export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
                 <option value="">Не указан</option>
                 {clientSegments.map((segment) => (
                   <option key={segment} value={segment}>
-                    {segment}
+                    {clientSegmentLabels[segment]}
                   </option>
                 ))}
               </select>
@@ -238,6 +241,11 @@ export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 {...register("inn")}
               />
+              {errors.inn ? (
+                <span className="mt-1 block text-sm text-red-600">
+                  {errors.inn.message}
+                </span>
+              ) : null}
             </label>
 
             <label>
@@ -245,9 +253,15 @@ export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
                 Телефон
               </span>
               <input
+                type="tel"
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 {...register("phone")}
               />
+              {errors.phone ? (
+                <span className="mt-1 block text-sm text-red-600">
+                  {errors.phone.message}
+                </span>
+              ) : null}
             </label>
 
             <label>
@@ -304,6 +318,22 @@ export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 {...register("contactLastName")}
               />
+            </label>
+
+            <label>
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Контакт: телефон
+              </span>
+              <input
+                type="tel"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                {...register("contactPhone")}
+              />
+              {errors.contactPhone ? (
+                <span className="mt-1 block text-sm text-red-600">
+                  {errors.contactPhone.message}
+                </span>
+              ) : null}
             </label>
           </div>
 

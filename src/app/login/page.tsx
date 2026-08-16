@@ -1,12 +1,12 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useAuth } from '../../context/auth-context';
+import { getErrorMessage } from '../../lib/errors';
 
 const loginSchema = z.object({
   email: z.string().email('Введите корректный email'),
@@ -15,13 +15,9 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-type BackendErrorBody = {
-  message?: string | string[];
-};
-
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user, isInitialized } = useAuth();
   const [requestError, setRequestError] = useState<string | null>(null);
   const {
     register,
@@ -40,11 +36,34 @@ export default function LoginPage() {
 
     try {
       await login(values.email, values.password);
-      router.push('/tasks');
+      router.push('/leads');
     } catch (error: unknown) {
-      setRequestError(getErrorMessage(error));
+      setRequestError(
+        getErrorMessage(error, 'Не удалось войти. Проверьте email и пароль.'),
+      );
     }
   };
+
+  useEffect(() => {
+    if (isInitialized && user) {
+      router.replace('/leads');
+    }
+  }, [isInitialized, router, user]);
+
+  if (!isInitialized) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900"
+          aria-label="Загрузка"
+        />
+      </main>
+    );
+  }
+
+  if (user) {
+    return null;
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
@@ -110,21 +129,4 @@ export default function LoginPage() {
       </form>
     </main>
   );
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof AxiosError) {
-    const data = error.response?.data as BackendErrorBody | undefined;
-    const message = data?.message;
-
-    if (Array.isArray(message)) {
-      return message.join(', ');
-    }
-
-    if (message) {
-      return message;
-    }
-  }
-
-  return 'Не удалось войти. Проверьте email и пароль.';
 }

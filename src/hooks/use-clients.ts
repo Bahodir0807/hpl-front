@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
+import { getErrorMessage } from "../lib/errors";
+import { showError, showSuccess } from "../lib/toast";
 import { Deal, DealStage } from "./use-deals";
 
 export type ClientType = "COMPANY" | "INDIVIDUAL";
@@ -43,6 +45,13 @@ export type ClientLead = {
   createdAt: string;
 };
 
+export type ClientOwner = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+};
+
 export type Client = {
   id: string;
   type: ClientType;
@@ -60,6 +69,7 @@ export type Client = {
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  owner?: ClientOwner | null;
   contacts?: Contact[];
   projectObjects?: ProjectObject[];
   deals?: Deal[];
@@ -214,7 +224,11 @@ export function useCreateClient() {
       return response.data;
     },
     onSuccess: () => {
+      showSuccess("Клиент создан");
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -233,10 +247,14 @@ export function useAddContact() {
       return response.data;
     },
     onSuccess: (_contact, payload) => {
+      showSuccess("Контакт добавлен");
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
       void queryClient.invalidateQueries({
         queryKey: ["clients", payload.clientId],
       });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -257,25 +275,50 @@ export function useAddProjectObject() {
       return response.data;
     },
     onSuccess: (_object, payload) => {
+      showSuccess("Объект добавлен");
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
       void queryClient.invalidateQueries({
         queryKey: ["clients", payload.clientId],
       });
     },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
   });
 }
 
 export function useClientTimeline(clientId: string | null) {
-  return useQuery({
-    queryKey: ["client-timeline", clientId],
-    queryFn: async (): Promise<ActivityTimelineItem[]> => {
-      const response = await apiClient.get<ActivityTimelineItem[]>(
-        `/audit/timeline/Client/${clientId}`,
-      );
+  const clientQuery = useClient(clientId);
+  const leadIds = (clientQuery.data?.leads ?? []).map((lead) => lead.id);
+  const dealIds = (clientQuery.data?.deals ?? []).map((deal) => deal.id);
 
-      return response.data;
+  return useQuery({
+    queryKey: ["client-timeline", clientId, leadIds, dealIds],
+    queryFn: async (): Promise<ActivityTimelineItem[]> => {
+      const requests = [
+        ...leadIds.map((id) =>
+          apiClient.get<ActivityTimelineItem[]>(`/audit/timeline/Lead/${id}`),
+        ),
+        ...dealIds.map((id) =>
+          apiClient.get<ActivityTimelineItem[]>(`/audit/timeline/Deal/${id}`),
+        ),
+      ];
+
+      if (requests.length === 0) {
+        return [];
+      }
+
+      const responses = await Promise.all(requests);
+
+      return responses
+        .flatMap((response) => response.data)
+        .sort(
+          (left, right) =>
+            new Date(right.createdAt).getTime() -
+            new Date(left.createdAt).getTime(),
+        );
     },
-    enabled: Boolean(clientId),
+    enabled: Boolean(clientId) && clientQuery.isSuccess,
   });
 }
 

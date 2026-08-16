@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
+import { getErrorMessage } from "../lib/errors";
+import { showError, showSuccess } from "../lib/toast";
 
 export type TaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
@@ -23,6 +25,18 @@ export type TaskType =
   | "SHIPMENT_CHECK"
   | "OTHER";
 
+export type TaskUser = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+};
+
+export type TaskRelatedEntity = {
+  id: string;
+  title: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -42,6 +56,8 @@ export type Task = {
   relatedId: string;
   createdAt: string;
   updatedAt: string;
+  assignee?: TaskUser | null;
+  relatedEntity?: TaskRelatedEntity | null;
 };
 
 export type TasksFilter = {
@@ -50,6 +66,8 @@ export type TasksFilter = {
   computedStatus?: TaskComputedStatus;
   relatedType?: string;
   relatedId?: string;
+  page?: number;
+  limit?: number;
 };
 
 export type TasksListResponse = {
@@ -109,7 +127,11 @@ export function useCompleteTask() {
       return response.data;
     },
     onSuccess: () => {
+      showSuccess("Задача завершена");
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -130,7 +152,11 @@ export function useRescheduleTask() {
       return response.data;
     },
     onSuccess: () => {
+      showSuccess("Срок задачи перенесён");
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -145,7 +171,11 @@ export function useCreateTask() {
       return response.data;
     },
     onSuccess: () => {
+      showSuccess("Задача создана");
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }

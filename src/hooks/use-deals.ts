@@ -1,7 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { apiClient } from "../lib/api-client";
+import { getErrorMessage } from "../lib/errors";
+import { showError, showSuccess } from "../lib/toast";
 
 export type DealStage =
   | "QUALIFICATION"
@@ -52,14 +55,26 @@ export type DealProduct = {
 
 export type DealItem = {
   id: string;
-  productId: string;
+  productId?: string | null;
   quantitySheets: number;
   quantityM2: number | string;
   unitPrice: number | string;
   discount: number | string;
   totalPrice: number | string;
   purchasePriceSnapshot?: number | string | null;
+  thickness?: number | string | null;
+  panelTypeId?: string | null;
+  supplierId?: string | null;
+  panelSizeId?: string | null;
   product?: DealProduct;
+  panelType?: { id?: string; code?: string; name?: string } | null;
+  supplier?: { id?: string; code?: string; name?: string } | null;
+  panelSize?: {
+    id?: string;
+    width?: number;
+    length?: number;
+    label?: string | null;
+  } | null;
 };
 
 export type DealOffer = {
@@ -85,6 +100,13 @@ export type DealStageHistory = {
   createdAt: string;
 };
 
+export type DealPermissions = {
+  canEdit: boolean;
+  canDelete: boolean;
+  canChangeStage: boolean;
+  canBypassStageValidation: boolean;
+};
+
 export type Deal = {
   id: string;
   title: string;
@@ -101,12 +123,32 @@ export type Deal = {
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  source?: string | null;
+  supplierId?: string | null;
+  calculationId?: string | null;
+  origin?: string | null;
+  deliveryAddress?: string | null;
+  deliveryCost?: number | string | null;
+  estimatedDeliveryDate?: string | null;
+  delivery?: {
+    address?: string | null;
+    cost?: number | string | null;
+    estimatedDate?: string | null;
+  } | null;
   client?: DealClient | null;
   projectObject?: DealProjectObject | null;
   owner?: DealUser | null;
+  supplier?: { id: string; name?: string; code?: string } | null;
+  supplierOrder?: {
+    id: string;
+    status: string;
+    trackingNumber?: string | null;
+    estimatedDate?: string | null;
+  } | null;
   items?: DealItem[];
   offers?: DealOffer[];
   stageHistory?: DealStageHistory[];
+  _permissions?: DealPermissions;
 };
 
 export type DealsFilter = {
@@ -115,6 +157,8 @@ export type DealsFilter = {
   ownerId?: string;
   projectObjectId?: string;
   search?: string;
+  source?: string;
+  supplierId?: string;
   page?: number;
   limit?: number;
 };
@@ -124,23 +168,6 @@ export type DealsListResponse = {
   total: number;
   page: number;
   limit: number;
-};
-
-export type CreateDealItemPayload = {
-  productId: string;
-  quantitySheets: number;
-  quantityM2: number;
-  unitPrice: number;
-  discount?: number;
-};
-
-export type CreateDealPayload = {
-  title: string;
-  clientId: string;
-  projectObjectId?: string;
-  ownerId?: string;
-  expectedCloseDate?: string;
-  items?: CreateDealItemPayload[];
 };
 
 export type ChangeDealStagePayload = {
@@ -157,6 +184,19 @@ export type AddDealOfferPayload = {
   validUntil?: string;
   pdfFileId?: string;
 };
+
+export function isHplCalculatorDeal(deal: Deal): boolean {
+  if (deal.calculationId || deal.origin === "calculator") {
+    return true;
+  }
+
+  return (deal.items ?? []).some(
+    (item) =>
+      Boolean(item.panelType) ||
+      Boolean(item.panelTypeId) ||
+      item.thickness !== undefined && item.thickness !== null,
+  );
+}
 
 export function useDeals(filters: DealsFilter) {
   return useQuery({
@@ -183,21 +223,6 @@ export function useDeal(id: string | null) {
   });
 }
 
-export function useCreateDeal() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (payload: CreateDealPayload): Promise<Deal> => {
-      const response = await apiClient.post<Deal>("/deals", payload);
-
-      return response.data;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["deals"] });
-    },
-  });
-}
-
 export function useChangeDealStage() {
   const queryClient = useQueryClient();
 
@@ -209,9 +234,18 @@ export function useChangeDealStage() {
       return response.data;
     },
     onSuccess: (deal) => {
+      showSuccess("Этап сделки обновлён");
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
       void queryClient.invalidateQueries({ queryKey: ["deals", deal.id] });
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (error) => {
+      // 400 показывается в StageExceptionModal с текстом требований этапа —
+      // дублирующий toast не нужен. Остальные ошибки — в toast.
+      if (isAxiosError(error) && error.response?.status === 400) {
+        return;
+      }
+      showError(getErrorMessage(error));
     },
   });
 }
@@ -232,10 +266,14 @@ export function useAddDealOffer() {
       return response.data;
     },
     onSuccess: (_offer, payload) => {
+      showSuccess("Версия КП создана");
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
       void queryClient.invalidateQueries({
         queryKey: ["deals", payload.dealId],
       });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
     },
   });
 }
