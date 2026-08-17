@@ -16,7 +16,10 @@ import { UnqualifyLeadModal } from '@/components/leads/unqualify-lead-modal';
 import { Button } from '@/components/ui/button';
 import { SearchCombobox } from '@/components/ui/search-combobox';
 import { useAuth } from '@/context/auth-context';
-import { useCalculationsByLead } from '@/hooks/use-calculations';
+import {
+  useCalculationsByLead,
+  useFinalizeCalculation,
+} from '@/hooks/use-calculations';
 import {
   useCreateLeadCall,
   useCreateLeadNote,
@@ -41,7 +44,7 @@ import {
   resolveEntityName,
   resolveUserName,
 } from '@/lib/display-names';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatNumber } from '@/lib/format';
 import { formatSupplierName, leadStatusLabels } from '@/lib/labels';
 import { hasElevatedAccess } from '@/lib/role-access';
 import {
@@ -281,10 +284,25 @@ function buildTimeline(
   return items.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+function calculationSheetsCount(
+  calculation: CalculationSession,
+): number | null {
+  const items = calculation.items ?? [];
+  if (items.length === 0) {
+    return null;
+  }
+
+  return items.reduce((sum, item) => {
+    const count = Number(item.sheetsCount);
+    return sum + (Number.isNaN(count) ? 0 : count);
+  }, 0);
+}
+
 function calculationSummary(calculation: CalculationSession) {
   const item = calculation.items?.[0];
   const typeName =
     item?.panelType?.name ||
+    item?.panelType?.displayNameRu ||
     PANEL_TYPE_LABELS[item?.panelType?.code ?? ''] ||
     '—';
   const supplierName = formatSupplierName(
@@ -294,16 +312,18 @@ function calculationSummary(calculation: CalculationSession) {
   );
   const sizeLabel = item?.panelSize?.label
     ? item.panelSize.label
-    : item?.panelSize?.width && item.panelSize.length
-      ? `${item.panelSize.width} × ${item.panelSize.length}`
-      : '—';
+    : item?.panelSize?.displayName
+      ? item.panelSize.displayName
+      : item?.panelSize?.width && item.panelSize.length
+        ? `${item.panelSize.width} × ${item.panelSize.length}`
+        : '—';
 
   return {
     typeName,
     supplierName,
     sizeLabel,
-    thickness: item?.thickness ?? '—',
-    sheets: calculation.sheetCount,
+    thickness: item?.thicknessMm ?? '—',
+    sheets: calculationSheetsCount(calculation),
     total: calculation.totalAmount,
   };
 }
@@ -319,7 +339,9 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const createNote = useCreateLeadNote();
   const assignOwner = useAssignLeadOwner();
   const convertToQuote = useConvertCalculationToQuote();
+  const finalizeCalculation = useFinalizeCalculation();
   const updateQuoteStatus = useUpdateQuoteStatus();
+  const finalizedCalculationIds = useRef(new Set<string>());
 
   const [tab, setTab] = useState<WorkspaceTab>('info');
   const [noteText, setNoteText] = useState('');
@@ -682,7 +704,9 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                         <td className="px-3 py-2 text-slate-700">{summary.supplierName}</td>
                         <td className="px-3 py-2 text-slate-700">{summary.sizeLabel}</td>
                         <td className="px-3 py-2 text-slate-700">{summary.thickness} мм</td>
-                        <td className="px-3 py-2 text-slate-700">{summary.sheets}</td>
+                        <td className="px-3 py-2 text-slate-700">
+                          {formatNumber(summary.sheets)}
+                        </td>
                         <td className="px-3 py-2 font-medium text-slate-900">
                           {formatMoney(summary.total)}
                         </td>
@@ -691,14 +715,41 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                             type="button"
                             variant="outline"
                             size="sm"
-                            disabled={convertToQuote.isPending}
+                            disabled={
+                              convertToQuote.isPending ||
+                              finalizeCalculation.isPending
+                            }
                             onClick={() => {
-                              void convertToQuote.mutateAsync({
-                                calculationId: calculation.id,
-                              });
+                              void (async () => {
+                                try {
+                                  const alreadyFinalized =
+                                    calculation.status === 'finalized' ||
+                                    finalizedCalculationIds.current.has(
+                                      calculation.id,
+                                    );
+
+                                  if (!alreadyFinalized) {
+                                    await finalizeCalculation.mutateAsync(
+                                      calculation.id,
+                                    );
+                                    finalizedCalculationIds.current.add(
+                                      calculation.id,
+                                    );
+                                  }
+
+                                  await convertToQuote.mutateAsync({
+                                    calculationId: calculation.id,
+                                  });
+                                } catch {
+                                  // mutation onError already toasted
+                                }
+                              })();
                             }}
                           >
-                            Конвертировать в КП
+                            {convertToQuote.isPending ||
+                            finalizeCalculation.isPending
+                              ? 'Создание КП...'
+                              : 'Конвертировать в КП'}
                           </Button>
                         </td>
                       </tr>

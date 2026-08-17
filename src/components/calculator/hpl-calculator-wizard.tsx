@@ -7,6 +7,7 @@ import {
   CreateCalculationItemPayload,
   useCalculationPreview,
   useCreateCalculation,
+  useFinalizeCalculation,
 } from '@/hooks/use-calculations';
 import {
   useCreatePanelColor,
@@ -21,7 +22,7 @@ import { useAuth } from '@/context/auth-context';
 import { formatMoney } from '@/lib/currency';
 import { formatNumber } from '@/lib/format';
 import { formatSupplierName } from '@/lib/labels';
-import { isDirectorOrAbove, isManagerOnly } from '@/lib/role-access';
+import { isManagerOnly } from '@/lib/role-access';
 import {
   CalculationPreview,
   PanelSize,
@@ -29,6 +30,16 @@ import {
   QualityClass,
   Supplier,
 } from '@/types/hpl';
+
+type GeometryEstimate = {
+  sheetsCount: number | null;
+  areaM2: number;
+};
+
+type SavedCalculationRef = {
+  id: string;
+  status?: 'draft' | 'finalized';
+};
 
 const FALLBACK_THICKNESSES_MM = [6, 8, 10, 12, 16, 20];
 
@@ -206,6 +217,12 @@ function qualityClassLabel(item: QualityClass | string | null | undefined): stri
   return named || item.code?.trim() || '';
 }
 
+function hasMoneyAmount(
+  value: number | string | null | undefined,
+): boolean {
+  return value !== undefined && value !== null && value !== '';
+}
+
 function resolveSheetArea(size: PanelSize): number | null {
   const fromSize = Number(size.areaM2);
   if (!Number.isNaN(fromSize) && fromSize > 0) {
@@ -355,7 +372,6 @@ export function HplCalculatorWizard({
 }: HplCalculatorWizardProps) {
   const { user } = useAuth();
   const hideSupplierStep = isManagerOnly(user);
-  const canSeePurchasePrice = isDirectorOrAbove(user);
   const [step, setStep] = useState<WizardStep>(1);
   const [panelTypeId, setPanelTypeId] = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -366,9 +382,10 @@ export function HplCalculatorWizard({
   const [requiredAreaM2, setRequiredAreaM2] = useState('');
   const [sizeQuery, setSizeQuery] = useState('');
   const [preview, setPreview] = useState<CalculationPreview | null>(null);
-  const [savedCalculationId, setSavedCalculationId] = useState<string | null>(
-    null,
-  );
+  const [unpricedEstimate, setUnpricedEstimate] =
+    useState<GeometryEstimate | null>(null);
+  const [savedCalculation, setSavedCalculation] =
+    useState<SavedCalculationRef | null>(null);
 
   const typesQuery = usePanelTypes();
   const suppliersQuery = useSuppliers(!hideSupplierStep);
@@ -376,6 +393,7 @@ export function HplCalculatorWizard({
   const colorsQuery = usePanelColors(supplierId || undefined);
   const previewMutation = useCalculationPreview();
   const createCalculation = useCreateCalculation();
+  const finalizeCalculation = useFinalizeCalculation();
   const convertToQuote = useConvertCalculationToQuote();
 
   const panelTypes = typesQuery.data ?? [];
@@ -481,141 +499,156 @@ export function HplCalculatorWizard({
 
     setQualityClassId('');
     setPreview(null);
-    setSavedCalculationId(null);
+    setUnpricedEstimate(null);
+    setSavedCalculation(null);
     setSupplierId(nextSupplier.id);
     setStep(3);
   };
 
   const markDirty = (): void => {
     setPreview(null);
-    setSavedCalculationId(null);
+    setUnpricedEstimate(null);
+    setSavedCalculation(null);
   };
+
+  const hasCatalogPricingInputs = Boolean(supplierId && qualityClassId);
 
   const buildPreviewPayload = (): CalculationPreviewPayload => {
     const area = Number(requiredAreaM2);
 
     return {
       panelTypeId,
-      ...(supplierId ? { supplierId } : {}),
-      qualityClassId: qualityClassId || undefined,
+      supplierId,
+      qualityClassId,
       thicknessMm: thickness ?? 0,
       panelSizeId,
-      colorId: colorId || undefined,
+      ...(colorId ? { colorId } : {}),
       requiredAreaM2: Number.isNaN(area) ? 0 : area,
     };
   };
 
-  const toCreateItem = (item?: {
-    panelTypeId?: string;
-    panelSizeId?: string;
-    supplierId?: string;
-    qualityClassId?: string | null;
-    thickness?: number;
-    thicknessMm?: number;
-    colorId?: string | null;
-    areaM2?: number | string;
-    requiredAreaM2?: number | string;
-  }): CreateCalculationItemPayload => {
-    const area = item?.requiredAreaM2 ?? item?.areaM2 ?? requiredAreaM2;
-    const itemColorId = item?.colorId || colorId;
-    const itemSupplierId = item?.supplierId ?? supplierId;
-    const itemQualityClassId = item?.qualityClassId || qualityClassId;
+  const buildCreateItems = (): CreateCalculationItemPayload[] => {
+    return [
+      {
+        panelTypeId,
+        panelSizeId,
+        ...(supplierId ? { supplierId } : {}),
+        ...(qualityClassId ? { qualityClassId } : {}),
+        thicknessMm: thickness ?? 0,
+        ...(colorId ? { colorId } : {}),
+        requiredAreaM2: String(requiredAreaM2),
+      },
+    ];
+  };
+
+  const buildGeometryEstimate = (): GeometryEstimate => {
+    const area = Number(requiredAreaM2);
+    const sheet = selectedSize ? resolveSheetArea(selectedSize) : null;
+    const sheetsCount =
+      sheet && sheet > 0 && !Number.isNaN(area) && area > 0
+        ? Math.ceil(area / sheet)
+        : null;
+    const totalArea =
+      sheet && sheetsCount && sheetsCount > 0 ? sheetsCount * sheet : area;
 
     return {
-      panelTypeId: item?.panelTypeId ?? panelTypeId,
-      panelSizeId: item?.panelSizeId ?? panelSizeId,
-      ...(itemSupplierId ? { supplierId: itemSupplierId } : {}),
-      ...(itemQualityClassId ? { qualityClassId: itemQualityClassId } : {}),
-      thicknessMm: item?.thicknessMm ?? item?.thickness ?? thickness ?? 0,
-      ...(itemColorId ? { colorId: itemColorId } : {}),
-      requiredAreaM2: String(area),
+      sheetsCount,
+      areaM2: Number.isNaN(totalArea) ? 0 : totalArea,
     };
   };
 
-  const buildItems = (
-    result: CalculationPreview,
-  ): CreateCalculationItemPayload[] => {
-    if (result.items && result.items.length > 0) {
-      return result.items.map((item) => toCreateItem(item));
-    }
-
-    return [toCreateItem({ areaM2: result.areaM2 })];
-  };
-
   const runPreview = async (): Promise<void> => {
-    if (hideSupplierStep) {
-      const area = Number(requiredAreaM2);
-      const sheet = selectedSize ? resolveSheetArea(selectedSize) : null;
-      const sheetCount =
-        sheet && sheet > 0 && !Number.isNaN(area)
-          ? Math.ceil(area / sheet)
-          : 0;
-      const totalArea = sheet && sheetCount > 0 ? sheetCount * sheet : area;
-
-      setPreview({
-        sheetCount,
-        areaM2: totalArea,
-        purchasePricePerM2: 0,
-        clientPricePerM2: 0,
-        pricePerSheet: 0,
-        totalAmount: 0,
-      });
-      setSavedCalculationId(null);
+    if (!hasCatalogPricingInputs) {
+      setPreview(null);
+      setUnpricedEstimate(buildGeometryEstimate());
+      setSavedCalculation(null);
       setStep(8);
       return;
     }
 
-    const result = await previewMutation.mutateAsync(buildPreviewPayload());
-    setPreview(result);
-    setSavedCalculationId(null);
-    setStep(8);
+    try {
+      const result = await previewMutation.mutateAsync(buildPreviewPayload());
+      setUnpricedEstimate(null);
+      setPreview(result);
+      setSavedCalculation(null);
+      setStep(8);
+    } catch {
+      // mutation onError already toasted
+    }
   };
 
-  const saveCalculation = async () => {
+  const saveCalculation = async (): Promise<SavedCalculationRef | null> => {
     if (!preview) {
       return null;
     }
 
-    if (savedCalculationId) {
-      return savedCalculationId;
+    if (savedCalculation) {
+      return savedCalculation;
     }
 
     const saved = await createCalculation.mutateAsync({
       leadId,
-      items: buildItems(preview),
+      items: buildCreateItems(),
     });
 
-    setSavedCalculationId(saved.id);
-    return saved.id;
+    const nextSaved: SavedCalculationRef = {
+      id: saved.id,
+      status: saved.status ?? 'draft',
+    };
+    setSavedCalculation(nextSaved);
+    return nextSaved;
   };
 
   const onSave = async (): Promise<void> => {
-    await saveCalculation();
+    try {
+      await saveCalculation();
+    } catch {
+      // mutation onError already toasted
+    }
   };
 
   const onCreateQuote = async (): Promise<void> => {
-    const calculationId = await saveCalculation();
-    if (!calculationId) {
-      return;
-    }
+    try {
+      const calculation = await saveCalculation();
+      if (!calculation) {
+        return;
+      }
 
-    await convertToQuote.mutateAsync({ calculationId });
-    onSuccess?.();
-    onClose();
+      let status = calculation.status;
+      if (status !== 'finalized') {
+        const finalized = await finalizeCalculation.mutateAsync(
+          calculation.id,
+        );
+        status = finalized.status ?? 'finalized';
+        setSavedCalculation({
+          id: calculation.id,
+          status,
+        });
+      }
+
+      await convertToQuote.mutateAsync({ calculationId: calculation.id });
+      onSuccess?.();
+      onClose();
+    } catch {
+      // mutation onError already toasted
+    }
   };
 
   const requiredArea = Number(requiredAreaM2);
-  const canPreview =
+  const canCalculate =
     Boolean(panelTypeId) &&
-    (hideSupplierStep || Boolean(supplierId)) &&
-    (hideSupplierStep || Boolean(qualityClassId)) &&
     thickness !== null &&
     Boolean(panelSizeId) &&
     requiredArea > 0 &&
     !Number.isNaN(requiredArea);
 
   const sheetArea = selectedSize ? resolveSheetArea(selectedSize) : null;
-  const isSaving = createCalculation.isPending || convertToQuote.isPending;
+  const isSaving =
+    createCalculation.isPending ||
+    finalizeCalculation.isPending ||
+    convertToQuote.isPending;
+  const resultSheetsCount = preview?.sheetsCount ?? unpricedEstimate?.sheetsCount;
+  const resultAreaM2 = preview?.areaM2 ?? unpricedEstimate?.areaM2;
   const visibleSteps = hideSupplierStep
     ? WIZARD_STEPS.filter((item) => item.step !== 2)
     : WIZARD_STEPS;
@@ -921,7 +954,7 @@ export function HplCalculatorWizard({
               </label>
               <Button
                 type="button"
-                disabled={!canPreview || previewMutation.isPending}
+                disabled={!canCalculate || previewMutation.isPending}
                 onClick={() => {
                   void runPreview();
                 }}
@@ -931,11 +964,17 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {step === 8 && preview ? (
+          {step === 8 && (preview || unpricedEstimate) ? (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">
                 Результат расчёта
               </h3>
+              {!preview ? (
+                <p className="text-sm text-slate-600">
+                  Коммерческая цена недоступна: не заданы поставщик и класс
+                  качества. Показана оценка количества листов.
+                </p>
+              ) : null}
               <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm">
                 <PreviewRow
                   label="Тип / поставщик"
@@ -950,30 +989,44 @@ export function HplCalculatorWizard({
                   }`}
                 />
                 <PreviewRow
-                  label="Количество листов"
-                  value={String(preview.sheetCount)}
+                  label={
+                    preview
+                      ? 'Количество листов'
+                      : 'Количество листов (оценка)'
+                  }
+                  value={formatNumber(resultSheetsCount)}
                 />
                 <PreviewRow
                   label="Площадь одного листа"
                   value={`${formatNumber(sheetArea)} м²`}
                 />
-                {canSeePurchasePrice ? (
+                <PreviewRow
+                  label={preview ? 'Площадь' : 'Площадь (оценка)'}
+                  value={`${formatNumber(resultAreaM2)} м²`}
+                />
+                {preview && hasMoneyAmount(preview.wastePercent) ? (
+                  <PreviewRow
+                    label="Отходы"
+                    value={`${formatNumber(preview.wastePercent)} %`}
+                  />
+                ) : null}
+                {preview && hasMoneyAmount(preview.supplierPricePerM2) ? (
                   <PreviewRow
                     label="Цена за м² (закуп)"
-                    value={formatMoney(preview.purchasePricePerM2)}
+                    value={formatMoney(preview.supplierPricePerM2)}
                   />
                 ) : null}
                 <PreviewRow
                   label="Цена за м² (клиент)"
-                  value={formatMoney(preview.clientPricePerM2)}
+                  value={formatMoney(preview?.clientPricePerM2)}
                 />
                 <PreviewRow
                   label="Цена за лист"
-                  value={formatMoney(preview.pricePerSheet)}
+                  value={formatMoney(preview?.pricePerSheet)}
                 />
                 <PreviewRow
                   label="Итого"
-                  value={formatMoney(preview.totalAmount)}
+                  value={formatMoney(preview?.total)}
                 />
                 <PreviewRow
                   label="Срок поставки"
@@ -985,7 +1038,7 @@ export function HplCalculatorWizard({
                 />
               </div>
 
-              {savedCalculationId ? (
+              {savedCalculation ? (
                 <p className="text-sm text-emerald-700">Расчёт сохранён.</p>
               ) : null}
 
@@ -1000,7 +1053,7 @@ export function HplCalculatorWizard({
                 <Button
                   type="button"
                   variant="secondary"
-                  disabled={isSaving}
+                  disabled={isSaving || !preview}
                   onClick={() => {
                     void onSave();
                   }}
@@ -1011,12 +1064,14 @@ export function HplCalculatorWizard({
                 </Button>
                 <Button
                   type="button"
-                  disabled={isSaving}
+                  disabled={isSaving || !preview}
                   onClick={() => {
                     void onCreateQuote();
                   }}
                 >
-                  {convertToQuote.isPending ? 'Создание КП...' : 'Создать КП'}
+                  {finalizeCalculation.isPending || convertToQuote.isPending
+                    ? 'Создание КП...'
+                    : 'Создать КП'}
                 </Button>
               </div>
             </div>

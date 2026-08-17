@@ -78,23 +78,32 @@ export type CalculationItem = {
   panelTypeId: string;
   supplierId: string;
   qualityClassId?: string | null;
-  thickness: number;
-  thicknessMm?: number;
+  thicknessMm: number;
   panelSizeId: string;
   colorId?: string | null;
-  sheetCount: number;
-  areaM2: number | string;
-  purchasePricePerM2: number | string;
+  requiredAreaM2?: number | string;
+  sheetsCount: number;
+  areaM2?: number | string | null;
+  supplierPricePerM2?: number | string;
   clientPricePerM2: number | string;
+  pricePerM2?: number | string;
   pricePerSheet: number | string;
   totalPrice: number | string;
-  panelType?: { id?: string; code?: string; name?: string } | null;
+  wastePercent?: number | string;
+  panelType?: {
+    id?: string;
+    code?: string;
+    name?: string;
+    displayNameRu?: string | null;
+  } | null;
   supplier?: { id?: string; code?: string; name?: string } | null;
   panelSize?: {
     id?: string;
     width?: number;
     length?: number;
     label?: string | null;
+    displayName?: string | null;
+    areaM2?: number | string | null;
   } | null;
 };
 
@@ -103,33 +112,21 @@ export type CalculationSession = {
   leadId: string;
   status?: 'draft' | 'finalized';
   items: CalculationItem[];
-  sheetCount: number;
-  sheetsCount?: number;
-  areaM2: number | string;
-  purchasePricePerM2?: number | string | null;
-  supplierPricePerM2?: number | string | null;
-  clientPricePerM2?: number | string | null;
-  pricePerSheet?: number | string | null;
-  totalAmount: number | string;
-  margin?: number | string | null;
+  totalAmount?: number | string | null;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+  displayCurrency?: string | null;
 };
 
 export type CalculationPreview = {
-  sheetCount?: number;
-  sheetsCount?: number;
+  sheetsCount: number;
   areaM2: number | string;
   wastePercent?: number | string;
-  purchasePricePerM2?: number | string;
   supplierPricePerM2?: number | string;
   clientPricePerM2: number | string;
   pricePerSheet: number | string;
-  totalAmount?: number | string;
-  total?: number | string;
-  margin?: number | string | null;
-  items?: CalculationItem[];
+  total: number | string;
 };
 
 export type QuoteItem = {
@@ -146,10 +143,8 @@ export type QuoteItem = {
   colorName?: string | null;
   requiredAreaM2?: number | string;
   sheetsCount?: number;
-  sheetCount?: number;
   areaM2: number | string;
   supplierPricePerM2?: number | string;
-  purchasePricePerM2?: number | string;
   pricePerM2?: number | string;
   clientPricePerM2?: number | string;
   pricePerSheet: number | string;

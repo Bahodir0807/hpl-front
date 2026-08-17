@@ -5,7 +5,6 @@ import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
 import {
-  CalculationItem,
   CalculationPreview,
   CalculationSession,
   HplListResponse,
@@ -20,20 +19,18 @@ export type {
 
 export type CalculationPreviewPayload = {
   panelTypeId: string;
-  supplierId?: string;
-  qualityClassId?: string;
-  thicknessMm: number;
   panelSizeId: string;
-  colorId?: string;
+  supplierId: string;
+  qualityClassId: string;
+  thicknessMm: number;
   requiredAreaM2: number;
-  wastePercent?: number;
-  sheetCount?: number;
+  colorId?: string;
+  leadId?: string;
 };
 
 export type CreateCalculationItemPayload = {
   panelTypeId: string;
   panelSizeId: string;
-  // TODO: Nest CalculationItemDto requires supplierId (@IsUUID). Backend must make it optional for manager-stage submissions (director fills it later).
   supplierId?: string;
   qualityClassId?: string;
   thicknessMm: number;
@@ -80,8 +77,6 @@ export function useCreateCalculation() {
           items: payload.items.map((item) => ({
             panelTypeId: item.panelTypeId,
             panelSizeId: item.panelSizeId,
-            // TODO: Nest CalculationItemDto.supplierId is @IsUUID() required.
-            // Backend must make supplierId optional for manager-stage submissions, or director fills it later.
             ...(item.supplierId ? { supplierId: item.supplierId } : {}),
             ...(item.qualityClassId
               ? { qualityClassId: item.qualityClassId }
@@ -97,6 +92,29 @@ export function useCreateCalculation() {
     },
     onSuccess: (calculation) => {
       showSuccess('Расчёт сохранён');
+      void queryClient.invalidateQueries({ queryKey: ['calculations'] });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', calculation.leadId],
+      });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useFinalizeCalculation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string): Promise<CalculationSession> => {
+      const response = await apiClient.post<CalculationSession>(
+        `/calculations/${id}/finalize`,
+      );
+
+      return response.data;
+    },
+    onSuccess: (calculation) => {
       void queryClient.invalidateQueries({ queryKey: ['calculations'] });
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', calculation.leadId],
