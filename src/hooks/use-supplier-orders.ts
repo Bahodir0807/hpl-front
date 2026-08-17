@@ -13,16 +13,20 @@ export const supplierOrderStatuses: SupplierOrderStatus[] = [
   'DRAFT',
   'SENT_TO_PRODUCTION',
   'IN_PRODUCTION',
+  'READY_FOR_SHIPMENT',
   'SHIPPED',
   'DELIVERED',
+  'CANCELLED',
 ];
 
 export const supplierOrderStatusLabels: Record<SupplierOrderStatus, string> = {
   DRAFT: 'Черновик',
   SENT_TO_PRODUCTION: 'Отправлено в производство',
   IN_PRODUCTION: 'В производстве',
+  READY_FOR_SHIPMENT: 'Готов к отгрузке',
   SHIPPED: 'Отгружено',
   DELIVERED: 'Доставлено',
+  CANCELLED: 'Отменён',
 };
 
 const LEGACY_STATUS_MAP: Record<string, SupplierOrderStatus> = {

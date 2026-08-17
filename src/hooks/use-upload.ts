@@ -10,9 +10,7 @@ export type FileRelatedType =
   | 'ORDER'
   | 'CLIENT'
   | 'PRODUCT'
-  | 'TASK'
-  | 'LEAD'
-  | 'PAYMENT';
+  | 'TASK';
 
 export type UploadedFile = {
   id: string;

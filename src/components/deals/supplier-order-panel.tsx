@@ -32,7 +32,10 @@ export function SupplierOrderPanel({ dealId, deal }: SupplierOrderPanelProps) {
   const deliveryAddress =
     deal.delivery?.address ?? deal.deliveryAddress ?? order?.deliveryAddress;
   const deliveryCost =
-    deal.delivery?.cost ?? deal.deliveryCost ?? order?.deliveryAmount;
+    deal.delivery?.cost ??
+    deal.deliveryCost ??
+    order?.deliveryCost ??
+    order?.deliveryAmount;
   const estimatedDate =
     deal.delivery?.estimatedDate ??
     deal.estimatedDeliveryDate ??

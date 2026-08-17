@@ -16,8 +16,10 @@ import { apiClient } from '../lib/api-client';
 export type AuthUser = {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
+  teamId?: string | null;
+  managerId?: string | null;
   roles: string[];
   permissions: string[];
 };

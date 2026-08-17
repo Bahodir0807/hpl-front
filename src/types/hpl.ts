@@ -2,14 +2,23 @@ export type PanelTypeCode = 'exterior' | 'interior' | 'laboratory';
 
 export type SupplierCode = 'wuya' | 'tianran' | 'polybet';
 
-export type QuoteStatus = 'draft' | 'sent' | 'approved' | 'rejected';
+export type QuoteStatus =
+  | 'draft'
+  | 'sent'
+  | 'approved'
+  | 'rejected'
+  | 'converted';
+
+export type PatchableQuoteStatus = 'sent' | 'approved' | 'rejected';
 
 export type SupplierOrderStatus =
   | 'DRAFT'
   | 'SENT_TO_PRODUCTION'
   | 'IN_PRODUCTION'
+  | 'READY_FOR_SHIPMENT'
   | 'SHIPPED'
-  | 'DELIVERED';
+  | 'DELIVERED'
+  | 'CANCELLED';
 
 export type HplListResponse<T> = T[] | { items: T[]; total?: number };
 
@@ -92,25 +101,33 @@ export type CalculationItem = {
 export type CalculationSession = {
   id: string;
   leadId: string;
+  status?: 'draft' | 'finalized';
   items: CalculationItem[];
   sheetCount: number;
+  sheetsCount?: number;
   areaM2: number | string;
   purchasePricePerM2?: number | string | null;
+  supplierPricePerM2?: number | string | null;
   clientPricePerM2?: number | string | null;
   pricePerSheet?: number | string | null;
   totalAmount: number | string;
   margin?: number | string | null;
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type CalculationPreview = {
-  sheetCount: number;
+  sheetCount?: number;
+  sheetsCount?: number;
   areaM2: number | string;
-  purchasePricePerM2: number | string;
+  wastePercent?: number | string;
+  purchasePricePerM2?: number | string;
+  supplierPricePerM2?: number | string;
   clientPricePerM2: number | string;
   pricePerSheet: number | string;
-  totalAmount: number | string;
+  totalAmount?: number | string;
+  total?: number | string;
   margin?: number | string | null;
   items?: CalculationItem[];
 };
@@ -119,12 +136,25 @@ export type QuoteItem = {
   id: string;
   quoteId?: string;
   name?: string | null;
-  sheetCount: number;
+  panelTypeCode?: string;
+  panelTypeName?: string;
+  panelSizeName?: string;
+  thicknessMm?: number;
+  qualityClassCode?: string;
+  qualityClassName?: string;
+  colorCode?: string | null;
+  colorName?: string | null;
+  requiredAreaM2?: number | string;
+  sheetsCount?: number;
+  sheetCount?: number;
   areaM2: number | string;
-  purchasePricePerM2: number | string;
-  clientPricePerM2: number | string;
+  supplierPricePerM2?: number | string;
+  purchasePricePerM2?: number | string;
+  pricePerM2?: number | string;
+  clientPricePerM2?: number | string;
   pricePerSheet: number | string;
   totalPrice: number | string;
+  wastePercent?: number | string;
 };
 
 export type Quote = {
@@ -133,11 +163,16 @@ export type Quote = {
   leadId: string;
   dealId?: string | null;
   calculationId?: string | null;
+  managerId?: string | null;
   status: QuoteStatus;
   items: QuoteItem[];
   subtotal?: number | string | null;
+  deliveryCost?: number | string | null;
   deliveryAmount?: number | string | null;
   totalAmount: number | string;
+  displayCurrency?: string | null;
+  clientComment?: string | null;
+  rejectionReason?: string | null;
   margin?: number | string | null;
   validUntil?: string | null;
   createdAt: string;
@@ -153,6 +188,7 @@ export type SupplierOrder = {
   estimatedDate?: string | null;
   deliveryDays?: number | null;
   deliveryAddress?: string | null;
+  deliveryCost?: number | string | null;
   deliveryAmount?: number | string | null;
   comment?: string | null;
   createdAt: string;
@@ -161,10 +197,15 @@ export type SupplierOrder = {
 
 export type Notification = {
   id: string;
+  userId?: string;
   title: string;
   message?: string | null;
   type?: string | null;
   isRead: boolean;
+  readAt?: string | null;
+  taskId?: string | null;
+  relatedType?: string | null;
+  relatedId?: string | null;
   leadId?: string | null;
   createdAt: string;
 };

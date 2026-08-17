@@ -4,14 +4,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
-import { HplListResponse, Quote, QuoteStatus, unwrapHplList } from '../types/hpl';
+import {
+  HplListResponse,
+  PatchableQuoteStatus,
+  Quote,
+  unwrapHplList,
+} from '../types/hpl';
 
-export type { Quote, QuoteItem, QuoteStatus } from '../types/hpl';
+export type { PatchableQuoteStatus, Quote, QuoteItem, QuoteStatus } from '../types/hpl';
 
 export type ConvertCalculationToQuotePayload = {
   calculationId?: string;
-  deliveryAmount?: number;
+  deliveryCost?: number;
   validUntil?: string;
+  clientComment?: string;
 };
 
 export function useQuotes(leadId?: string) {
@@ -43,8 +49,13 @@ export function useConvertCalculationToQuote(calculationId?: string) {
       const response = await apiClient.post<Quote>(
         `/calculations/${id}/convert-to-quote`,
         {
-          deliveryAmount: payload?.deliveryAmount,
-          validUntil: payload?.validUntil,
+          ...(payload?.deliveryCost !== undefined
+            ? { deliveryCost: payload.deliveryCost }
+            : {}),
+          ...(payload?.validUntil ? { validUntil: payload.validUntil } : {}),
+          ...(payload?.clientComment
+            ? { clientComment: payload.clientComment }
+            : {}),
         },
       );
 
@@ -66,7 +77,7 @@ export function useConvertCalculationToQuote(calculationId?: string) {
 
 export type UpdateQuoteStatusPayload = {
   id: string;
-  status: QuoteStatus;
+  status: PatchableQuoteStatus;
 };
 
 export function useUpdateQuoteStatus() {
