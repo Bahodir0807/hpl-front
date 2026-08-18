@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../context/auth-context';
 import { enumLabel, roleLabels } from '../../lib/labels';
+import { NotificationCenter } from '../notifications/notification-center';
 
 const sectionTitles: Record<string, string> = {
   '/tasks': 'Задачи',
@@ -47,9 +48,10 @@ export function Header({ onMenuOpen }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        <NotificationCenter />
         {user ? (
           <div className="flex items-center gap-2">
-            <div className="text-right">
+            <div className="hidden text-right sm:block">
               <div className="text-sm font-medium text-slate-900">
                 {user.firstName} {user.lastName}
               </div>

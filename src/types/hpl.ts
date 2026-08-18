@@ -235,17 +235,17 @@ export type SupplierOrder = {
 
 export type Notification = {
   id: string;
-  userId?: string;
+  userId: string;
   title: string;
   message?: string | null;
-  type?: string | null;
+  type: string;
   isRead: boolean;
   readAt?: string | null;
   taskId?: string | null;
   relatedType?: string | null;
   relatedId?: string | null;
-  leadId?: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type LeadCall = {
