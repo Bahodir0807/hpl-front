@@ -25,6 +25,7 @@ const navigationGroups: NavigationGroup[] = [
   {
     title: 'Продажи',
     items: [
+      { href: '/', label: 'Обзор' },
       { href: '/leads', label: 'Лиды' },
       { href: '/deals', label: 'Сделки' },
       { href: '/clients', label: 'Клиенты и Контакты' },

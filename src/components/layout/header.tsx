@@ -7,6 +7,7 @@ import { enumLabel, roleLabels } from '../../lib/labels';
 import { NotificationCenter } from '../notifications/notification-center';
 
 const sectionTitles: Record<string, string> = {
+  '/': 'Обзор',
   '/tasks': 'Задачи',
   '/leads': 'Лиды',
   '/deals': 'Сделки',
