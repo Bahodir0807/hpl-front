@@ -17,8 +17,11 @@ export type Contact = {
   firstName: string;
   lastName?: string | null;
   position?: string | null;
+  role?: string | null;
   phone?: string | null;
+  messenger?: string | null;
   email?: string | null;
+  preferredChannel?: string | null;
   isPrimary: boolean;
   createdAt: string;
   updatedAt: string;
@@ -42,7 +45,11 @@ export type ClientLead = {
   id: string;
   title: string;
   status: string;
+  source: string;
+  ownerId: string;
+  estimatedAmount?: number | string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type ClientOwner = {
@@ -157,6 +164,7 @@ export type ActivityTimelineItem = {
   content?: string | null;
   metadata?: Record<string, unknown> | null;
   createdAt: string;
+  author?: ClientOwner | null;
 };
 
 export function useClients(filters: ClientsFilter) {
@@ -287,38 +295,17 @@ export function useAddProjectObject() {
   });
 }
 
-export function useClientTimeline(clientId: string | null) {
-  const clientQuery = useClient(clientId);
-  const leadIds = (clientQuery.data?.leads ?? []).map((lead) => lead.id);
-  const dealIds = (clientQuery.data?.deals ?? []).map((deal) => deal.id);
-
+export function useClientTimeline(clientId: string | null, enabled = true) {
   return useQuery({
-    queryKey: ["client-timeline", clientId, leadIds, dealIds],
+    queryKey: ["client-timeline", clientId],
     queryFn: async (): Promise<ActivityTimelineItem[]> => {
-      const requests = [
-        ...leadIds.map((id) =>
-          apiClient.get<ActivityTimelineItem[]>(`/audit/timeline/Lead/${id}`),
-        ),
-        ...dealIds.map((id) =>
-          apiClient.get<ActivityTimelineItem[]>(`/audit/timeline/Deal/${id}`),
-        ),
-      ];
+      const response = await apiClient.get<ActivityTimelineItem[]>(
+        `/audit/timeline/Client/${clientId}`,
+      );
 
-      if (requests.length === 0) {
-        return [];
-      }
-
-      const responses = await Promise.all(requests);
-
-      return responses
-        .flatMap((response) => response.data)
-        .sort(
-          (left, right) =>
-            new Date(right.createdAt).getTime() -
-            new Date(left.createdAt).getTime(),
-        );
+      return response.data;
     },
-    enabled: Boolean(clientId) && clientQuery.isSuccess,
+    enabled: enabled && Boolean(clientId),
   });
 }
 
