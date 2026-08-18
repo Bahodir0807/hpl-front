@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { QualifyLeadModal } from '@/components/leads/qualify-lead-modal';
 import { UnqualifyLeadModal } from '@/components/leads/unqualify-lead-modal';
+import { QuoteCard } from '@/components/quotes/quote-card';
+import { RejectQuoteModal } from '@/components/quotes/reject-quote-modal';
 import { Button } from '@/components/ui/button';
 import { SearchCombobox } from '@/components/ui/search-combobox';
 import { useAuth } from '@/context/auth-context';
@@ -55,12 +57,12 @@ import {
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { formatSupplierName, leadStatusLabels } from '@/lib/labels';
 import { hasElevatedAccess } from '@/lib/role-access';
+import { QuoteAction, quoteStatusLabels } from '@/lib/quote-presentation';
 import {
   CalculationSession,
   LeadActivity,
   LeadQualification,
   Quote,
-  QuoteStatus,
 } from '@/types/hpl';
 
 const HplCalculatorWizard = dynamic(
@@ -79,22 +81,6 @@ const statusClassName: Record<LeadStatus, string> = {
   QUALIFIED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   UNQUALIFIED: 'bg-slate-100 text-slate-700 border-slate-200',
   CONVERTED: 'bg-green-50 text-green-700 border-green-200',
-};
-
-const quoteStatusLabels: Record<QuoteStatus, string> = {
-  draft: 'Черновик',
-  sent: 'Отправлено',
-  approved: 'Согласовано',
-  rejected: 'Отклонено',
-  converted: 'Конвертировано',
-};
-
-const quoteStatusClassName: Record<QuoteStatus, string> = {
-  draft: 'border-slate-200 bg-slate-50 text-slate-700',
-  sent: 'border-blue-200 bg-blue-50 text-blue-700',
-  approved: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  rejected: 'border-red-200 bg-red-50 text-red-700',
-  converted: 'border-violet-200 bg-violet-50 text-violet-700',
 };
 
 const PANEL_TYPE_LABELS: Record<string, string> = {
@@ -479,6 +465,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const [ownerId, setOwnerId] = useState('');
   const [qualifyingLead, setQualifyingLead] = useState<Lead | null>(null);
   const [unqualifyingLead, setUnqualifyingLead] = useState<Lead | null>(null);
+  const [rejectingQuote, setRejectingQuote] = useState<Quote | null>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
   const lead = leadQuery.data;
@@ -495,7 +482,6 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const commercialQualification = workspace?.commercialQualification ?? null;
   const canCommercialQualify =
     user?.permissions.includes('leads:commercial_qualify') ?? false;
-  const canApproveQuote = user?.permissions.includes('quotes:approve') ?? false;
   const source = lead?.source ?? workspace?.lead.source;
   const contact = lead?.contact ?? workspace?.lead.contact;
   const clientName =
@@ -531,6 +517,30 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
       quotes,
     );
   }, [calculations, lead, quotes, workspace]);
+
+  const pendingQuoteAction = (quoteId: string): QuoteAction | null => {
+    if (
+      updateQuoteStatus.isPending &&
+      updateQuoteStatus.variables?.id === quoteId
+    ) {
+      if (updateQuoteStatus.variables.status === 'sent') return 'send';
+      if (updateQuoteStatus.variables.status === 'approved') return 'approve';
+      return 'reject';
+    }
+    if (
+      recordClientAcceptance.isPending &&
+      recordClientAcceptance.variables === quoteId
+    ) {
+      return 'client-accept';
+    }
+    if (
+      convertQuoteToDeal.isPending &&
+      convertQuoteToDeal.variables === quoteId
+    ) {
+      return 'convert';
+    }
+    return null;
+  };
 
   const onCall = async (): Promise<void> => {
     const call = await createCall.mutateAsync({ leadId });
@@ -924,134 +934,64 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
         ) : null}
 
         {tab === 'quotes' ? (
-          <section className="rounded border border-slate-200 bg-white p-5">
-            <h3 className="text-base font-semibold text-slate-950">КП</h3>
+          <section>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-950">
+                  Коммерческие предложения
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  История предложений по этому лиду
+                </p>
+              </div>
+            </div>
             {quotesQuery.isLoading ? (
               <p className="mt-4 text-sm text-slate-600">Загрузка КП...</p>
             ) : null}
             {quotesQuery.isError ? (
-              <p className="mt-4 text-sm text-red-600">Не удалось загрузить КП.</p>
+              <div className="mt-4 flex items-center justify-between gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <span>Не удалось загрузить КП.</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => void quotesQuery.refetch()}>
+                  Повторить
+                </Button>
+              </div>
             ) : null}
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Номер</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Статус</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Сумма</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Дата</th>
-                    <th className="px-3 py-2 text-right font-semibold text-slate-700">Действия</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {quotes.map((quote) => (
-                    <tr key={quote.id}>
-                      <td className="px-3 py-2 font-medium text-slate-900">
-                        {quote.number ?? quote.id}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={`inline-flex rounded border px-2 py-0.5 text-xs font-semibold ${quoteStatusClassName[quote.status]}`}
-                        >
-                          {quoteStatusLabels[quote.status] ?? quote.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-slate-700">
-                        {formatMoney(quote.totalAmount)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-                        {formatDateTime(quote.createdAt)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {quote.status === 'draft' ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={updateQuoteStatus.isPending}
-                            onClick={() => {
-                              void updateQuoteStatus.mutateAsync({
-                                id: quote.id,
-                                status: 'sent',
-                              });
-                            }}
-                          >
-                            Отправить клиенту
-                          </Button>
-                        ) : null}
-                        {quote.status === 'sent' && canApproveQuote ? (
-                          <div className="mt-2 flex flex-wrap justify-end gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={updateQuoteStatus.isPending}
-                              onClick={() => {
-                                void updateQuoteStatus.mutateAsync({
-                                  id: quote.id,
-                                  status: 'approved',
-                                });
-                              }}
-                            >
-                              Одобрить
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={updateQuoteStatus.isPending}
-                              onClick={() => {
-                                const rejectionReason = window.prompt(
-                                  'Причина отказа',
-                                );
-                                if (rejectionReason?.trim()) {
-                                  void updateQuoteStatus.mutateAsync({
-                                    id: quote.id,
-                                    status: 'rejected',
-                                    rejectionReason: rejectionReason.trim(),
-                                  });
-                                }
-                              }}
-                            >
-                              Отклонить
-                            </Button>
-                          </div>
-                        ) : null}
-                        {quote.status === 'approved' ? (
-                          <div className="mt-2 flex flex-wrap justify-end gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={recordClientAcceptance.isPending}
-                              onClick={() => {
-                                void recordClientAcceptance.mutateAsync(
-                                  quote.id,
-                                );
-                              }}
-                            >
-                              Клиент согласен
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={convertQuoteToDeal.isPending}
-                              onClick={() => {
-                                void convertQuoteToDeal.mutateAsync(quote.id);
-                              }}
-                            >
-                              В сделку
-                            </Button>
-                          </div>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!quotesQuery.isLoading && quotes.length === 0 ? (
-                <div className="p-6 text-center text-sm text-slate-500">
+            <div className="mt-4 space-y-3">
+              {quotes.map((quote, index) => {
+                const manager = usersById.get(quote.managerId);
+                return (
+                  <QuoteCard
+                    key={quote.id}
+                    quote={quote}
+                    currentUserId={user?.id}
+                    permissions={user?.permissions ?? []}
+                    managerName={manager ? formatPersonName(manager, manager.email) : undefined}
+                    isLatest={index === 0}
+                    conversionAllowed={
+                      lead?.status === 'QUALIFIED' &&
+                      !lead.dealId &&
+                      (qualification?.stockOnly !== true ||
+                        Boolean(quote.clientAcceptedAt))
+                    }
+                    pendingAction={pendingQuoteAction(quote.id)}
+                    onSend={() => {
+                      void updateQuoteStatus.mutateAsync({ id: quote.id, status: 'sent' }).catch(() => undefined);
+                    }}
+                    onApprove={() => {
+                      void updateQuoteStatus.mutateAsync({ id: quote.id, status: 'approved' }).catch(() => undefined);
+                    }}
+                    onReject={() => setRejectingQuote(quote)}
+                    onClientAccept={() => {
+                      void recordClientAcceptance.mutateAsync(quote.id).catch(() => undefined);
+                    }}
+                    onConvert={() => {
+                      void convertQuoteToDeal.mutateAsync(quote.id).catch(() => undefined);
+                    }}
+                  />
+                );
+              })}
+              {!quotesQuery.isLoading && !quotesQuery.isError && quotes.length === 0 ? (
+                <div className="border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
                   КП пока нет.
                 </div>
               ) : null}
@@ -1070,6 +1010,24 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
         isOpen={Boolean(unqualifyingLead)}
         onClose={() => setUnqualifyingLead(null)}
       />
+      {rejectingQuote ? (
+        <RejectQuoteModal
+          quoteId={rejectingQuote.id.slice(0, 8).toUpperCase()}
+          isPending={
+            updateQuoteStatus.isPending &&
+            updateQuoteStatus.variables?.id === rejectingQuote.id
+          }
+          onCancel={() => setRejectingQuote(null)}
+          onSubmit={async (rejectionReason) => {
+            await updateQuoteStatus.mutateAsync({
+              id: rejectingQuote.id,
+              status: 'rejected',
+              rejectionReason,
+            });
+            setRejectingQuote(null);
+          }}
+        />
+      ) : null}
       {isCalculatorOpen ? (
         <HplCalculatorWizard
           leadId={lead.id}

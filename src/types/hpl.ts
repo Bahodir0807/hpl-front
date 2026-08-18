@@ -180,6 +180,8 @@ export type QuoteItem = {
   panelTypeName?: string;
   panelSizeName?: string;
   thicknessMm?: number;
+  supplierCode?: string;
+  supplierName?: string;
   qualityClassCode?: string;
   qualityClassName?: string;
   colorCode?: string | null;
@@ -201,7 +203,7 @@ export type Quote = {
   leadId: string;
   dealId?: string | null;
   calculationId?: string | null;
-  managerId?: string | null;
+  managerId: string;
   status: QuoteStatus;
   items: QuoteItem[];
   subtotal?: number | string | null;
@@ -211,6 +213,8 @@ export type Quote = {
   displayCurrency?: string | null;
   clientComment?: string | null;
   rejectionReason?: string | null;
+  clientAcceptedAt?: string | null;
+  clientAcceptedById?: string | null;
   margin?: number | string | null;
   validUntil?: string | null;
   createdAt: string;

@@ -13,6 +13,19 @@ import {
 
 export type { PatchableQuoteStatus, Quote, QuoteItem, QuoteStatus } from '../types/hpl';
 
+function updateQuoteLists(
+  current: Quote[] | undefined,
+  updatedQuote: Quote,
+): Quote[] | undefined {
+  if (!current) {
+    return current;
+  }
+
+  return current.map((quote) =>
+    quote.id === updatedQuote.id ? updatedQuote : quote,
+  );
+}
+
 export type ConvertCalculationToQuotePayload = {
   calculationId?: string;
   deliveryCost?: number;
@@ -100,6 +113,10 @@ export function useUpdateQuoteStatus() {
     },
     onSuccess: (quote) => {
       showSuccess('Статус КП обновлён');
+      queryClient.setQueriesData<Quote[]>(
+        { queryKey: ['quotes'] },
+        (current) => updateQuoteLists(current, quote),
+      );
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', quote.leadId],
@@ -122,6 +139,10 @@ export function useRecordQuoteClientAcceptance() {
     },
     onSuccess: (quote) => {
       showSuccess('Согласие клиента зафиксировано');
+      queryClient.setQueriesData<Quote[]>(
+        { queryKey: ['quotes'] },
+        (current) => updateQuoteLists(current, quote),
+      );
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', quote.leadId],
@@ -146,6 +167,10 @@ export function useConvertQuoteToDeal() {
     },
     onSuccess: (result) => {
       showSuccess('КП конвертировано в сделку');
+      queryClient.setQueriesData<Quote[]>(
+        { queryKey: ['quotes'] },
+        (current) => updateQuoteLists(current, result.quote),
+      );
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({ queryKey: ['deals'] });
       void queryClient.invalidateQueries({

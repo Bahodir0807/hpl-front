@@ -33,7 +33,7 @@ type TabId = "items" | "supplier" | "offers" | "history" | "tasks";
 const tabs: { id: TabId; label: string }[] = [
   { id: "items", label: "Позиции HPL" },
   { id: "supplier", label: "Заказ поставщику" },
-  { id: "offers", label: "КП" },
+  { id: "offers", label: "Документы КП" },
   { id: "history", label: "История этапов" },
   { id: "tasks", label: "Открытые задачи" },
 ];
@@ -278,6 +278,14 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
 
               {activeTab === "offers" ? (
                 <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-950">
+                      Версии документов после создания сделки
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Коммерческое предложение до сделки хранится в карточке лида.
+                    </p>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="date"
@@ -293,7 +301,7 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                       disabled={addOffer.isPending}
                       className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
                     >
-                      Создать версию КП
+                      Добавить версию документа
                     </button>
                     <FileUpload
                       relatedType="DEAL"
@@ -302,7 +310,7 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                     />
                     {offerFileId ? (
                       <span className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-                        PDF прикреплён к новой версии КП
+                        PDF прикреплён к новой версии документа
                         <button
                           type="button"
                           onClick={() => setOfferFileId(null)}

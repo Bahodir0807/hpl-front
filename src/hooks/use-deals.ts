@@ -266,7 +266,7 @@ export function useAddDealOffer() {
       return response.data;
     },
     onSuccess: (_offer, payload) => {
-      showSuccess("Версия КП создана");
+      showSuccess("Версия документа КП создана");
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
       void queryClient.invalidateQueries({
         queryKey: ["deals", payload.dealId],
