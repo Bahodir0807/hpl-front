@@ -18,20 +18,12 @@ function userRole(user: User): string {
   return role ? enumLabel(roleLabels, role) : "—";
 }
 
-function canAccessUsers(roles: string[], hasReadPermission: boolean): boolean {
-  if (roles.length === 0 && !hasReadPermission) {
-    return false;
-  }
-
-  return hasReadPermission || roles.includes("ADMIN") || roles.includes("HEAD");
-}
-
 export default function UsersPage() {
   const router = useRouter();
-  const { user: currentUser, hasPermission, isInitialized } = useAuth();
-  const canAccess =
-    isInitialized &&
-    canAccessUsers(currentUser?.roles ?? [], hasPermission("users:read"));
+  const { hasPermission, isInitialized } = useAuth();
+  const canAccess = isInitialized && hasPermission("users:read");
+  const canCreate = hasPermission("users:create");
+  const canManage = hasPermission("users:manage");
   const usersQuery = useUsers(canAccess);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -69,13 +61,13 @@ export default function UsersPage() {
               Пользователи, роли, руководители и блокировка доступа.
             </p>
           </div>
-          <button
+          {canCreate ? <button
             type="button"
             onClick={() => setIsCreateOpen(true)}
             className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
           >
             Создать сотрудника
-          </button>
+          </button> : null}
         </div>
 
         {usersQuery.isError ? (
@@ -155,13 +147,13 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <button
+                      {canManage ? <button
                         type="button"
                         onClick={() => setEditingUser(item)}
                         className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                       >
                         Редактировать
-                      </button>
+                      </button> : null}
                     </td>
                   </tr>
                 ))}
@@ -177,16 +169,16 @@ export default function UsersPage() {
         ) : null}
       </div>
 
-      <UserModal
+      {canCreate ? <UserModal
         user={null}
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-      />
-      <UserModal
+      /> : null}
+      {canManage ? <UserModal
         user={editingUser}
         isOpen={Boolean(editingUser)}
         onClose={() => setEditingUser(null)}
-      />
+      /> : null}
     </>
   );
 }

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { CreateClientModal } from "../../../components/clients/create-client-modal";
 import { Pagination } from "../../../components/ui/pagination";
 import { SearchCombobox } from "../../../components/ui/search-combobox";
+import { useAuth } from "../../../context/auth-context";
 import {
   Client,
   ClientSegment,
@@ -61,6 +62,11 @@ function getActiveObjectsCount(client: Client): string {
 }
 
 export default function ClientsPage() {
+  const { user } = useAuth();
+  const canFilterOwners = Boolean(
+    user?.permissions.includes("users:read") &&
+      user.permissions.includes("clients:read_all"),
+  );
   const [search, setSearch] = useState("");
   const [type, setType] = useState<TypeFilter>("ALL");
   const [segment, setSegment] = useState<SegmentFilter>("ALL");
@@ -81,7 +87,7 @@ export default function ClientsPage() {
     [debouncedOwnerId, debouncedSearch, page, segment],
   );
   const clientsQuery = useClients(apiFilters);
-  const { users, usersById } = useUsersList();
+  const { users, usersById } = useUsersList(canFilterOwners);
   const managerOptions = useMemo(
     () =>
       users.map((user) => ({
@@ -176,22 +182,24 @@ export default function ClientsPage() {
             </select>
           </label>
 
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-slate-700">
-              Менеджер
-            </span>
-            <SearchCombobox
-              value={ownerId}
-              onChange={(value) => {
-                setOwnerId(value);
-                setPage(1);
-              }}
-              options={managerOptions}
-              placeholder="Все менеджеры"
-              searchPlaceholder="Поиск сотрудника"
-              emptyLabel="Сотрудники не найдены"
-            />
-          </label>
+          {canFilterOwners ? (
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Менеджер
+              </span>
+              <SearchCombobox
+                value={ownerId}
+                onChange={(value) => {
+                  setOwnerId(value);
+                  setPage(1);
+                }}
+                options={managerOptions}
+                placeholder="Все менеджеры"
+                searchPlaceholder="Поиск сотрудника"
+                emptyLabel="Сотрудники не найдены"
+              />
+            </label>
+          ) : null}
         </div>
 
         {clientsQuery.isLoading ? (

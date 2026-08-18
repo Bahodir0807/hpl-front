@@ -4,16 +4,11 @@ import { X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../context/auth-context';
-import {
-  canManagerViewExpectedReceipts,
-  canManagerViewReports,
-} from '../../lib/role-access';
 
 type NavigationItem = {
   href: string;
   label: string;
   permission?: string;
-  managerRestricted?: boolean;
 };
 
 type NavigationGroup = {
@@ -26,31 +21,31 @@ const navigationGroups: NavigationGroup[] = [
     title: 'Продажи',
     items: [
       { href: '/', label: 'Обзор' },
-      { href: '/leads', label: 'Лиды' },
-      { href: '/deals', label: 'Сделки' },
-      { href: '/clients', label: 'Клиенты и Контакты' },
-      { href: '/tasks', label: 'Задачи' },
+      { href: '/leads', label: 'Лиды', permission: 'leads:read' },
+      { href: '/deals', label: 'Сделки', permission: 'deals:read' },
+      { href: '/clients', label: 'Клиенты и Контакты', permission: 'clients:read' },
+      { href: '/tasks', label: 'Задачи', permission: 'tasks:read' },
     ],
   },
   {
     title: 'Справочники',
     items: [
-      { href: '/references/panels', label: 'Панели' },
-      { href: '/references/panels#suppliers', label: 'Поставщики' },
+      { href: '/references/panels', label: 'Панели', permission: 'panel_catalog:read' },
+      { href: '/references/panels#suppliers', label: 'Поставщики', permission: 'panel_catalog:read' },
     ],
   },
   {
     title: 'Склад',
     items: [
-      { href: '/products', label: 'Склад' },
-      { href: '/orders', label: 'Заказы' },
-      { href: '/receipts', label: 'Ожидаемые приходы', managerRestricted: true },
+      { href: '/products', label: 'Склад', permission: 'products:read' },
+      { href: '/orders', label: 'Заказы', permission: 'orders:read' },
+      { href: '/receipts', label: 'Ожидаемые приходы', permission: 'inventory:read' },
     ],
   },
   {
     title: 'Аналитика и Настройки',
     items: [
-      { href: '/reports', label: 'Отчеты и KPI', managerRestricted: true },
+      { href: '/reports', label: 'Отчеты и KPI', permission: 'reports:read' },
       {
         href: '/users',
         label: 'Команда и Доступы',
@@ -67,15 +62,8 @@ type SidebarProps = {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { hasPermission, user } = useAuth();
-  const roles = user?.roles ?? [];
-
-  const visibleGroups = navigationGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => isNavItemVisible(item, roles, hasPermission)),
-    }))
-    .filter((group) => group.items.length > 0);
+  const { user } = useAuth();
+  const visibleGroups = getVisibleNavigationGroups(user?.permissions ?? []);
 
   return (
     <aside
@@ -122,28 +110,19 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   );
 }
 
-function isNavItemVisible(
-  item: NavigationItem,
-  roles: string[],
-  hasPermission: (slug: string) => boolean,
-): boolean {
-  if (item.permission && !hasPermission(item.permission)) {
-    return false;
-  }
+export function getVisibleNavigationGroups(
+  permissions: string[],
+): NavigationGroup[] {
+  const permissionSet = new Set(permissions);
 
-  if (!item.managerRestricted) {
-    return true;
-  }
-
-  if (item.href === '/reports') {
-    return canManagerViewReports(roles);
-  }
-
-  if (item.href === '/receipts') {
-    return canManagerViewExpectedReceipts(roles);
-  }
-
-  return true;
+  return navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !item.permission || permissionSet.has(item.permission),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
 }
 
 function getItemClassName(pathname: string, href: string): string {

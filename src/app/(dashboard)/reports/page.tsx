@@ -14,7 +14,6 @@ import {
 } from "../../../hooks/use-reports";
 import { formatNumber } from "../../../lib/format";
 import { dealStageLabels, enumLabel } from "../../../lib/labels";
-import { canManagerViewReports } from "../../../lib/role-access";
 
 type TabId = "funnel" | "overdues" | "kpi";
 
@@ -89,7 +88,7 @@ export default function ReportsPage() {
     [dateFrom, dateTo, managerId],
   );
   const canAccess =
-    isInitialized && canManagerViewReports(user?.roles ?? []);
+    isInitialized && Boolean(user?.permissions.includes("reports:read"));
   const funnelQuery = useReportsFunnel(filters, canAccess);
   const overduesQuery = useReportsOverdues(filters, canAccess);
   const kpiQuery = useReportsKpi(filters, canAccess);
@@ -152,7 +151,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (isInitialized && !canAccess) {
-      router.replace("/leads");
+      router.replace("/");
     }
   }, [canAccess, isInitialized, router]);
 

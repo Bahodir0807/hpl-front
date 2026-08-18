@@ -4,6 +4,7 @@ import { isAxiosError } from "axios";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { Pagination } from "../../../components/ui/pagination";
+import { useAuth } from "../../../context/auth-context";
 import {
   Deal,
   DealStage,
@@ -150,6 +151,7 @@ function NextActionBadge({ nextActionAt }: { nextActionAt?: string | null }) {
 }
 
 export default function DealsPage() {
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [source, setSource] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -160,7 +162,9 @@ export default function DealsPage() {
     supplierId: supplierId || undefined,
   });
   const suppliersQuery = useSuppliers();
-  const { usersById } = useUsersList();
+  const { usersById } = useUsersList(
+    user?.permissions.includes("users:read") ?? false,
+  );
   const changeStage = useChangeDealStage();
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [pendingStageChange, setPendingStageChange] =

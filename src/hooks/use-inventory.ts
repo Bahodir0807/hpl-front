@@ -154,7 +154,7 @@ export function useProducts(filters: ProductsFilter) {
   });
 }
 
-export function useStockBalances() {
+export function useStockBalances(enabled = true) {
   return useQuery({
     queryKey: ["stock-balances"],
     queryFn: async (): Promise<StockBalancesResponse> => {
@@ -165,6 +165,7 @@ export function useStockBalances() {
 
       return response.data;
     },
+    enabled,
     staleTime: 2 * 60 * 1000,
   });
 }

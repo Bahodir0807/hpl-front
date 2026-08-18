@@ -56,7 +56,6 @@ import {
 } from '@/lib/display-names';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { formatSupplierName, leadStatusLabels } from '@/lib/labels';
-import { hasElevatedAccess } from '@/lib/role-access';
 import { QuoteAction, quoteStatusLabels } from '@/lib/quote-presentation';
 import {
   CalculationSession,
@@ -447,7 +446,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const workspaceQuery = useLeadWorkspace(leadId);
   const calculationsQuery = useCalculationsByLead(leadId);
   const quotesQuery = useQuotes(leadId);
-  const { users, usersById } = useUsersList();
+  const canReadUsers = user?.permissions.includes('users:read') ?? false;
+  const { users, usersById } = useUsersList(canReadUsers);
   const createCall = useCreateLeadCall();
   const createNote = useCreateLeadNote();
   const assignOwner = useAssignLeadOwner();
@@ -491,7 +491,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
 
   const canAssign =
     Boolean(lead) &&
-    (!lead?.ownerId || hasElevatedAccess(user?.roles ?? []));
+    canReadUsers &&
+    Boolean(user?.permissions.includes('leads:assign'));
 
   const ownerOptions = useMemo(
     () =>

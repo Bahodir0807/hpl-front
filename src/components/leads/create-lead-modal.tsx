@@ -18,7 +18,6 @@ import { formatPersonName } from '../../lib/display-names';
 import { optionalInnSchema } from '../../lib/validations/inn';
 import { optionalPhoneSchema } from '../../lib/validations/phone';
 import { getErrorMessage } from '../../lib/errors';
-import { isHeadOrAbove, isManagerOnly } from '../../lib/role-access';
 
 const optionalUuid = z
   .string()
@@ -84,9 +83,11 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
 
 function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
-  const hideOwnerField = isManagerOnly(user);
-  const canAssignOwner = isHeadOrAbove(user);
-  const { users } = useUsersList();
+  const canAssignOwner = Boolean(
+    user?.permissions.includes('leads:assign') &&
+      user.permissions.includes('users:read'),
+  );
+  const { users } = useUsersList(canAssignOwner);
   const createLead = useCreateLead();
   const createClient = useCreateClient();
   const [formError, setFormError] = useState<string | null>(null);
@@ -188,7 +189,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
       await createLead.mutateAsync({
         title: values.title,
         source: values.source,
-        ownerId: hideOwnerField ? user?.id : values.ownerId || undefined,
+        ownerId: canAssignOwner ? values.ownerId || undefined : user?.id,
         clientId,
         contactId,
       });

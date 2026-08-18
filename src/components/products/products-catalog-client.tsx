@@ -150,7 +150,8 @@ export function ProductsCatalogClient() {
     page: filters.page,
     limit: PAGE_SIZE,
   });
-  const balancesQuery = useStockBalances();
+  const canReadInventory = hasPermission("inventory:read");
+  const balancesQuery = useStockBalances(canReadInventory);
   const canSeePurchasePrice = hasPermission("products:read_purchase_price");
 
   const balancesByProduct = useMemo(() => {
@@ -325,7 +326,7 @@ export function ProductsCatalogClient() {
         ) : null}
       </div>
 
-      {productsQuery.isLoading || balancesQuery.isLoading ? (
+      {productsQuery.isLoading || (canReadInventory && balancesQuery.isLoading) ? (
         <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
           Загрузка каталога...
         </div>
@@ -365,15 +366,13 @@ export function ProductsCatalogClient() {
                     Закупочная цена
                   </th>
                 ) : null}
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Факт
-                </th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Резерв
-                </th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Доступно
-                </th>
+                {canReadInventory ? (
+                  <>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Факт</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Резерв</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Доступно</th>
+                  </>
+                ) : null}
                 <th className="px-3 py-2 text-right font-semibold text-slate-700">
                   Расчёт
                 </th>
@@ -413,15 +412,13 @@ export function ProductsCatalogClient() {
                         {getPrice(product, "PURCHASE")}
                       </td>
                     ) : null}
-                    <td className="px-3 py-3 text-slate-700">
-                      {formatNumber(balance?.onHand)}
-                    </td>
-                    <td className="px-3 py-3 text-slate-700">
-                      {formatNumber(balance?.reserved)}
-                    </td>
-                    <td className="px-3 py-3 font-semibold text-slate-900">
-                      {formatNumber(balance?.available)}
-                    </td>
+                    {canReadInventory ? (
+                      <>
+                        <td className="px-3 py-3 text-slate-700">{formatNumber(balance?.onHand)}</td>
+                        <td className="px-3 py-3 text-slate-700">{formatNumber(balance?.reserved)}</td>
+                        <td className="px-3 py-3 font-semibold text-slate-900">{formatNumber(balance?.available)}</td>
+                      </>
+                    ) : null}
                     <td className="px-3 py-3 text-right">
                       <button
                         type="button"
