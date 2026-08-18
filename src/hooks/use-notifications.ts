@@ -4,12 +4,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError } from '../lib/toast';
+import {
+  NotificationListFilters,
+  notificationListKey,
+  notificationScopeKey,
+  updateNotificationPage,
+} from '../lib/notification-state';
 import type { Notification } from '../types/hpl';
 
-export type NotificationsFilter = {
-  page?: number;
-  limit?: number;
-};
+export type NotificationsFilter = NotificationListFilters;
 
 export type NotificationsListResponse = {
   items: Notification[];
@@ -23,7 +26,7 @@ export function useNotifications(
   filters: NotificationsFilter,
 ) {
   return useQuery({
-    queryKey: ['notifications', userId, filters],
+    queryKey: notificationListKey(userId, filters),
     queryFn: async (): Promise<NotificationsListResponse> => {
       const response = await apiClient.get<NotificationsListResponse>(
         '/notifications',
@@ -50,21 +53,11 @@ export function useMarkNotificationRead(userId: string | undefined) {
     },
     onSuccess: (updatedNotification) => {
       queryClient.setQueriesData<NotificationsListResponse>(
-        { queryKey: ['notifications', userId] },
-        (current) =>
-          current
-            ? {
-                ...current,
-                items: current.items.map((notification) =>
-                  notification.id === updatedNotification.id
-                    ? updatedNotification
-                    : notification,
-                ),
-              }
-            : current,
+        { queryKey: notificationScopeKey(userId) },
+        (current) => updateNotificationPage(current, updatedNotification),
       );
       void queryClient.invalidateQueries({
-        queryKey: ['notifications', userId],
+        queryKey: notificationScopeKey(userId),
       });
     },
     onError: (error) => {

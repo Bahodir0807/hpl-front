@@ -44,6 +44,7 @@ import {
   useUpdateQuoteStatus,
 } from '@/hooks/use-quotes';
 import { useUsersList } from '@/hooks/use-users';
+import { finalizeCalculationBeforeQuote } from '@/lib/calculation-quote';
 import { formatMoney } from '@/lib/currency';
 import {
   formatContactName,
@@ -875,17 +876,20 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                                       calculation.id,
                                     );
 
-                                  if (!alreadyFinalized) {
-                                    await finalizeCalculation.mutateAsync(
-                                      calculation.id,
-                                    );
-                                    finalizedCalculationIds.current.add(
-                                      calculation.id,
-                                    );
-                                  }
-
-                                  await convertToQuote.mutateAsync({
+                                  await finalizeCalculationBeforeQuote({
                                     calculationId: calculation.id,
+                                    isFinalized: alreadyFinalized,
+                                    finalize:
+                                      finalizeCalculation.mutateAsync,
+                                    onFinalized: () => {
+                                      finalizedCalculationIds.current.add(
+                                        calculation.id,
+                                      );
+                                    },
+                                    convert: (calculationId) =>
+                                      convertToQuote.mutateAsync({
+                                        calculationId,
+                                      }),
                                   });
                                 } catch {
                                   // mutation onError already toasted

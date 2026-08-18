@@ -10,6 +10,10 @@ import { Lead, useQualifyLead } from '../../hooks/use-leads';
 import { usePanelSizes, usePanelTypes } from '../../hooks/use-panels';
 import { apiClient } from '../../lib/api-client';
 import { formatContactName } from '../../lib/display-names';
+import {
+  InstallationRequiredField,
+  installationSelectionToBoolean,
+} from './installation-required-field';
 import { MoneyInput } from '../ui/money-input';
 import { SearchCombobox } from '../ui/search-combobox';
 
@@ -288,7 +292,9 @@ export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProp
           colorCode: values.colorCode,
           colorName: values.colorName || null,
           requiredAreaM2: values.requiredAreaM2,
-          installationRequired: values.installationRequired === 'yes',
+          installationRequired: installationSelectionToBoolean(
+            values.installationRequired,
+          ),
           stockOnly: values.stockOnly,
           urgent: values.urgent,
           willingToWait: values.willingToWait,
@@ -426,20 +432,17 @@ export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProp
               <FieldError message={errors.requiredAreaM2?.message} />
             </label>
 
-            <fieldset>
-              <legend className="mb-1 block text-sm font-medium text-slate-700">Монтаж</legend>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
-                  <input type="radio" value="yes" {...register('installationRequired')} />
-                  Да
-                </label>
-                <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
-                  <input type="radio" value="no" {...register('installationRequired')} />
-                  Нет
-                </label>
-              </div>
-              <FieldError message={errors.installationRequired?.message} />
-            </fieldset>
+            <Controller
+              name="installationRequired"
+              control={control}
+              render={({ field }) => (
+                <InstallationRequiredField
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.installationRequired?.message}
+                />
+              )}
+            />
 
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" {...register('stockOnly')} />

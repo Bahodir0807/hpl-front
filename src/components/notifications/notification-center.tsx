@@ -9,6 +9,10 @@ import {
   useNotifications,
 } from '@/hooks/use-notifications';
 import { formatDateTime } from '@/lib/format';
+import {
+  hasUnreadInRecentPage,
+  shouldMarkNotificationRead,
+} from '@/lib/notification-state';
 import type { Notification } from '@/types/hpl';
 
 const RECENT_NOTIFICATIONS_LIMIT = 20;
@@ -24,9 +28,7 @@ export function NotificationCenter() {
   });
   const markRead = useMarkNotificationRead(user?.id);
   const notifications = notificationsQuery.data?.items ?? [];
-  const hasRecentUnread = notifications.some(
-    (notification) => !notification.isRead,
-  );
+  const hasRecentUnread = hasUnreadInRecentPage(notifications);
 
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent): void => {
@@ -66,7 +68,7 @@ export function NotificationCenter() {
   ): Promise<void> => {
     const destination = getNotificationRoute(notification);
 
-    if (!notification.isRead) {
+    if (shouldMarkNotificationRead(notification)) {
       try {
         await markRead.mutateAsync(notification.id);
       } catch {

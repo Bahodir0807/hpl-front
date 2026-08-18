@@ -20,6 +20,7 @@ import {
 } from '../../../lib/display-names';
 import { formatDateTime } from '../../../lib/format';
 import { leadStatusLabels } from '../../../lib/labels';
+import { resolveLeadWorkflowState } from '../../../lib/lead-workflow';
 
 const QualifyLeadModal = dynamic(
   () =>
@@ -32,12 +33,6 @@ const QualifyLeadModal = dynamic(
 const PAGE_LIMIT = 20;
 
 type StatusFilter = 'ALL' | LeadStatus;
-
-type WorkflowState = {
-  label: string;
-  className: string;
-  needsCommercialAction?: boolean;
-};
 
 const statusOptions: { value: StatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Все статусы' },
@@ -56,49 +51,6 @@ const knownSourceOptions = [
   'Рекомендация партнёра',
   'Тендерная площадка',
 ];
-
-function resolveWorkflowState(lead: Lead): WorkflowState {
-  if (lead.status === 'NEW') {
-    return {
-      label: 'Новая заявка',
-      className: 'border-blue-200 bg-blue-50 text-blue-700',
-    };
-  }
-
-  if (lead.status === 'IN_PROGRESS') {
-    return {
-      label: 'В работе',
-      className: 'border-amber-200 bg-amber-50 text-amber-800',
-    };
-  }
-
-  if (lead.status === 'QUALIFIED' && !lead.commercialQualification) {
-    return {
-      label: 'Ожидает коммерческой квалификации',
-      className: 'border-orange-200 bg-orange-50 text-orange-800',
-      needsCommercialAction: true,
-    };
-  }
-
-  if (lead.status === 'QUALIFIED') {
-    return {
-      label: 'Коммерчески квалифицирован',
-      className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    };
-  }
-
-  if (lead.status === 'CONVERTED') {
-    return {
-      label: 'Конвертирован',
-      className: 'border-green-200 bg-green-50 text-green-700',
-    };
-  }
-
-  return {
-    label: 'Не квалифицирован',
-    className: 'border-slate-200 bg-slate-100 text-slate-700',
-  };
-}
 
 function sourceLabel(source: string): string {
   if (source === 'telegram') {
@@ -354,7 +306,7 @@ export default function LeadsPage() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {leads.map((lead) => {
-                  const workflow = resolveWorkflowState(lead);
+                  const workflow = resolveLeadWorkflowState(lead);
                   const needsAction =
                     workflow.needsCommercialAction && canCommerciallyQualify;
 
