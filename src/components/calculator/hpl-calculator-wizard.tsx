@@ -511,15 +511,19 @@ export function HplCalculatorWizard({
     setSavedCalculation(null);
   };
 
+  const canUseLeadCommercialPricing = hideSupplierStep;
   const hasCatalogPricingInputs = Boolean(supplierId && qualityClassId);
+  const canRequestPricedPreview =
+    hasCatalogPricingInputs || canUseLeadCommercialPricing;
 
   const buildPreviewPayload = (): CalculationPreviewPayload => {
     const area = Number(requiredAreaM2);
 
     return {
       panelTypeId,
-      supplierId,
-      qualityClassId,
+      ...(canUseLeadCommercialPricing ? { leadId } : {}),
+      ...(supplierId ? { supplierId } : {}),
+      ...(qualityClassId ? { qualityClassId } : {}),
       thicknessMm: thickness ?? 0,
       panelSizeId,
       ...(colorId ? { colorId } : {}),
@@ -558,7 +562,7 @@ export function HplCalculatorWizard({
   };
 
   const runPreview = async (): Promise<void> => {
-    if (!hasCatalogPricingInputs) {
+    if (!canRequestPricedPreview) {
       setPreview(null);
       setUnpricedEstimate(buildGeometryEstimate());
       setSavedCalculation(null);

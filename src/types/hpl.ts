@@ -2,6 +2,8 @@ export type PanelTypeCode = 'exterior' | 'interior' | 'laboratory';
 
 export type SupplierCode = 'wuya' | 'tianran' | 'polybet';
 
+export type HplApplication = 'INTERIOR' | 'EXTERIOR';
+
 export type QuoteStatus =
   | 'draft'
   | 'sent'
@@ -127,6 +129,47 @@ export type CalculationPreview = {
   clientPricePerM2: number | string;
   pricePerSheet: number | string;
   total: number | string;
+};
+
+export type LeadQualification = {
+  id: string;
+  leadId: string;
+  application?: HplApplication | null;
+  panelTypeId?: string | null;
+  thicknessMm?: number | null;
+  panelSizeId?: string | null;
+  customWidthMm?: number | null;
+  customHeightMm?: number | null;
+  colorCode?: string | null;
+  colorName?: string | null;
+  requiredAreaM2?: number | string | null;
+  installationRequired?: boolean | null;
+  stockOnly?: boolean | null;
+  urgent?: boolean | null;
+  willingToWait?: boolean | null;
+  customerRequirements?: string | null;
+  panelType?: { id: string; code: string; displayNameRu?: string | null } | null;
+  panelSize?: {
+    id: string;
+    displayName?: string | null;
+    widthMm?: number;
+    heightMm?: number;
+    areaM2?: number | string | null;
+  } | null;
+};
+
+export type LeadCommercialQualification = {
+  id: string;
+  leadId: string;
+  supplierId: string;
+  qualityClassId: string;
+  mappingId: string;
+  status: 'CONFIRMED';
+  decisionComment?: string | null;
+  confirmedById: string;
+  confirmedAt: string;
+  supplier?: { id: string; code: string; name: string } | null;
+  qualityClass?: { id: string; code: string; nameRu: string } | null;
 };
 
 export type QuoteItem = {
@@ -264,6 +307,14 @@ export type LeadWorkspace = {
   };
   calculations?: CalculationSession[];
   quotes?: Quote[];
+  qualification?: LeadQualification | null;
+  requirementPrefill?: Partial<LeadQualification> | null;
+  commercialQualification?: LeadCommercialQualification | null;
+  commercialPrefill?: {
+    supplierId: string;
+    qualityClassId: string;
+    status: 'CONFIRMED';
+  } | null;
   calls?: LeadCall[];
   notes?: LeadNote[];
   activities?: LeadActivity[];

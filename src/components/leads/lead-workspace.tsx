@@ -29,11 +29,18 @@ import {
   Lead,
   LeadStatus,
   useAssignLeadOwner,
+  useConfirmLeadCommercialQualification,
   useLead,
 } from '@/hooks/use-leads';
 import {
+  useSupplierQualityClasses,
+  useSuppliers,
+} from '@/hooks/use-panels';
+import {
   useConvertCalculationToQuote,
+  useConvertQuoteToDeal,
   useQuotes,
+  useRecordQuoteClientAcceptance,
   useUpdateQuoteStatus,
 } from '@/hooks/use-quotes';
 import { useUsersList } from '@/hooks/use-users';
@@ -50,6 +57,7 @@ import { hasElevatedAccess } from '@/lib/role-access';
 import {
   CalculationSession,
   LeadActivity,
+  LeadQualification,
   Quote,
   QuoteStatus,
 } from '@/types/hpl';
@@ -328,6 +336,124 @@ function calculationSummary(calculation: CalculationSession) {
   };
 }
 
+function panelCodeForQualification(
+  qualification?: LeadQualification | null,
+): string {
+  const code = qualification?.panelType?.code?.trim().toLowerCase();
+  if (code) {
+    return code;
+  }
+
+  return qualification?.application === 'EXTERIOR' ? 'exterior' : 'interior';
+}
+
+function installationLabel(value?: boolean | null): string {
+  if (value === true) {
+    return 'Да';
+  }
+
+  if (value === false) {
+    return 'Нет';
+  }
+
+  return 'Не указано';
+}
+
+function CommercialQualificationPanel({
+  leadId,
+  qualification,
+  currentSupplierId,
+  currentQualityClassId,
+}: {
+  leadId: string;
+  qualification?: LeadQualification | null;
+  currentSupplierId?: string | null;
+  currentQualityClassId?: string | null;
+}) {
+  const suppliersQuery = useSuppliers();
+  const confirmCommercial = useConfirmLeadCommercialQualification();
+  const [supplierId, setSupplierId] = useState(currentSupplierId ?? '');
+  const [qualityClassId, setQualityClassId] = useState(
+    currentQualityClassId ?? '',
+  );
+  const [comment, setComment] = useState('');
+
+  const suppliers = suppliersQuery.data ?? [];
+  const selectedSupplier = suppliers.find((item) => item.id === supplierId);
+  const supplierCode = selectedSupplier?.code ?? '';
+  const panelTypeCode = panelCodeForQualification(qualification);
+  const qualityQuery = useSupplierQualityClasses(supplierCode, panelTypeCode);
+  const qualityClasses = qualityQuery.data ?? [];
+
+  const supplierOptions = suppliers.map((supplier) => ({
+    value: supplier.id,
+    label: formatSupplierName(supplier.code, supplier.name),
+    description: supplier.code,
+  }));
+  const qualityOptions = qualityClasses.map((quality) => ({
+    value: quality.id,
+    label: quality.nameRu ?? quality.name ?? quality.code ?? quality.id,
+    description: quality.code ?? undefined,
+  }));
+
+  const canSubmit =
+    Boolean(supplierId && qualityClassId) && !confirmCommercial.isPending;
+
+  return (
+    <div className="mt-5 border-t border-slate-200 pt-4">
+      <h4 className="text-sm font-semibold text-slate-900">
+        Коммерческая квалификация
+      </h4>
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <SearchCombobox
+          value={supplierId}
+          onChange={(nextValue) => {
+            setSupplierId(nextValue);
+            setQualityClassId('');
+          }}
+          options={supplierOptions}
+          placeholder="Поставщик"
+          searchPlaceholder="Поиск поставщика"
+          emptyLabel="Поставщики не найдены"
+          loading={suppliersQuery.isFetching}
+        />
+        <SearchCombobox
+          value={qualityClassId}
+          onChange={setQualityClassId}
+          options={qualityOptions}
+          placeholder="Класс качества"
+          searchPlaceholder="Поиск класса"
+          emptyLabel="Классы не найдены"
+          disabled={!supplierId}
+          loading={qualityQuery.isFetching}
+        />
+        <input
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          placeholder="Комментарий"
+          className="rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 md:col-span-2"
+        />
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        className="mt-3"
+        disabled={!canSubmit}
+        onClick={() => {
+          void confirmCommercial.mutateAsync({
+            id: leadId,
+            supplierId,
+            qualityClassId,
+            ...(comment.trim() ? { decisionComment: comment.trim() } : {}),
+          });
+        }}
+      >
+        {confirmCommercial.isPending ? 'Сохранение...' : 'Подтвердить'}
+      </Button>
+    </div>
+  );
+}
+
 export function LeadWorkspace({ leadId }: { leadId: string }) {
   const { user } = useAuth();
   const leadQuery = useLead(leadId);
@@ -341,6 +467,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const convertToQuote = useConvertCalculationToQuote();
   const finalizeCalculation = useFinalizeCalculation();
   const updateQuoteStatus = useUpdateQuoteStatus();
+  const recordClientAcceptance = useRecordQuoteClientAcceptance();
+  const convertQuoteToDeal = useConvertQuoteToDeal();
   const finalizedCalculationIds = useRef(new Set<string>());
 
   const [tab, setTab] = useState<WorkspaceTab>('info');
@@ -356,6 +484,11 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const workspace = workspaceQuery.data;
   const calculations = calculationsQuery.data ?? workspace?.calculations ?? [];
   const quotes = quotesQuery.data ?? workspace?.quotes ?? [];
+  const qualification = workspace?.qualification ?? null;
+  const commercialQualification = workspace?.commercialQualification ?? null;
+  const canCommercialQualify =
+    user?.permissions.includes('leads:commercial_qualify') ?? false;
+  const canApproveQuote = user?.permissions.includes('quotes:approve') ?? false;
   const source = lead?.source ?? workspace?.lead.source;
   const contact = lead?.contact ?? workspace?.lead.contact;
   const clientName =
@@ -592,6 +725,10 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 <Field label="Создан" value={formatDateTime(lead.createdAt)} />
                 <Field label="Обновлён" value={formatDateTime(lead.updatedAt)} />
                 <Field label="ЛПР" value={lead.decisionMakerContact} />
+                <Field
+                  label="Монтаж"
+                  value={installationLabel(qualification?.installationRequired)}
+                />
                 <Field label="Причина брака" value={lead.unqualificationReason} />
                 <Button
                   type="button"
@@ -602,6 +739,16 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 >
                   Брак
                 </Button>
+                {canCommercialQualify && lead.status === 'QUALIFIED' ? (
+                  <CommercialQualificationPanel
+                    leadId={lead.id}
+                    qualification={qualification}
+                    currentSupplierId={commercialQualification?.supplierId}
+                    currentQualityClassId={
+                      commercialQualification?.qualityClassId
+                    }
+                  />
+                ) : null}
               </div>
             </section>
           </div>
@@ -821,6 +968,72 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                           >
                             Отправить клиенту
                           </Button>
+                        ) : null}
+                        {quote.status === 'sent' && canApproveQuote ? (
+                          <div className="mt-2 flex flex-wrap justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={updateQuoteStatus.isPending}
+                              onClick={() => {
+                                void updateQuoteStatus.mutateAsync({
+                                  id: quote.id,
+                                  status: 'approved',
+                                });
+                              }}
+                            >
+                              Одобрить
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={updateQuoteStatus.isPending}
+                              onClick={() => {
+                                const rejectionReason = window.prompt(
+                                  'Причина отказа',
+                                );
+                                if (rejectionReason?.trim()) {
+                                  void updateQuoteStatus.mutateAsync({
+                                    id: quote.id,
+                                    status: 'rejected',
+                                    rejectionReason: rejectionReason.trim(),
+                                  });
+                                }
+                              }}
+                            >
+                              Отклонить
+                            </Button>
+                          </div>
+                        ) : null}
+                        {quote.status === 'approved' ? (
+                          <div className="mt-2 flex flex-wrap justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={recordClientAcceptance.isPending}
+                              onClick={() => {
+                                void recordClientAcceptance.mutateAsync(
+                                  quote.id,
+                                );
+                              }}
+                            >
+                              Клиент согласен
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={convertQuoteToDeal.isPending}
+                              onClick={() => {
+                                void convertQuoteToDeal.mutateAsync(quote.id);
+                              }}
+                            >
+                              В сделку
+                            </Button>
+                          </div>
                         ) : null}
                       </td>
                     </tr>

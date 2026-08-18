@@ -18,12 +18,12 @@ export type {
 } from '../types/hpl';
 
 export type CalculationPreviewPayload = {
-  panelTypeId: string;
-  panelSizeId: string;
-  supplierId: string;
-  qualityClassId: string;
-  thicknessMm: number;
-  requiredAreaM2: number;
+  panelTypeId?: string;
+  panelSizeId?: string;
+  supplierId?: string;
+  qualityClassId?: string;
+  thicknessMm?: number;
+  requiredAreaM2?: number;
   colorId?: string;
   leadId?: string;
 };

@@ -111,6 +111,31 @@ export type QualifyLeadPayload = {
   estimatedAmount: number;
   targetDate: string;
   decisionMakerContact: string;
+  qualification?: UpsertLeadQualificationPayload;
+};
+
+export type UpsertLeadQualificationPayload = {
+  application?: 'INTERIOR' | 'EXTERIOR' | null;
+  panelTypeId?: string | null;
+  thicknessMm?: number | null;
+  panelSizeId?: string | null;
+  customWidthMm?: number | null;
+  customHeightMm?: number | null;
+  colorCode?: string | null;
+  colorName?: string | null;
+  requiredAreaM2?: number | string | null;
+  installationRequired?: boolean | null;
+  stockOnly?: boolean | null;
+  urgent?: boolean | null;
+  willingToWait?: boolean | null;
+  customerRequirements?: string | null;
+};
+
+export type ConfirmLeadCommercialQualificationPayload = {
+  id: string;
+  supplierId: string;
+  qualityClassId: string;
+  decisionComment?: string | null;
 };
 
 export type UnqualifyLeadPayload = {
@@ -200,10 +225,62 @@ export function useQualifyLead() {
       return response.data;
     },
     onSuccess: (_lead, payload) => {
-      showSuccess('Лид квалифицирован, сделка создана');
+      showSuccess('Лид квалифицирован');
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
-      void queryClient.invalidateQueries({ queryKey: ['deals'] });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', payload.id],
+      });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useUpsertLeadQualification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { id: string } & UpsertLeadQualificationPayload) => {
+      const { id, ...body } = payload;
+      const response = await apiClient.patch(`/leads/${id}/qualification`, body);
+
+      return response.data;
+    },
+    onSuccess: (_qualification, payload) => {
+      showSuccess('Потребность HPL сохранена');
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', payload.id],
+      });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useConfirmLeadCommercialQualification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      payload: ConfirmLeadCommercialQualificationPayload,
+    ): Promise<unknown> => {
+      const { id, ...body } = payload;
+      const response = await apiClient.post(
+        `/leads/${id}/commercial-qualification`,
+        body,
+      );
+
+      return response.data;
+    },
+    onSuccess: (_qualification, payload) => {
+      showSuccess('Коммерческая квалификация подтверждена');
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', payload.id],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
     },
     onError: (error) => {
       showError(getErrorMessage(error));

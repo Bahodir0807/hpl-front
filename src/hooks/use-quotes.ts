@@ -78,6 +78,7 @@ export function useConvertCalculationToQuote(calculationId?: string) {
 export type UpdateQuoteStatusPayload = {
   id: string;
   status: PatchableQuoteStatus;
+  rejectionReason?: string;
 };
 
 export function useUpdateQuoteStatus() {
@@ -87,7 +88,12 @@ export function useUpdateQuoteStatus() {
     mutationFn: async (payload: UpdateQuoteStatusPayload): Promise<Quote> => {
       const response = await apiClient.patch<Quote>(
         `/quotes/${payload.id}/status`,
-        { status: payload.status },
+        {
+          status: payload.status,
+          ...(payload.rejectionReason
+            ? { rejectionReason: payload.rejectionReason }
+            : {}),
+        },
       );
 
       return response.data;
@@ -97,6 +103,56 @@ export function useUpdateQuoteStatus() {
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', quote.leadId],
+      });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useRecordQuoteClientAcceptance() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string): Promise<Quote> => {
+      const response = await apiClient.post<Quote>(`/quotes/${id}/client-accept`);
+
+      return response.data;
+    },
+    onSuccess: (quote) => {
+      showSuccess('Согласие клиента зафиксировано');
+      void queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', quote.leadId],
+      });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useConvertQuoteToDeal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string): Promise<{ quote: Quote; dealId: string }> => {
+      const response = await apiClient.post<{ quote: Quote; dealId: string }>(
+        `/quotes/${id}/convert-to-deal`,
+      );
+
+      return response.data;
+    },
+    onSuccess: (result) => {
+      showSuccess('КП конвертировано в сделку');
+      void queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      void queryClient.invalidateQueries({ queryKey: ['deals'] });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', result.quote.leadId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead', result.quote.leadId],
       });
     },
     onError: (error) => {

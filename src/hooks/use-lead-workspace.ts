@@ -17,6 +17,10 @@ export type NormalizedLeadWorkspace = {
   lead: LeadWorkspace['lead'];
   calculations: NonNullable<LeadWorkspace['calculations']>;
   quotes: NonNullable<LeadWorkspace['quotes']>;
+  qualification: LeadWorkspace['qualification'];
+  requirementPrefill: LeadWorkspace['requirementPrefill'];
+  commercialQualification: LeadWorkspace['commercialQualification'];
+  commercialPrefill: LeadWorkspace['commercialPrefill'];
   calls: LeadCall[];
   notes: LeadNote[];
   activities: LeadActivity[];
@@ -29,6 +33,10 @@ export function normalizeLeadWorkspace(
     lead: data.lead,
     calculations: data.calculations ?? [],
     quotes: data.quotes ?? [],
+    qualification: data.qualification ?? null,
+    requirementPrefill: data.requirementPrefill ?? null,
+    commercialQualification: data.commercialQualification ?? null,
+    commercialPrefill: data.commercialPrefill ?? null,
     calls: data.calls ?? [],
     notes: data.notes ?? [],
     activities: data.activities ?? data.timeline ?? [],
