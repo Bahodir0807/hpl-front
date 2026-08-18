@@ -483,8 +483,14 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
 
   const lead = leadQuery.data;
   const workspace = workspaceQuery.data;
-  const calculations = calculationsQuery.data ?? workspace?.calculations ?? [];
-  const quotes = quotesQuery.data ?? workspace?.quotes ?? [];
+  const calculations = useMemo(
+    () => calculationsQuery.data ?? workspace?.calculations ?? [],
+    [calculationsQuery.data, workspace?.calculations],
+  );
+  const quotes = useMemo(
+    () => quotesQuery.data ?? workspace?.quotes ?? [],
+    [quotesQuery.data, workspace?.quotes],
+  );
   const qualification = workspace?.qualification ?? null;
   const commercialQualification = workspace?.commercialQualification ?? null;
   const canCommercialQualify =

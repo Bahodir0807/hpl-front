@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   CalculationPreviewPayload,
@@ -192,29 +192,6 @@ function isQualityClassAllowed(
   }
 
   return false;
-}
-
-function qualityClassLabel(item: QualityClass | string | null | undefined): string {
-  if (typeof item === 'string' || item == null) {
-    return qualityClassLabels[normalizeQualityCode(item)] ?? '';
-  }
-
-  const mapped = qualityClassLabels[resolveQualityCode(item)];
-  if (mapped) {
-    return mapped;
-  }
-
-  const named = [
-    item.nameRu,
-    item.displayName,
-    item.name,
-    item.title,
-    item.label,
-  ]
-    .map((value) => value?.trim() ?? '')
-    .find((value) => value && value.toLowerCase() !== 'линейка');
-
-  return named || item.code?.trim() || '';
 }
 
 function hasMoneyAmount(
@@ -409,7 +386,7 @@ export function HplCalculatorWizard({
   const panelTypeCode = toPanelTypeCode(selectedType);
 
   const qualityQuery = useSupplierQualityClasses(supplierCode, panelTypeCode);
-  const qualityClasses = useMemo(() => {
+  const qualityClasses = (() => {
     const classes = qualityQuery.data ?? [];
     const allowed = classes.filter((item) =>
       isQualityClassAllowed(
@@ -420,18 +397,14 @@ export function HplCalculatorWizard({
     );
 
     return allowed.length > 0 ? allowed : classes;
-  }, [panelTypeCode, qualityQuery.data, supplierCode]);
+  })();
 
-  const availableSuppliers = useMemo(
-    () =>
-      suppliers.filter(
-        (supplier) =>
-          !isLaboratoryOnlyTianran(supplier.code, selectedType?.code),
-      ),
-    [selectedType?.code, suppliers],
+  const availableSuppliers = suppliers.filter(
+    (supplier) =>
+      !isLaboratoryOnlyTianran(supplier.code, selectedType?.code),
   );
 
-  const filteredSizes = useMemo(() => {
+  const filteredSizes = (() => {
     const query = sizeQuery.trim().toLowerCase();
     if (!query) {
       return sizes;
@@ -441,55 +414,40 @@ export function HplCalculatorWizard({
       const haystack = `${size.label ?? ''} ${size.width} ${size.length} ${size.width}x${size.length}`;
       return haystack.toLowerCase().includes(query);
     });
-  }, [sizeQuery, sizes]);
-
-  useEffect(() => {
-    if (step !== 3 || qualityQuery.isLoading || qualityQuery.isFetching) {
-      return;
-    }
-
-    if (!qualityQuery.isSuccess) {
-      return;
-    }
-
-    if (qualityClasses.length === 1 && qualityClasses[0]?.id) {
-      setQualityClassId(qualityClasses[0].id);
-      setStep(4);
-    }
-  }, [
-    qualityClasses,
-    qualityQuery.isFetching,
-    qualityQuery.isLoading,
-    qualityQuery.isSuccess,
-    step,
-  ]);
-
-  useEffect(() => {
-    if (!hideSupplierStep) {
-      return;
-    }
-
-    if (step === 2 || step === 3) {
-      setStep(4);
-    }
-  }, [hideSupplierStep, step]);
+  })();
+  const soleQualityClassId =
+    qualityQuery.isSuccess && qualityClasses.length === 1
+      ? (qualityClasses[0]?.id ?? '')
+      : '';
+  const selectedQualityClassId = qualityClassId || soleQualityClassId;
+  const currentStep =
+    (hideSupplierStep && (step === 2 || step === 3)) ||
+    (step === 3 &&
+      Boolean(soleQualityClassId) &&
+      !qualityQuery.isLoading &&
+      !qualityQuery.isFetching)
+      ? 4
+      : step;
 
   const goBack = (): void => {
-    if (step === 1) {
+    if (currentStep === 1) {
       return;
     }
 
-    if (step === 3 && hideSupplierStep) {
+    if (currentStep === 3 && hideSupplierStep) {
       setStep(1);
       return;
     }
 
-    if (step === 4 && (hideSupplierStep || qualityClasses.length <= 1)) {
+    if (
+      currentStep === 4 &&
+      (hideSupplierStep || qualityClasses.length <= 1)
+    ) {
       setStep(hideSupplierStep ? 1 : 2);
       return;
     }
 
-    setStep((current) => (current - 1) as WizardStep);
+    setStep((currentStep - 1) as WizardStep);
   };
 
   const selectSupplier = (nextSupplier: Supplier): void => {
@@ -512,7 +470,9 @@ export function HplCalculatorWizard({
   };
 
   const canUseLeadCommercialPricing = hideSupplierStep;
-  const hasCatalogPricingInputs = Boolean(supplierId && qualityClassId);
+  const hasCatalogPricingInputs = Boolean(
+    supplierId && selectedQualityClassId,
+  );
   const canRequestPricedPreview =
     hasCatalogPricingInputs || canUseLeadCommercialPricing;
 
@@ -523,7 +483,9 @@ export function HplCalculatorWizard({
       panelTypeId,
       ...(canUseLeadCommercialPricing ? { leadId } : {}),
       ...(supplierId ? { supplierId } : {}),
-      ...(qualityClassId ? { qualityClassId } : {}),
+      ...(selectedQualityClassId
+        ? { qualityClassId: selectedQualityClassId }
+        : {}),
       thicknessMm: thickness ?? 0,
       panelSizeId,
       ...(colorId ? { colorId } : {}),
@@ -537,7 +499,9 @@ export function HplCalculatorWizard({
         panelTypeId,
         panelSizeId,
         ...(supplierId ? { supplierId } : {}),
-        ...(qualityClassId ? { qualityClassId } : {}),
+        ...(selectedQualityClassId
+          ? { qualityClassId: selectedQualityClassId }
+          : {}),
         thicknessMm: thickness ?? 0,
         ...(colorId ? { colorId } : {}),
         requiredAreaM2: String(requiredAreaM2),
@@ -658,7 +622,7 @@ export function HplCalculatorWizard({
     : WIZARD_STEPS;
   const currentVisibleIndex = Math.max(
     1,
-    visibleSteps.findIndex((item) => item.step === step) + 1,
+    visibleSteps.findIndex((item) => item.step === currentStep) + 1,
   );
 
   return (
@@ -681,8 +645,8 @@ export function HplCalculatorWizard({
         <div className="overflow-x-auto border-b border-slate-200 px-5 py-3">
           <div className="flex w-max min-w-full gap-1">
             {visibleSteps.map((item, index) => {
-              const isCurrent = item.step === step;
-              const isDone = item.step < step;
+              const isCurrent = item.step === currentStep;
+              const isDone = item.step < currentStep;
 
               return (
                 <button
@@ -710,7 +674,7 @@ export function HplCalculatorWizard({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          {step === 1 ? (
+          {currentStep === 1 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
                 Тип панели
@@ -749,7 +713,7 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {!hideSupplierStep && step === 2 ? (
+          {!hideSupplierStep && currentStep === 2 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
                 Поставщик
@@ -778,7 +742,7 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {step === 3 ? (
+          {currentStep === 3 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
                 Линейка
@@ -813,7 +777,7 @@ export function HplCalculatorWizard({
                     <OptionCard
                       key={item.id}
                       title={title}
-                      selected={qualityClassId === item.id}
+                      selected={selectedQualityClassId === item.id}
                       onClick={() => {
                         setQualityClassId(item.id);
                         markDirty();
@@ -826,7 +790,7 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {step === 4 ? (
+          {currentStep === 4 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
                 Толщина, мм
@@ -854,7 +818,7 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {step === 5 ? (
+          {currentStep === 5 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
                 Размер панели
@@ -893,7 +857,7 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {step === 6 ? (
+          {currentStep === 6 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">Цвет</h3>
               {colorsQuery.isLoading ? (
@@ -934,7 +898,7 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {step === 7 ? (
+          {currentStep === 7 ? (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">
                 Нужная площадь
@@ -968,7 +932,7 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {step === 8 && (preview || unpricedEstimate) ? (
+          {currentStep === 8 && (preview || unpricedEstimate) ? (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">
                 Результат расчёта
@@ -1082,7 +1046,7 @@ export function HplCalculatorWizard({
           ) : null}
         </div>
 
-        {step > 1 && step < 8 ? (
+        {currentStep > 1 && currentStep < 8 ? (
           <div className="border-t border-slate-200 px-5 py-3">
             <Button type="button" variant="outline" size="sm" onClick={goBack}>
               Назад
@@ -1090,7 +1054,7 @@ export function HplCalculatorWizard({
           </div>
         ) : null}
 
-        {step === 8 ? (
+        {currentStep === 8 ? (
           <div className="border-t border-slate-200 px-5 py-3">
             <Button type="button" variant="outline" size="sm" onClick={goBack}>
               Назад

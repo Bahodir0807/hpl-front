@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { SearchCombobox } from '../ui/search-combobox';
 import { useClients } from '../../hooks/use-clients';
@@ -63,7 +63,6 @@ export function CreateTaskModal({
     handleSubmit,
     reset,
     control,
-    watch,
     setValue,
     formState: { errors },
   } = useForm<CreateTaskFormValues>({
@@ -78,7 +77,7 @@ export function CreateTaskModal({
       relatedId: '',
     },
   });
-  const relatedType = watch('relatedType');
+  const relatedType = useWatch({ control, name: 'relatedType' });
   const leadsQuery = useLeads({ limit: 100 });
   const dealsQuery = useDeals({ limit: 100 });
   const clientsQuery = useClients({ limit: 100 });

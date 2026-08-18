@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Product } from "@/hooks/use-inventory";
 import { formatNumber } from "@/lib/format";
 
@@ -32,21 +32,26 @@ export function HplCalculatorModal({
   product,
   onClose,
 }: HplCalculatorModalProps) {
+  if (!product) {
+    return null;
+  }
+
+  return (
+    <HplCalculatorContent key={product.id} product={product} onClose={onClose} />
+  );
+}
+
+function HplCalculatorContent({
+  product,
+  onClose,
+}: {
+  product: Product;
+  onClose: () => void;
+}) {
   const [requiredAreaM2, setRequiredAreaM2] = useState("");
   const [wastePercent, setWastePercent] = useState(String(DEFAULT_WASTE_PERCENT));
 
-  useEffect(() => {
-    if (product) {
-      setRequiredAreaM2("");
-      setWastePercent(String(DEFAULT_WASTE_PERCENT));
-    }
-  }, [product?.id]);
-
   const calculation = useMemo(() => {
-    if (!product) {
-      return null;
-    }
-
     const areaPerSheet = resolveSheetArea(
       product.sheetArea,
       product.length,
@@ -77,10 +82,6 @@ export function HplCalculatorModal({
       totalAreaM2,
     };
   }, [product, requiredAreaM2, wastePercent]);
-
-  if (!product) {
-    return null;
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">

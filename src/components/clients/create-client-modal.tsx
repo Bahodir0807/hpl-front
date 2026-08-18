@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import {
   ClientSegment,
@@ -61,6 +61,14 @@ type CreateClientModalProps = {
 };
 
 export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
+  if (!isOpen) {
+    return null;
+  }
+
+  return <CreateClientModalContent onClose={onClose} />;
+}
+
+function CreateClientModalContent({ onClose }: { onClose: () => void }) {
   const createClient = useCreateClient();
   const [duplicateInput, setDuplicateInput] = useState({
     inn: "",
@@ -74,7 +82,7 @@ export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     formState: { errors, isValid },
   } = useForm<CreateClientFormValues>({
     resolver: zodResolver(createClientSchema),
@@ -96,7 +104,7 @@ export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
       contactEmail: "",
     },
   });
-  const watchedValues = watch();
+  const watchedValues = useWatch({ control });
   const watchedDuplicateFields = useMemo(
     () => ({
       inn: watchedValues.inn ?? "",
@@ -119,17 +127,6 @@ export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
 
     return () => window.clearTimeout(timerId);
   }, [watchedDuplicateFields]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      reset();
-      setDuplicateInput({ inn: "", phone: "", email: "", name: "" });
-    }
-  }, [isOpen, reset]);
-
-  if (!isOpen) {
-    return null;
-  }
 
   const onSubmit = async (values: CreateClientFormValues): Promise<void> => {
     await createClient.mutateAsync({

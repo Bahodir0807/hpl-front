@@ -1,8 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useEffect, useRef, useState } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { useClient, useClients } from '../../hooks/use-clients';
 import { useDebouncedValue } from '../../hooks/use-debounced-value';
@@ -85,6 +85,22 @@ function FieldError({ message }: { message?: string }) {
 }
 
 export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProps) {
+  if (!isOpen || !lead) {
+    return null;
+  }
+
+  return (
+    <QualifyLeadModalContent key={lead.id} lead={lead} onClose={onClose} />
+  );
+}
+
+function QualifyLeadModalContent({
+  lead,
+  onClose,
+}: {
+  lead: Lead;
+  onClose: () => void;
+}) {
   const qualifyLead = useQualifyLead();
   const panelTypesQuery = usePanelTypes();
   const panelSizesQuery = usePanelSizes();
@@ -104,23 +120,22 @@ export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProp
     handleSubmit,
     reset,
     control,
-    watch,
     setValue,
     formState: { errors, isValid },
   } = useForm<QualifyLeadFormInput, unknown, QualifyLeadFormValues>({
     resolver: zodResolver(qualifyLeadSchema),
     mode: 'onChange',
     defaultValues: {
-      clientId: '',
-      projectObjectId: '',
+      clientId: lead.clientId ?? '',
+      projectObjectId: lead.projectObjectId ?? '',
       newObjectName: '',
-      contactId: '',
+      contactId: lead.contactId ?? '',
       contactName: '',
-      needDescription: '',
-      estimatedAmount: 0,
+      needDescription: lead.needDescription ?? '',
+      estimatedAmount: Number(lead.estimatedAmount ?? 0),
       estimatedAmountCurrency: 'UZS',
-      targetDate: '',
-      decisionMakerContact: '',
+      targetDate: lead.targetDate ? lead.targetDate.slice(0, 10) : '',
+      decisionMakerContact: lead.decisionMakerContact ?? '',
       application: 'INTERIOR',
       panelTypeId: '',
       thicknessMm: 0,
@@ -135,10 +150,10 @@ export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProp
     },
   });
 
-  const selectedClientId = watch('clientId');
+  const selectedClientId = useWatch({ control, name: 'clientId' });
   const clientDetailsQuery = useClient(selectedClientId || null);
 
-  const clientOptions = useMemo(() => {
+  const clientOptions = (() => {
     const items = (clientsQuery.data?.items ?? []).map((client) => ({
       value: client.id,
       label: client.name,
@@ -148,9 +163,9 @@ export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProp
       return [{ value: lead.client.id, label: lead.client.name }, ...items];
     }
     return items;
-  }, [clientsQuery.data?.items, lead?.client]);
+  })();
 
-  const projectObjectOptions = useMemo(() => {
+  const projectObjectOptions = (() => {
     const items = (clientDetailsQuery.data?.projectObjects ?? [])
       .filter((object) => object.stage !== 'ARCHIVED')
       .map((object) => ({
@@ -162,9 +177,9 @@ export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProp
       return [{ value: lead.projectObject.id, label: lead.projectObject.name }, ...items];
     }
     return items;
-  }, [clientDetailsQuery.data?.projectObjects, lead?.projectObject]);
+  })();
 
-  const contactOptions = useMemo(() => {
+  const contactOptions = (() => {
     const items = (clientDetailsQuery.data?.contacts ?? []).map((contact) => ({
       value: contact.id,
       label: formatContactName(contact),
@@ -174,67 +189,24 @@ export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProp
       return [{ value: lead.contact.id, label: formatContactName(lead.contact) }, ...items];
     }
     return items;
-  }, [clientDetailsQuery.data?.contacts, lead?.contact]);
+  })();
 
-  const panelTypeOptions = useMemo(
-    () =>
-      (panelTypesQuery.data ?? []).map((type) => ({
-        value: type.id,
-        label: type.name || type.code,
-        description: type.code,
-      })),
-    [panelTypesQuery.data],
-  );
+  const panelTypeOptions = (panelTypesQuery.data ?? []).map((type) => ({
+    value: type.id,
+    label: type.name || type.code,
+    description: type.code,
+  }));
 
-  const panelSizeOptions = useMemo(
-    () =>
-      (panelSizesQuery.data ?? []).map((size) => ({
-        value: size.id,
-        label: size.label ?? `${size.width} x ${size.length} мм`,
-        description: size.areaM2 ? `${size.areaM2} м2` : undefined,
-      })),
-    [panelSizesQuery.data],
-  );
-
-  useEffect(() => {
-    if (isOpen && lead) {
-      reset({
-        clientId: lead.clientId ?? '',
-        projectObjectId: lead.projectObjectId ?? '',
-        newObjectName: '',
-        contactId: lead.contactId ?? '',
-        contactName: '',
-        needDescription: lead.needDescription ?? '',
-        estimatedAmount: Number(lead.estimatedAmount ?? 0),
-        estimatedAmountCurrency: 'UZS',
-        targetDate: lead.targetDate ? lead.targetDate.slice(0, 10) : '',
-        decisionMakerContact: lead.decisionMakerContact ?? '',
-        application: 'INTERIOR',
-        panelTypeId: '',
-        thicknessMm: 0,
-        panelSizeId: '',
-        colorCode: '',
-        colorName: '',
-        requiredAreaM2: 0,
-        installationRequired: undefined,
-        stockOnly: false,
-        urgent: false,
-        willingToWait: false,
-      });
-      setClientSearch('');
-      setFormError(null);
-      setIsSubmitting(false);
-      setIsCreatingObject(false);
-      submitLockRef.current = false;
-    }
-  }, [isOpen, lead, reset]);
+  const panelSizeOptions = (panelSizesQuery.data ?? []).map((size) => ({
+    value: size.id,
+    label: size.label ?? `${size.width} x ${size.length} мм`,
+    description: size.areaM2 ? `${size.areaM2} м2` : undefined,
+  }));
 
   useEffect(() => {
     setValue('projectObjectId', '');
     setValue('contactId', '');
   }, [selectedClientId, setValue]);
-
-  if (!isOpen || !lead) return null;
 
   const onSubmit = async (values: QualifyLeadFormValues): Promise<void> => {
     if (submitLockRef.current) return;

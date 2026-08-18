@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { Controller, Resolver, useForm } from "react-hook-form";
 import { z } from "zod";
 import { SearchCombobox } from "../ui/search-combobox";
@@ -73,8 +73,6 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
   const updateUser = useUpdateUser();
   const { users } = useUsersList();
   const isEditing = Boolean(user);
-  const isEditingRef = useRef(isEditing);
-  isEditingRef.current = isEditing;
   const managerOptions = useMemo(
     () =>
       users
@@ -93,8 +91,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
     control,
     formState: { errors, isValid },
   } = useForm<UserFormValues>({
-    resolver: (values, context, options) =>
-      getUserFormResolver(isEditingRef.current)(values, context, options),
+    resolver: getUserFormResolver(isEditing),
     mode: "onChange",
     defaultValues: {
       email: "",

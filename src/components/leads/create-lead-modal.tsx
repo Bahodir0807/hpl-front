@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { SearchCombobox } from '../ui/search-combobox';
 import { useAuth } from '../../context/auth-context';
@@ -55,7 +55,7 @@ function formatReasons(reasons: string[]): string {
   return reasons.join(', ');
 }
 
-function pickDuplicateQuery(values: CreateLeadFormValues): string {
+function pickDuplicateQuery(values: Partial<CreateLeadFormValues>): string {
   return values.inn || values.phone || values.email || '';
 }
 
@@ -75,6 +75,14 @@ function optionalText(value?: string): string | undefined {
 }
 
 export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
+  if (!isOpen) {
+    return null;
+  }
+
+  return <CreateLeadModalContent onClose={onClose} />;
+}
+
+function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
   const hideOwnerField = isManagerOnly(user);
   const canAssignOwner = isHeadOrAbove(user);
@@ -99,7 +107,6 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
     register,
     handleSubmit,
     reset,
-    watch,
     control,
     formState: { errors, isValid },
   } = useForm<CreateLeadFormValues>({
@@ -116,7 +123,7 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
     },
   });
 
-  const watchedValues = watch();
+  const watchedValues = useWatch({ control });
   const duplicateSearchValue = useMemo(
     () => pickDuplicateQuery(watchedValues),
     [watchedValues],
@@ -132,28 +139,6 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
 
     return () => window.clearTimeout(timerId);
   }, [duplicateSearchValue]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      reset({
-        title: '',
-        source: '',
-        ownerId: user?.id ?? '',
-        phone: '',
-        email: '',
-        inn: '',
-        contactName: '',
-      });
-      setDuplicateQuery('');
-      setSelectedDuplicate(null);
-      setFormError(null);
-      setIsSubmitting(false);
-    }
-  }, [isOpen, reset, user?.id]);
-
-  if (!isOpen) {
-    return null;
-  }
 
   const onSubmit = async (values: CreateLeadFormValues): Promise<void> => {
     setFormError(null);

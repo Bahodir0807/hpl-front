@@ -147,15 +147,14 @@ export function OrderDetailsModal({
   const canAddPayment = order?._permissions?.canAddPayment !== false;
   const canConfirmPayments = order?._permissions?.canConfirmPayment === true;
   const canCreateDelivery = order?._permissions?.canCreateDelivery === true;
-  const orderItems = order?.items ?? [];
   const remainingByItem = useMemo(
     () =>
-      orderItems.map((item) => ({
+      (order?.items ?? []).map((item) => ({
         id: item.id,
         label: item.product?.sku ?? item.productId,
         remaining: Number(item.quantity) - Number(item.deliveredQuantity),
       })),
-    [orderItems],
+    [order?.items],
   );
 
   if (!orderId) {

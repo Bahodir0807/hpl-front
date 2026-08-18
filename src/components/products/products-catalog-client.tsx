@@ -93,6 +93,41 @@ function FilterChip({
   );
 }
 
+function CatalogSearchField({ search }: { search: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [value, setValue] = useState(search);
+  const debouncedSearch = useDebouncedValue(value, 450);
+
+  useEffect(() => {
+    const nextSearch = debouncedSearch.trim();
+    if (nextSearch === search.trim()) {
+      return;
+    }
+
+    router.replace(
+      buildProductsUrl(searchParams, {
+        search: nextSearch || null,
+      }),
+      { scroll: false },
+    );
+  }, [debouncedSearch, router, search, searchParams]);
+
+  return (
+    <label className="block max-w-md">
+      <span className="mb-1 block text-sm font-medium text-slate-700">
+        Поиск
+      </span>
+      <input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Артикул, декор, название"
+        className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+      />
+    </label>
+  );
+}
+
 export function ProductsCatalogClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -102,17 +137,12 @@ export function ProductsCatalogClient() {
     () => parseCatalogFilters(searchParams),
     [searchParams],
   );
-  const [searchInput, setSearchInput] = useState(filters.search);
-  const debouncedSearch = useDebouncedValue(searchInput, 450);
   const [calculatorProduct, setCalculatorProduct] = useState<Product | null>(
     null,
   );
 
-  const effectiveSearch =
-    debouncedSearch.trim() || filters.search.trim() || undefined;
-
   const productsQuery = useProducts({
-    search: effectiveSearch,
+    search: filters.search.trim() || undefined,
     thickness: filters.thickness,
     surface: filters.surface,
     collectionId: filters.collectionId,
@@ -147,24 +177,6 @@ export function ProductsCatalogClient() {
     });
   };
 
-  useEffect(() => {
-    setSearchInput(filters.search);
-  }, [filters.search]);
-
-  useEffect(() => {
-    const nextSearch = debouncedSearch.trim();
-    if (nextSearch === filters.search.trim()) {
-      return;
-    }
-
-    router.replace(
-      buildProductsUrl(searchParams, {
-        search: nextSearch || null,
-      }),
-      { scroll: false },
-    );
-  }, [debouncedSearch, filters.search, router, searchParams]);
-
   const getPrice = (product: Product, type: ProductPriceType): string => {
     const price = product.prices?.find((item) => item.type === type);
 
@@ -192,19 +204,7 @@ export function ProductsCatalogClient() {
       </div>
 
       <div className="space-y-3 rounded border border-slate-200 bg-white p-3">
-        <label className="block max-w-md">
-          <span className="mb-1 block text-sm font-medium text-slate-700">
-            Поиск
-          </span>
-          <input
-            value={searchInput}
-            onChange={(event) => {
-              setSearchInput(event.target.value);
-            }}
-            placeholder="Артикул, декор, название"
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-          />
-        </label>
+        <CatalogSearchField key={filters.search} search={filters.search} />
 
         {facetsQuery.isLoading ? (
           <div className="text-sm text-slate-500">Загрузка фильтров...</div>
@@ -316,7 +316,6 @@ export function ProductsCatalogClient() {
           <button
             type="button"
             onClick={() => {
-              setSearchInput("");
               router.replace("/products", { scroll: false });
             }}
             className="text-sm font-medium text-slate-600 hover:text-slate-950"
