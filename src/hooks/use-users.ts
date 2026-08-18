@@ -30,6 +30,13 @@ export type UsersListResponse =
     }
   | User[];
 
+export type UsersFilter = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: RoleName;
+};
+
 export type CreateUserPayload = {
   email: string;
   password: string;
@@ -58,11 +65,13 @@ export function normalizeUsersList(data?: UsersListResponse): User[] {
   return Array.isArray(data.items) ? data.items : [];
 }
 
-export function useUsers(enabled = true) {
+export function useUsers(enabled = true, filters: UsersFilter = {}) {
   return useQuery({
-    queryKey: ["users"],
+    queryKey: ["users", filters],
     queryFn: async (): Promise<UsersListResponse> => {
-      const response = await apiClient.get<UsersListResponse>("/users");
+      const response = await apiClient.get<UsersListResponse>("/users", {
+        params: filters,
+      });
 
       return response.data;
     },
@@ -71,8 +80,8 @@ export function useUsers(enabled = true) {
   });
 }
 
-export function useUsersList() {
-  const query = useUsers();
+export function useUsersList(enabled = true, filters: UsersFilter = {}) {
+  const query = useUsers(enabled, filters);
   const users = useMemo(() => normalizeUsersList(query.data), [query.data]);
   const usersById = useMemo(
     () => new Map(users.map((user) => [user.id, user])),

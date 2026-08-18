@@ -4,6 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
+import type {
+  LeadCommercialQualification,
+  LeadQualification,
+} from '../types/hpl';
 
 export type LeadStatus =
   'NEW' | 'IN_PROGRESS' | 'QUALIFIED' | 'UNQUALIFIED' | 'CONVERTED';
@@ -61,6 +65,8 @@ export type Lead = {
   projectObject?: LeadProjectObject | null;
   contact?: LeadContact | null;
   deal?: LeadDeal | null;
+  qualification?: LeadQualification | null;
+  commercialQualification?: LeadCommercialQualification | null;
 };
 
 export type LeadsFilter = {
@@ -158,6 +164,7 @@ export function useLeads(filters: LeadsFilter) {
 
       return response.data;
     },
+    placeholderData: (previousData) => previousData,
   });
 }
 
