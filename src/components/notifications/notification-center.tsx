@@ -13,6 +13,7 @@ import {
   hasUnreadInRecentPage,
   shouldMarkNotificationRead,
 } from '@/lib/notification-state';
+import { getRelatedEntityHref } from '@/lib/entity-routes';
 import type { Notification } from '@/types/hpl';
 
 const RECENT_NOTIFICATIONS_LIMIT = 20;
@@ -242,20 +243,14 @@ export function NotificationCenter() {
 }
 
 function getNotificationRoute(notification: Notification): string | null {
-  if (!notification.relatedId) {
-    return notification.taskId ? '/tasks' : null;
+  const relatedHref = getRelatedEntityHref(
+    notification.relatedType,
+    notification.relatedId,
+  );
+
+  if (relatedHref) {
+    return relatedHref;
   }
 
-  switch (notification.relatedType) {
-    case 'Lead':
-      return `/leads/${notification.relatedId}`;
-    case 'Client':
-      return `/clients/${notification.relatedId}`;
-    case 'Deal':
-      return '/deals';
-    case 'Order':
-      return '/orders';
-    default:
-      return notification.taskId ? '/tasks' : null;
-  }
+  return notification.taskId ? '/tasks' : null;
 }

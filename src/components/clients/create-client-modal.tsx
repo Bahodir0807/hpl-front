@@ -13,6 +13,7 @@ import {
 import { clientSegmentLabels } from "../../lib/labels";
 import { optionalInnSchema } from "../../lib/validations/inn";
 import { optionalPhoneSchema } from "../../lib/validations/phone";
+import { buildCreateClientPayload } from "../../lib/client-contact";
 
 const clientSegments: ClientSegment[] = [
   "DEALER",
@@ -34,9 +35,12 @@ const createClientSchema = z.object({
     .refine((value) => !value || z.string().email().safeParse(value).success, {
       message: "Некорректный email",
     }),
-  segment: z
-    .enum(["DEALER", "ARCHITECT", "CONTRACTOR", "END_CUSTOMER", "OTHER"])
-    .optional(),
+  segment: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .enum(['DEALER', 'ARCHITECT', 'CONTRACTOR', 'END_CUSTOMER', 'OTHER'])
+      .optional(),
+  ),
   region: z.string().trim().optional(),
   address: z.string().trim().optional(),
   source: z.string().trim().optional(),
@@ -53,7 +57,8 @@ const createClientSchema = z.object({
     }),
 });
 
-type CreateClientFormValues = z.infer<typeof createClientSchema>;
+type CreateClientFormInput = z.input<typeof createClientSchema>;
+type CreateClientFormValues = z.output<typeof createClientSchema>;
 
 type CreateClientModalProps = {
   isOpen: boolean;
@@ -84,7 +89,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
     reset,
     control,
     formState: { errors, isValid },
-  } = useForm<CreateClientFormValues>({
+  } = useForm<CreateClientFormInput, unknown, CreateClientFormValues>({
     resolver: zodResolver(createClientSchema),
     mode: "onChange",
     defaultValues: {
@@ -129,29 +134,22 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
   }, [watchedDuplicateFields]);
 
   const onSubmit = async (values: CreateClientFormValues): Promise<void> => {
-    await createClient.mutateAsync({
-      type: values.type as ClientType,
-      name: values.name,
-      inn: values.inn || undefined,
-      phone: values.phone || undefined,
-      email: values.email || undefined,
-      segment: values.segment,
-      region: values.region || undefined,
-      address: values.address || undefined,
-      source: values.source || undefined,
-      comment: values.comment || undefined,
-      contacts: values.contactFirstName
-        ? [
-            {
-              firstName: values.contactFirstName,
-              lastName: values.contactLastName || undefined,
-              phone: values.contactPhone || undefined,
-              email: values.contactEmail || undefined,
-              isPrimary: true,
-            },
-          ]
-        : undefined,
-    });
+      await createClient.mutateAsync(buildCreateClientPayload({
+        type: values.type as ClientType,
+        name: values.name,
+        inn: values.inn,
+        phone: values.phone,
+        email: values.email,
+        segment: values.segment,
+        region: values.region,
+        address: values.address,
+        source: values.source,
+        comment: values.comment,
+        contactFirstName: values.contactFirstName,
+        contactLastName: values.contactLastName,
+        contactPhone: values.contactPhone,
+        contactEmail: values.contactEmail,
+      }));
 
     reset();
     onClose();
@@ -329,6 +327,22 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
               {errors.contactPhone ? (
                 <span className="mt-1 block text-sm text-red-600">
                   {errors.contactPhone.message}
+                </span>
+              ) : null}
+            </label>
+
+            <label>
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Контакт: email
+              </span>
+              <input
+                type="email"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+                {...register("contactEmail")}
+              />
+              {errors.contactEmail ? (
+                <span className="mt-1 block text-sm text-red-600">
+                  {errors.contactEmail.message}
                 </span>
               ) : null}
             </label>

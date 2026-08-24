@@ -5,12 +5,13 @@ import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
 import type {
+  HplApplication,
   LeadCommercialQualification,
   LeadQualification,
 } from '../types/hpl';
 
 export type LeadStatus =
-  'NEW' | 'IN_PROGRESS' | 'QUALIFIED' | 'UNQUALIFIED' | 'CONVERTED';
+  'NEW' | 'IN_PROGRESS' | 'QUALIFIED' | 'UNQUALIFIED' | 'CONVERTED' | 'LOST';
 
 export type LeadUser = {
   id: string;
@@ -22,6 +23,15 @@ export type LeadUser = {
 export type LeadClient = {
   id: string;
   name: string;
+  phone?: string | null;
+  email?: string | null;
+  contacts?: Array<{
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    isPrimary?: boolean;
+  }> | null;
 };
 
 export type LeadProjectObject = {
@@ -57,6 +67,14 @@ export type Lead = {
   targetDate?: string | null;
   decisionMakerContact?: string | null;
   unqualificationReason?: string | null;
+  lostReasonCode?: string | null;
+  lostComment?: string | null;
+  lostAt?: string | null;
+  lostById?: string | null;
+  managerCommercialNote?: string | null;
+  managerCommercialNoteUpdatedAt?: string | null;
+  managerCommercialInputReadyAt?: string | null;
+  managerCommercialInputReadyById?: string | null;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -112,18 +130,17 @@ export type CreateLeadPayload = {
 export type QualifyLeadPayload = {
   id: string;
   clientId: string;
+  contactId?: string;
   projectObjectId: string;
   needDescription: string;
-  estimatedAmount: number;
-  targetDate: string;
   decisionMakerContact: string;
   qualification?: UpsertLeadQualificationPayload;
 };
 
 export type UpsertLeadQualificationPayload = {
-  application?: 'INTERIOR' | 'EXTERIOR' | null;
+  application?: HplApplication | null;
   panelTypeId?: string | null;
-  thicknessMm?: number | null;
+  thicknessMm?: number | string | null;
   panelSizeId?: string | null;
   customWidthMm?: number | null;
   customHeightMm?: number | null;
@@ -131,7 +148,6 @@ export type UpsertLeadQualificationPayload = {
   colorName?: string | null;
   requiredAreaM2?: number | string | null;
   installationRequired?: boolean | null;
-  stockOnly?: boolean | null;
   urgent?: boolean | null;
   willingToWait?: boolean | null;
   customerRequirements?: string | null;
@@ -141,6 +157,7 @@ export type ConfirmLeadCommercialQualificationPayload = {
   id: string;
   supplierId: string;
   qualityClassId: string;
+  targetDate?: string | null;
   decisionComment?: string | null;
 };
 
@@ -149,9 +166,20 @@ export type UnqualifyLeadPayload = {
   reason: string;
 };
 
+export type LoseLeadPayload = {
+  id: string;
+  reason: string;
+  comment?: string;
+};
+
 export type AssignLeadOwnerPayload = {
   id: string;
   ownerId: string;
+};
+
+export type UpdateLeadManagerCommercialNotePayload = {
+  id: string;
+  commercialNote: string;
 };
 
 export function useLeads(filters: LeadsFilter) {
@@ -238,6 +266,7 @@ export function useQualifyLead() {
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', payload.id],
       });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
     onError: (error) => {
       showError(getErrorMessage(error));
@@ -320,6 +349,33 @@ export function useUnqualifyLead() {
   });
 }
 
+export function useLoseLead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: LoseLeadPayload): Promise<Lead> => {
+      const response = await apiClient.post<Lead>(`/leads/${payload.id}/lose`, {
+        reason: payload.reason,
+        ...(payload.comment ? { comment: payload.comment } : {}),
+      });
+      return response.data;
+    },
+    onSuccess: (_lead, payload) => {
+      showSuccess('Лид закрыт как проигранный');
+      void queryClient.invalidateQueries({ queryKey: ['leads'] });
+      void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', payload.id],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
 export function useAssignLeadOwner() {
   const queryClient = useQueryClient();
 
@@ -339,6 +395,71 @@ export function useAssignLeadOwner() {
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', payload.id],
       });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export type ManagerCommercialNoteResponse = {
+  leadId: string;
+  commercialNote: string | null;
+  managerCommercialNoteUpdatedAt: string | null;
+  managerCommercialInputReadyAt: string | null;
+  managerCommercialInputReadyById: string | null;
+};
+
+export function useUpdateLeadManagerCommercialNote() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      payload: UpdateLeadManagerCommercialNotePayload,
+    ): Promise<ManagerCommercialNoteResponse> => {
+      const response = await apiClient.patch<ManagerCommercialNoteResponse>(
+        `/leads/${payload.id}/manager-commercial-note`,
+        { commercialNote: payload.commercialNote },
+      );
+
+      return response.data;
+    },
+    onSuccess: (_result, payload) => {
+      showSuccess('Примечание сохранено');
+      void queryClient.invalidateQueries({ queryKey: ['leads'] });
+      void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', payload.id],
+      });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useHandoffLeadToHead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      leadId: string,
+    ): Promise<ManagerCommercialNoteResponse> => {
+      const response = await apiClient.post<ManagerCommercialNoteResponse>(
+        `/leads/${leadId}/handoff-to-head`,
+      );
+
+      return response.data;
+    },
+    onSuccess: (_result, leadId) => {
+      showSuccess('Данные переданы руководителю');
+      void queryClient.invalidateQueries({ queryKey: ['leads'] });
+      void queryClient.invalidateQueries({ queryKey: ['lead', leadId] });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-workspace', leadId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
     onError: (error) => {
       showError(getErrorMessage(error));

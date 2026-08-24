@@ -9,6 +9,7 @@ type NavigationItem = {
   href: string;
   label: string;
   permission?: string;
+  anyOf?: string[];
 };
 
 type NavigationGroup = {
@@ -23,6 +24,16 @@ const navigationGroups: NavigationGroup[] = [
       { href: '/', label: 'Обзор' },
       { href: '/leads', label: 'Лиды', permission: 'leads:read' },
       { href: '/deals', label: 'Сделки', permission: 'deals:read' },
+      {
+        href: '/installations',
+        label: 'Монтаж',
+        anyOf: [
+          'installation:confirm_work',
+          'installation:schedule',
+          'installation:confirm_supervisor',
+          'installation:assess',
+        ],
+      },
       { href: '/clients', label: 'Клиенты и Контакты', permission: 'clients:read' },
       { href: '/tasks', label: 'Задачи', permission: 'tasks:read' },
     ],
@@ -118,9 +129,15 @@ export function getVisibleNavigationGroups(
   return navigationGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => !item.permission || permissionSet.has(item.permission),
-      ),
+      items: group.items.filter((item) => {
+        if (item.permission && permissionSet.has(item.permission)) {
+          return true;
+        }
+        if (item.anyOf?.some((permission) => permissionSet.has(permission))) {
+          return true;
+        }
+        return !item.permission && !item.anyOf;
+      }),
     }))
     .filter((group) => group.items.length > 0);
 }

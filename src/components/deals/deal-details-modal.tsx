@@ -1,5 +1,6 @@
 "use client";
 
+import { isAxiosError } from "axios";
 import { useMemo, useState } from "react";
 import { useAuth } from "../../context/auth-context";
 import {
@@ -9,11 +10,18 @@ import {
   isHplCalculatorDeal,
   useAddDealOffer,
   useDeal,
+  useLoseDeal,
 } from "../../hooks/use-deals";
+import { InstallationPanel } from "../installations/installation-panel";
+import { CalculationRequestPanel } from "../calculations/calculation-request-panel";
 import { SupplierOrderPanel } from "./supplier-order-panel";
+import { LoseOpportunityModal } from "../opportunities/lose-opportunity-modal";
 import { TaskStatus, useTasks } from "../../hooks/use-tasks";
 import { formatDateTime } from "../../lib/format";
 import { formatMoney } from "../../lib/currency";
+import { isCommerciallyWon, isOperationallyCompleted } from "../../lib/deal-completion";
+import { getErrorMessage } from "../../lib/errors";
+import { formatThicknessMm, panelSizeLabel, panelTypeLabel } from "../../lib/hpl-domain";
 import { FileUpload } from "../ui/file-upload";
 import {
   dealStageLabels,
@@ -22,17 +30,29 @@ import {
   taskStatusLabels,
   taskTypeLabels,
 } from "../../lib/labels";
+import { lossReasonLabel } from "../../lib/loss-reasons";
 
 type DealDetailsModalProps = {
   dealId: string | null;
+  supplierOrderId?: string | null;
+  installation?: boolean;
   onClose: () => void;
 };
 
-type TabId = "items" | "supplier" | "offers" | "history" | "tasks";
+type TabId =
+  | "items"
+  | "calculations"
+  | "supplier"
+  | "installation"
+  | "offers"
+  | "history"
+  | "tasks";
 
 const tabs: { id: TabId; label: string }[] = [
   { id: "items", label: "Позиции HPL" },
-  { id: "supplier", label: "Заказ поставщику" },
+  { id: "calculations", label: "Расчёты" },
+  { id: "supplier", label: "Заказы поставщику" },
+  { id: "installation", label: "Монтаж" },
   { id: "offers", label: "Документы КП" },
   { id: "history", label: "История этапов" },
   { id: "tasks", label: "Открытые задачи" },
@@ -41,15 +61,7 @@ const tabs: { id: TabId; label: string }[] = [
 const openTaskStatuses: TaskStatus[] = ["PENDING", "IN_PROGRESS"];
 
 function formatDealItemSize(item: DealItem): string {
-  if (item.panelSize?.label) {
-    return item.panelSize.label;
-  }
-
-  if (item.panelSize?.width && item.panelSize.length) {
-    return `${item.panelSize.width} × ${item.panelSize.length}`;
-  }
-
-  return "—";
+  return panelSizeLabel(item.panelSize);
 }
 
 function OfferRow({ offer }: { offer: DealOffer }) {
@@ -82,13 +94,22 @@ function OfferRow({ offer }: { offer: DealOffer }) {
   );
 }
 
-export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
+export function DealDetailsModal({
+  dealId,
+  supplierOrderId = null,
+  installation = false,
+  onClose,
+}: DealDetailsModalProps) {
   const { hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>("items");
+  const [activeTab, setActiveTab] = useState<TabId>(
+    installation ? "installation" : supplierOrderId ? "supplier" : "items",
+  );
   const [validUntil, setValidUntil] = useState("");
   const [offerFileId, setOfferFileId] = useState<string | null>(null);
+  const [isLoseOpen, setIsLoseOpen] = useState(false);
   const dealQuery = useDeal(dealId);
   const addOffer = useAddDealOffer();
+  const loseDeal = useLoseDeal();
   const tasksQuery = useTasks({
     relatedType: "Deal",
     relatedId: dealId ?? undefined,
@@ -122,6 +143,7 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
       <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded border border-slate-200 bg-white shadow-sm">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
@@ -133,6 +155,34 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
               {deal?.client?.name ?? deal?.clientId ?? "-"} ·{" "}
               {deal ? enumLabel(dealStageLabels, deal.stage) : "—"}
             </div>
+            {deal ? (
+              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                {isCommerciallyWon(deal) ? (
+                  <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
+                    Коммерчески выиграна
+                  </span>
+                ) : null}
+                {isOperationallyCompleted(deal) ? (
+                  <span className="rounded border border-slate-900 bg-slate-900 px-2 py-1 font-medium text-white">
+                    Операционно завершена {formatDateTime(deal.completedAt)}
+                  </span>
+                ) : isCommerciallyWon(deal) ? (
+                  <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-medium text-slate-700">
+                    В исполнении
+                  </span>
+                ) : null}
+                {deal.stage === "LOST" ? (
+                  <span className="rounded border border-red-200 bg-red-50 px-2 py-1 font-medium text-red-700">
+                    {lossReasonLabel(deal.lostReasonCode)}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+            {deal?.lostComment ? (
+              <div className="mt-2 text-xs text-slate-600">
+                {deal.lostComment}
+              </div>
+            ) : null}
             {canSeePurchasePrice ? (
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
                 <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
@@ -144,13 +194,26 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            Закрыть
-          </button>
+          <div className="flex shrink-0 items-start gap-2">
+            {deal &&
+            deal.stage !== "LOST" &&
+            hasPermission("deals:update") ? (
+              <button
+                type="button"
+                onClick={() => setIsLoseOpen(true)}
+                className="rounded border border-red-200 bg-white px-2 py-1 text-sm text-red-700 hover:bg-red-50"
+              >
+                Проиграна
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Закрыть
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto border-b border-slate-200 px-5">
@@ -179,7 +242,13 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
 
           {dealQuery.isError ? (
             <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              Не удалось загрузить сделку.
+              {isAxiosError(dealQuery.error) &&
+              dealQuery.error.response?.status === 403
+                ? "Недостаточно прав для просмотра сделки."
+                : isAxiosError(dealQuery.error) &&
+                    dealQuery.error.response?.status === 404
+                  ? "Сделка не найдена."
+                  : "Не удалось загрузить сделку."}
             </div>
           ) : null}
 
@@ -223,9 +292,9 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                         <tr key={item.id}>
                           <td className="min-w-40 px-3 py-2">
                             <div className="font-medium text-slate-950">
-                              {item.panelType?.name ??
-                                item.product?.name ??
-                                "—"}
+                              {panelTypeLabel(item.panelType) !== '—'
+                                ? panelTypeLabel(item.panelType)
+                                : (item.product?.name ?? '—')}
                             </div>
                             {item.product?.sku && !isHplCalculatorDeal(deal) ? (
                               <div className="text-xs text-slate-600">
@@ -244,7 +313,7 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
                             {formatDealItemSize(item)}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-                            {item.thickness ? `${item.thickness} мм` : "—"}
+                            {formatThicknessMm(item.thickness)}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">
                             {item.quantitySheets}
@@ -273,7 +342,28 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
               ) : null}
 
               {activeTab === "supplier" ? (
-                <SupplierOrderPanel dealId={deal.id} deal={deal} />
+                <SupplierOrderPanel
+                  dealId={deal.id}
+                  deal={deal}
+                  highlightedSupplierOrderId={supplierOrderId}
+                />
+              ) : null}
+
+              {activeTab === "calculations" ? (
+                <CalculationRequestPanel
+                  dealId={deal.id}
+                  clientId={deal.clientId}
+                />
+              ) : null}
+
+              {activeTab === "installation" ? (
+                <InstallationPanel
+                  dealId={deal.id}
+                  deal={deal}
+                  installation={deal.installation}
+                  dealReadable
+                  highlighted={installation}
+                />
               ) : null}
 
               {activeTab === "offers" ? (
@@ -428,5 +518,25 @@ export function DealDetailsModal({ dealId, onClose }: DealDetailsModalProps) {
         </div>
       </div>
     </div>
+    <LoseOpportunityModal
+      isOpen={isLoseOpen}
+      title={deal?.title ?? ""}
+      entityLabel="сделку"
+      pending={loseDeal.isPending}
+      error={loseDeal.isError ? getErrorMessage(loseDeal.error) : null}
+      onClose={() => setIsLoseOpen(false)}
+      onSubmit={async (payload) => {
+        if (!deal) {
+          return;
+        }
+        await loseDeal.mutateAsync({
+          id: deal.id,
+          reason: payload.reason,
+          comment: payload.comment,
+        });
+        setIsLoseOpen(false);
+      }}
+    />
+    </>
   );
 }

@@ -7,7 +7,13 @@ import { getErrorMessage } from "../lib/errors";
 import { showError, showSuccess } from "../lib/toast";
 
 export type RoleName =
-  "ADMIN" | "HEAD" | "MANAGER" | "STOREKEEPER" | "OBSERVER";
+  | 'ADMIN'
+  | 'DIRECTOR'
+  | 'HEAD'
+  | 'MANAGER'
+  | 'ACCOUNTANT'
+  | 'STOREKEEPER'
+  | 'INSTALLER';
 
 export type User = {
   id: string;

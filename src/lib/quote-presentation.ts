@@ -1,4 +1,11 @@
 import type { Quote, QuoteItem, QuoteStatus } from '@/types/hpl';
+import {
+  formatThicknessMm,
+  hplApplicationLabel,
+  panelTypeLabel,
+} from '@/lib/hpl-domain';
+import { formatSupplierName } from '@/lib/labels';
+import { qualityLineLabel } from '@/lib/quality-line-presentation';
 
 export type QuoteAction =
   | 'send'
@@ -56,7 +63,9 @@ export function getQuoteActions({
     (quote.status === 'approved' || quote.status === 'converted');
 
   if (quote.status === 'draft') {
-    return canWrite ? ['send'] : [];
+    return canWrite && Boolean(quote.finalizedAt && quote.pdfFileId)
+      ? ['send']
+      : [];
   }
 
   if (quote.status === 'sent') {
@@ -75,7 +84,7 @@ export function getQuoteActions({
     if (canRecordClientAcceptance) {
       actions.push('client-accept');
     }
-    if (canWrite && conversionAllowed) {
+    if (canWrite && hasPermission('quotes:approve') && conversionAllowed) {
       actions.push('convert');
     }
     return actions;
@@ -94,26 +103,93 @@ export type QuoteItemDetail = {
   kind: 'text' | 'number' | 'area' | 'percent' | 'money';
 };
 
+export function quoteItemGroupTitle(item: QuoteItem): string | null {
+  const title =
+    item.calculationGroupTitle?.trim() || item.calculationTitle?.trim() || '';
+  return title || null;
+}
+
+export function quoteItemTitle(item: QuoteItem): string {
+  if (item.panelTypeName?.trim()) {
+    return item.panelTypeName.trim();
+  }
+
+  if (item.application) {
+    return hplApplicationLabel(item.application);
+  }
+
+  const fromCode = panelTypeLabel({
+    code: item.panelTypeCode,
+    displayNameRu: null,
+  });
+  if (fromCode !== '—') {
+    return fromCode;
+  }
+
+  return item.name?.trim() || 'Позиция HPL';
+}
+
 export function getQuoteItemDetails(item: QuoteItem): QuoteItemDetail[] {
+  const typeValue = quoteItemTitle(item);
   const details: Array<QuoteItemDetail | null> = [
+    item.application || item.panelTypeCode || item.panelTypeName
+      ? { label: 'Тип HPL', value: typeValue, kind: 'text' }
+      : null,
     item.panelSizeName
       ? { label: 'Размер', value: item.panelSizeName, kind: 'text' }
       : null,
-    item.thicknessMm !== undefined
-      ? { label: 'Толщина', value: `${item.thicknessMm} мм`, kind: 'text' }
+    item.thicknessMm !== undefined && item.thicknessMm !== null
+      ? { label: 'Толщина', value: formatThicknessMm(item.thicknessMm), kind: 'text' }
       : null,
-    item.qualityClassName
-      ? { label: 'Класс', value: item.qualityClassName, kind: 'text' }
+    item.qualityClassName || item.qualityClassCode
+      ? {
+          label: 'Класс',
+          value: qualityLineLabel({
+            code: item.qualityClassCode,
+            nameRu: item.qualityClassName,
+          }),
+          kind: 'text',
+        }
       : null,
-    item.supplierName
-      ? { label: 'Поставщик', value: item.supplierName, kind: 'text' }
+    item.supplierCode || item.supplierName
+      ? {
+          label: 'Поставщик',
+          value: formatSupplierName(item.supplierCode, item.supplierName, '—'),
+          kind: 'text',
+        }
       : null,
     item.colorCode || item.colorName
       ? {
-          label: 'Цвет',
+          label: 'Декор',
           value: [item.colorCode, item.colorName].filter(Boolean).join(' · '),
           kind: 'text',
         }
+      : null,
+    item.coating?.trim()
+      ? { label: 'Покрытие', value: item.coating.trim(), kind: 'text' }
+      : null,
+    item.texture?.trim()
+      ? { label: 'Текстура', value: item.texture.trim(), kind: 'text' }
+      : null,
+    item.customTypeDescription?.trim()
+      ? {
+          label: 'Нестандартный тип',
+          value: item.customTypeDescription.trim(),
+          kind: 'text',
+        }
+      : null,
+    item.customWidthMm != null &&
+    item.customHeightMm != null &&
+    String(item.customWidthMm) !== '' &&
+    String(item.customHeightMm) !== ''
+      ? {
+          label: 'Нестандартный размер',
+          value: `${item.customWidthMm} × ${item.customHeightMm} мм`,
+          kind: 'text',
+        }
+      : null,
+    item.note?.trim()
+      ? { label: 'Примечание', value: item.note.trim(), kind: 'text' }
       : null,
     item.requiredAreaM2 !== undefined
       ? { label: 'Требуется', value: item.requiredAreaM2, kind: 'area' }
@@ -124,20 +200,19 @@ export function getQuoteItemDetails(item: QuoteItem): QuoteItemDetail[] {
     item.wastePercent !== undefined
       ? { label: 'Отходы', value: item.wastePercent, kind: 'percent' }
       : null,
-    item.supplierPricePerM2 !== undefined
+    item.pricePerM2 != null
       ? {
-          label: 'Цена закупки за м²',
-          value: item.supplierPricePerM2,
+          label: item.priceApprovedAt
+            ? 'Утверждённая цена за м²'
+            : 'Расчётная / справочная цена за м²',
+          value: item.pricePerM2,
           kind: 'money',
         }
       : null,
-    item.pricePerM2 !== undefined
-      ? { label: 'Цена клиенту за м²', value: item.pricePerM2, kind: 'money' }
-      : null,
-    item.pricePerSheet !== undefined
+    item.pricePerSheet != null
       ? { label: 'Цена за лист', value: item.pricePerSheet, kind: 'money' }
       : null,
-    item.totalPrice !== undefined
+    item.totalPrice != null
       ? { label: 'Сумма позиции', value: item.totalPrice, kind: 'money' }
       : null,
   ];

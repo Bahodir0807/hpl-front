@@ -2,10 +2,11 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useAuth } from '../../context/auth-context';
+import { getDefaultAuthenticatedPath } from '../../lib/auth-routing';
 import { getErrorMessage } from '../../lib/errors';
 
 const loginSchema = z.object({
@@ -19,6 +20,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, user, isInitialized } = useAuth();
   const [requestError, setRequestError] = useState<string | null>(null);
+  const hasNavigatedRef = useRef(false);
+  const isSubmitNavigationRef = useRef(false);
   const {
     register,
     handleSubmit,
@@ -33,11 +36,16 @@ export default function LoginPage() {
 
   const onSubmit = async (values: LoginFormValues): Promise<void> => {
     setRequestError(null);
+    isSubmitNavigationRef.current = true;
 
     try {
-      await login(values.email, values.password);
-      router.push('/leads');
+      const authenticatedUser = await login(values.email, values.password);
+      if (!hasNavigatedRef.current) {
+        hasNavigatedRef.current = true;
+        router.replace(getDefaultAuthenticatedPath(authenticatedUser));
+      }
     } catch (error: unknown) {
+      isSubmitNavigationRef.current = false;
       setRequestError(
         getErrorMessage(error, 'Не удалось войти. Проверьте email и пароль.'),
       );
@@ -45,8 +53,14 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
-    if (isInitialized && user) {
-      router.replace('/leads');
+    if (
+      isInitialized &&
+      user &&
+      !isSubmitNavigationRef.current &&
+      !hasNavigatedRef.current
+    ) {
+      hasNavigatedRef.current = true;
+      router.replace(getDefaultAuthenticatedPath(user));
     }
   }, [isInitialized, router, user]);
 

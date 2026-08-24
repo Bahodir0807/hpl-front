@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { UserModal } from "../../../components/users/user-modal";
 import { useAuth } from "../../../context/auth-context";
 import { User, normalizeUsersList, useUsers } from "../../../hooks/use-users";
+import { getDefaultAuthenticatedPath } from "../../../lib/auth-routing";
 import { resolveUserName } from "../../../lib/display-names";
 import { enumLabel, roleLabels } from "../../../lib/labels";
 
@@ -20,7 +21,7 @@ function userRole(user: User): string {
 
 export default function UsersPage() {
   const router = useRouter();
-  const { hasPermission, isInitialized } = useAuth();
+  const { hasPermission, isInitialized, user } = useAuth();
   const canAccess = isInitialized && hasPermission("users:read");
   const canCreate = hasPermission("users:create");
   const canManage = hasPermission("users:manage");
@@ -33,9 +34,9 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (isInitialized && !canAccess) {
-      router.replace("/leads");
+      router.replace(getDefaultAuthenticatedPath(user));
     }
-  }, [canAccess, isInitialized, router]);
+  }, [canAccess, isInitialized, router, user]);
 
   if (!isInitialized) {
     return null;

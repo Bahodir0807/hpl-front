@@ -20,22 +20,28 @@ export type {
 export type CalculationPreviewPayload = {
   panelTypeId?: string;
   panelSizeId?: string;
+  customWidthMm?: number;
+  customHeightMm?: number;
   supplierId?: string;
   qualityClassId?: string;
-  thicknessMm?: number;
+  thicknessMm?: number | string;
   requiredAreaM2?: number;
   colorId?: string;
   leadId?: string;
+  purchasePricePerM2Cny?: string;
 };
 
 export type CreateCalculationItemPayload = {
   panelTypeId: string;
-  panelSizeId: string;
+  panelSizeId?: string;
+  customWidthMm?: number;
+  customHeightMm?: number;
   supplierId?: string;
   qualityClassId?: string;
-  thicknessMm: number;
+  thicknessMm: number | string;
   colorId?: string;
   requiredAreaM2: string;
+  purchasePricePerM2Cny?: string;
 };
 
 export type CreateCalculationPayload = {
@@ -76,7 +82,13 @@ export function useCreateCalculation() {
           ...(payload.notes ? { notes: payload.notes } : {}),
           items: payload.items.map((item) => ({
             panelTypeId: item.panelTypeId,
-            panelSizeId: item.panelSizeId,
+            ...(item.panelSizeId ? { panelSizeId: item.panelSizeId } : {}),
+            ...(item.customWidthMm != null
+              ? { customWidthMm: item.customWidthMm }
+              : {}),
+            ...(item.customHeightMm != null
+              ? { customHeightMm: item.customHeightMm }
+              : {}),
             ...(item.supplierId ? { supplierId: item.supplierId } : {}),
             ...(item.qualityClassId
               ? { qualityClassId: item.qualityClassId }
@@ -84,6 +96,9 @@ export function useCreateCalculation() {
             thicknessMm: item.thicknessMm,
             ...(item.colorId ? { colorId: item.colorId } : {}),
             requiredAreaM2: String(item.requiredAreaM2),
+            ...(item.purchasePricePerM2Cny
+              ? { purchasePricePerM2Cny: item.purchasePricePerM2Cny }
+              : {}),
           })),
         },
       );

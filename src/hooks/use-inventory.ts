@@ -119,7 +119,13 @@ export type CreateExpectedReceiptPayload = {
 
 export type ReceiveExpectedReceiptPayload = {
   id: string;
-  items: { itemId: string; receivedQuantity: number }[];
+  comment?: string;
+  items: {
+    itemId: string;
+    receivedQuantity?: number;
+    acceptedQuantity?: number;
+    rejectedQuantity?: number;
+  }[];
 };
 
 export type ProductFacets = {
@@ -220,7 +226,10 @@ export function useReceiveExpectedReceipt() {
     ): Promise<ExpectedReceipt> => {
       const response = await apiClient.post<ExpectedReceipt>(
         `/inventory/expected-receipts/${payload.id}/receive`,
-        { items: payload.items },
+        {
+          items: payload.items,
+          ...(payload.comment ? { comment: payload.comment } : {}),
+        },
       );
 
       return response.data;

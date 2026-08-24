@@ -8,6 +8,7 @@ import {
   TaskPriority,
   TaskType,
 } from '../../hooks/use-tasks';
+import { getRelatedEntityHref } from '../../lib/entity-routes';
 import { formatDateTime } from '../../lib/format';
 import {
   enumLabel,
@@ -105,13 +106,18 @@ export function TasksTable({ tasks }: TasksTableProps) {
                 </td>
                 <td className="px-3 py-3">
                   <div className="font-medium text-slate-950">{task.title}</div>
+                  {task.description ? (
+                    <div className="mt-1 text-xs text-slate-600">
+                      {task.description}
+                    </div>
+                  ) : null}
                   <div className="mt-1 inline-flex rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
                     {taskTypeLabels[task.type]}
                   </div>
                 </td>
                 <td className="px-3 py-3">
                   <div className="text-slate-700">
-                    {enumLabel(relatedTypeLabels, task.relatedType.toLowerCase())}
+                    {enumLabel(relatedTypeLabels, task.relatedType)}
                   </div>
                   {getRelatedHref(task.relatedType, task.relatedId) ? (
                     <Link
@@ -182,23 +188,19 @@ export function TasksTable({ tasks }: TasksTableProps) {
 }
 
 function getRelatedLabel(task: Task): string {
+  if (task.relatedType === 'LeadRecovery') {
+    return task.relatedEntity?.title
+      ? `Лид · ${task.relatedEntity.title}`
+      : 'Открыть лид';
+  }
+  if (task.relatedType === 'DealRecovery') {
+    return task.relatedEntity?.title
+      ? `Сделка · ${task.relatedEntity.title}`
+      : 'Открыть сделку';
+  }
   return task.relatedEntity?.title ?? task.relatedId;
 }
 
 function getRelatedHref(relatedType: string, relatedId: string): string {
-  const normalizedType = relatedType.toLowerCase();
-
-  if (normalizedType === 'lead') {
-    return `/leads/${relatedId}`;
-  }
-
-  if (normalizedType === 'deal') {
-    return `/deals/${relatedId}`;
-  }
-
-  if (normalizedType === 'client') {
-    return `/clients/${relatedId}`;
-  }
-
-  return '';
+  return getRelatedEntityHref(relatedType, relatedId) ?? '';
 }

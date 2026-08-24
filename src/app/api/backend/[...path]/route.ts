@@ -42,12 +42,21 @@ async function proxyRequest(
 
   const responseBody = await backendResponse.arrayBuffer();
 
+  const responseHeaders = new Headers();
+  responseHeaders.set(
+    'Content-Type',
+    backendResponse.headers.get('content-type') ?? 'application/json',
+  );
+  const contentDisposition = backendResponse.headers.get(
+    'content-disposition',
+  );
+  if (contentDisposition) {
+    responseHeaders.set('Content-Disposition', contentDisposition);
+  }
+
   return new NextResponse(responseBody, {
     status: backendResponse.status,
-    headers: {
-      'Content-Type':
-        backendResponse.headers.get('content-type') ?? 'application/json',
-    },
+    headers: responseHeaders,
   });
 }
 

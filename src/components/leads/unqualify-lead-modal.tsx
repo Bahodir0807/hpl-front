@@ -75,7 +75,7 @@ export function UnqualifyLeadModal({
         >
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Причина брака
+              Причина
             </span>
             <textarea
               rows={4}

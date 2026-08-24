@@ -27,6 +27,17 @@ describe("sidebar permissions", () => {
     expect(hrefs).not.toContain("/users");
     expect(hrefs).not.toContain("/reports");
     expect(hrefs).not.toContain("/receipts");
+    expect(hrefs).not.toContain("/installations");
+    expect(hrefs.every((href) => !href.includes("calculat"))).toBe(true);
+  });
+
+  it("shows the installation workspace for INSTALLER and HEAD permissions", () => {
+    expect(
+      visibleHrefs(["deals:read", "installation:confirm_work"]),
+    ).toContain("/installations");
+    expect(
+      visibleHrefs(["leads:read", "installation:schedule"]),
+    ).toContain("/installations");
   });
 
   it("shows reports and receipts only with their explicit permissions", () => {

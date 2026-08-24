@@ -27,7 +27,7 @@ export type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   isInitialized: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   hasPermission: (slug: string) => boolean;
 };
@@ -53,7 +53,7 @@ export function AuthContextProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(
-    async (email: string, password: string): Promise<void> => {
+    async (email: string, password: string): Promise<AuthUser> => {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,7 +76,7 @@ export function AuthContextProvider({ children }: { children: ReactNode }) {
         throw new Error(message);
       }
 
-      await loadProfile();
+      return loadProfile();
     },
     [loadProfile],
   );

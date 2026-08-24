@@ -144,6 +144,18 @@ export type AddContactPayload = CreateContactPayload & {
   clientId: string;
 };
 
+export type UpdateClientPayload = {
+  id: string;
+  phone?: string;
+  email?: string;
+  name?: string;
+  inn?: string;
+  region?: string;
+  address?: string;
+  source?: string;
+  comment?: string;
+};
+
 export type AddProjectObjectPayload = {
   clientId: string;
   name: string;
@@ -234,6 +246,33 @@ export function useCreateClient() {
     onSuccess: () => {
       showSuccess("Клиент создан");
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["lead-workspace"] });
+      void queryClient.invalidateQueries({ queryKey: ["deals"] });
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useUpdateClient() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: UpdateClientPayload): Promise<Client> => {
+      const { id, ...body } = payload;
+      const response = await apiClient.patch<Client>(`/clients/${id}`, body);
+
+      return response.data;
+    },
+    onSuccess: (client) => {
+      showSuccess("Клиент обновлён");
+      void queryClient.invalidateQueries({ queryKey: ["clients"] });
+      void queryClient.invalidateQueries({ queryKey: ["clients", client.id] });
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["lead-workspace"] });
+      void queryClient.invalidateQueries({ queryKey: ["deals"] });
     },
     onError: (error) => {
       showError(getErrorMessage(error));
@@ -260,6 +299,8 @@ export function useAddContact() {
       void queryClient.invalidateQueries({
         queryKey: ["clients", payload.clientId],
       });
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["lead-workspace"] });
     },
     onError: (error) => {
       showError(getErrorMessage(error));

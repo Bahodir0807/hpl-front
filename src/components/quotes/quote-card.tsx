@@ -1,26 +1,54 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   BadgeCheck,
   BriefcaseBusiness,
+  Download,
   Send,
   UserCheck,
   XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatMoney, normalizeCurrency } from '@/lib/currency';
-import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
+import { dealWorkspaceHref } from '@/lib/entity-routes';
+import { formatDate, formatDateTime, formatNumber, toDateInputValue } from '@/lib/format';
+import {
+  COMMERCIAL_NOTE_LABEL,
+  DOCUMENT_DATE_LABEL,
+  DELIVERY_PERIOD_LABEL,
+  PRODUCTION_PERIOD_LABEL,
+  VALID_UNTIL_LABEL,
+  buildQuoteCommercialTermsPayload,
+  canEditQuoteCommercialNote,
+  canMutateQuoteDraftClientTerms,
+  quoteAutomaticDate,
+  quoteCustomerDocumentIssues,
+  validateQuoteCommercialTerms,
+} from '@/lib/quote-commercial-terms';
 import {
   compactQuoteId,
   getQuoteActions,
   getQuoteItemDetails,
   QuoteAction,
   QuoteItemDetail,
+  quoteItemTitle,
   quoteStatusClassNames,
   quoteStatusLabels,
 } from '@/lib/quote-presentation';
-import type { Quote } from '@/types/hpl';
+import { QuoteApprovedPricing } from '@/components/quotes/quote-approved-pricing';
+import type { UpdateQuoteCommercialTermsPayload } from '@/hooks/use-quotes';
+import type { Quote, QuotePricingPreview } from '@/types/hpl';
+import type { ApprovedPricingItemPayload } from '@/lib/quote-pricing';
+import {
+  MIXED_CURRENCY_TOTAL_HINT,
+  QUOTE_FINALIZED_LABEL,
+  canDownloadQuoteDocument,
+  isQuoteFinalized,
+  parseCommercialCurrency,
+  quoteUsesMixedCurrencies,
+} from '@/lib/quote-pricing';
 
 type QuoteCardProps = {
   quote: Quote;
@@ -35,6 +63,27 @@ type QuoteCardProps = {
   onReject: () => void;
   onClientAccept: () => void;
   onConvert: () => void;
+  onDownloadPdf?: () => void;
+  pdfPending?: boolean;
+  onDownloadDocx?: () => void;
+  docxPending?: boolean;
+  onSaveCommercialTerms?: (
+    payload: Omit<UpdateQuoteCommercialTermsPayload, 'id'>,
+  ) => Promise<unknown> | unknown;
+  termsPending?: boolean;
+  onApprovePricing?: (
+    items: ApprovedPricingItemPayload[],
+  ) => Promise<unknown> | unknown;
+  onPreviewPricing?: (
+    items: ApprovedPricingItemPayload[],
+  ) => Promise<QuotePricingPreview>;
+  pricingPending?: boolean;
+  pricingPreviewPending?: boolean;
+  onFinalize?: () => Promise<unknown> | unknown;
+  onCreateVersion?: () => Promise<unknown> | unknown;
+  createVersionPending?: boolean;
+  finalizePending?: boolean;
+  highlightUnapproved?: boolean;
 };
 
 function detailValue(
@@ -109,8 +158,26 @@ export function QuoteCard({
   onReject,
   onClientAccept,
   onConvert,
+  onDownloadPdf,
+  pdfPending = false,
+  onDownloadDocx,
+  docxPending = false,
+  onSaveCommercialTerms,
+  termsPending = false,
+  onApprovePricing,
+  onPreviewPricing,
+  pricingPending = false,
+  pricingPreviewPending = false,
+  onFinalize,
+  onCreateVersion,
+  createVersionPending = false,
+  finalizePending = false,
+  highlightUnapproved = false,
 }: QuoteCardProps) {
+  const mixedCurrencies = quoteUsesMixedCurrencies(quote);
+  const locked = isQuoteFinalized(quote);
   const currency = normalizeCurrency(quote.displayCurrency);
+  const canApprovePricing = permissions.includes('quotes:approve');
   const actions = getQuoteActions({
     quote,
     currentUserId,
@@ -124,6 +191,21 @@ export function QuoteCard({
     'client-accept': onClientAccept,
     convert: onConvert,
   };
+  const canMutateTerms = canMutateQuoteDraftClientTerms({
+    permissions,
+    currentUserId,
+    managerId: quote.managerId,
+    status: quote.status,
+    finalizedAt: quote.finalizedAt,
+  });
+  const canEditNote = canEditQuoteCommercialNote(permissions);
+  const customerDocumentReady = canDownloadQuoteDocument(quote, permissions);
+  const legacyDocumentMissing =
+    quote.documentAvailability === 'LEGACY_MISSING' ||
+    (quote.status === 'converted' && !quote.pdfFileId);
+  const customerDocumentIssues = locked
+    ? []
+    : quoteCustomerDocumentIssues(quote);
 
   return (
     <article className="rounded border border-slate-200 bg-white">
@@ -131,13 +213,18 @@ export function QuoteCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="font-semibold text-slate-950" title={quote.id}>
-              КП · {compactQuoteId(quote.id)}
+              КП v{quote.versionNumber ?? 1} · {compactQuoteId(quote.id)}
             </h4>
             <span
               className={`inline-flex rounded border px-2 py-0.5 text-xs font-semibold ${quoteStatusClassNames[quote.status]}`}
             >
               {quoteStatusLabels[quote.status]}
             </span>
+            {locked ? (
+              <span className="inline-flex rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                {QUOTE_FINALIZED_LABEL}
+              </span>
+            ) : null}
             {isLatest ? (
               <span className="text-xs font-medium text-slate-500">Последнее</span>
             ) : null}
@@ -150,7 +237,9 @@ export function QuoteCard({
         <div className="shrink-0 text-left sm:text-right">
           <div className="text-xs text-slate-500">Итого</div>
           <div className="text-lg font-semibold text-slate-950">
-            {formatMoney(quote.totalAmount, currency)}
+            {mixedCurrencies
+              ? MIXED_CURRENCY_TOTAL_HINT
+              : formatMoney(quote.totalAmount, currency)}
           </div>
         </div>
       </div>
@@ -160,7 +249,9 @@ export function QuoteCard({
           label="Доставка"
           value={
             quote.deliveryCost !== undefined && quote.deliveryCost !== null
-              ? formatMoney(quote.deliveryCost, currency)
+              ? mixedCurrencies
+                ? MIXED_CURRENCY_TOTAL_HINT
+                : formatMoney(quote.deliveryCost, currency)
               : 'Не указана'
           }
         />
@@ -175,6 +266,42 @@ export function QuoteCard({
         />
         <MetaField label="Позиций" value={String(quote.items.length)} />
       </dl>
+
+      {(canApprovePricing || locked) && quote.items.length > 0 ? (
+        <QuoteApprovedPricing
+          quote={quote}
+          canApprove={
+            canApprovePricing &&
+            Boolean(onApprovePricing) &&
+            Boolean(onPreviewPricing) &&
+            !locked
+          }
+          canFinalize={canApprovePricing && Boolean(onFinalize) && !locked}
+          highlightUnapproved={highlightUnapproved}
+          pricingPending={pricingPending}
+          previewPending={pricingPreviewPending}
+          finalizePending={finalizePending}
+          onApprove={onApprovePricing ?? (async () => undefined)}
+          onPreview={
+            onPreviewPricing ??
+            (async () => ({
+              cnyUsdRate: 0,
+              sellingCoefficient: 2,
+              currencyCode: 'USD',
+              items: [],
+            }))
+          }
+          onFinalize={onFinalize ?? (async () => undefined)}
+        />
+      ) : null}
+
+      <QuoteCommercialTermsSection
+        quote={quote}
+        canMutate={canMutateTerms && Boolean(onSaveCommercialTerms)}
+        canEditNote={canEditNote}
+        pending={termsPending}
+        onSave={onSaveCommercialTerms}
+      />
 
       {quote.clientComment || quote.rejectionReason ? (
         <div className="space-y-3 border-b border-slate-200 p-4 text-sm">
@@ -195,14 +322,17 @@ export function QuoteCard({
           {quote.items.map((item, index) => (
             <div key={item.id} className="p-4">
               <div className="text-sm font-semibold text-slate-950">
-                {index + 1}. {item.panelTypeName ?? item.name ?? 'Позиция HPL'}
+                {index + 1}. {quoteItemTitle(item)}
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 text-xs sm:grid-cols-3 lg:grid-cols-4">
                 {getQuoteItemDetails(item).map((detail) => (
                   <div key={detail.label} className="min-w-0">
                     <dt className="text-slate-500">{detail.label}</dt>
                     <dd className="mt-0.5 break-words font-medium text-slate-800">
-                      {detailValue(detail, currency)}
+                      {detailValue(
+                      detail,
+                      parseCommercialCurrency(item.currencyCode) ?? currency,
+                    )}
                     </dd>
                   </div>
                 ))}
@@ -216,14 +346,68 @@ export function QuoteCard({
       </details>
 
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
           {quote.dealId ? (
-            <Link href="/deals" className="font-medium text-slate-700 underline underline-offset-4">
+            <Link
+              href={dealWorkspaceHref({ dealId: quote.dealId })}
+              className="font-medium text-slate-700 underline underline-offset-4"
+            >
               Открыть раздел сделок · {quote.dealId.slice(0, 8).toUpperCase()}
             </Link>
           ) : (
             <span className="text-slate-500">Сделка ещё не создана</span>
           )}
+          {customerDocumentIssues.length > 0 ? (
+            <div className="w-full space-y-1 text-sm text-red-700">
+              {customerDocumentIssues.map((issue) => (
+                <p key={issue}>{issue}</p>
+              ))}
+            </div>
+          ) : null}
+          {legacyDocumentMissing ? (
+            <span className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-800">
+              Документ отсутствует (legacy)
+            </span>
+          ) : null}
+          {onDownloadDocx && !legacyDocumentMissing ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={docxPending || !customerDocumentReady}
+              onClick={onDownloadDocx}
+            >
+              <Download aria-hidden="true" />
+              {docxPending ? 'Скачивание...' : 'Скачать КП DOCX'}
+            </Button>
+          ) : null}
+          {onDownloadPdf && !legacyDocumentMissing ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={pdfPending || !customerDocumentReady}
+              onClick={onDownloadPdf}
+            >
+              <Download aria-hidden="true" />
+              {pdfPending ? 'Скачивание...' : 'Скачать КП PDF'}
+            </Button>
+          ) : null}
+          {locked && onCreateVersion && !quote.nextVersion ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={createVersionPending}
+              onClick={() =>
+                void Promise.resolve(onCreateVersion()).catch(() => undefined)
+              }
+            >
+              {createVersionPending
+                ? 'Создание версии...'
+                : 'Создать новую версию'}
+            </Button>
+          ) : null}
         </div>
         {actions.length > 0 ? (
           <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -268,6 +452,342 @@ function TextBlock({
       <p className={tone === 'danger' ? 'mt-1 whitespace-pre-wrap text-red-700' : 'mt-1 whitespace-pre-wrap text-slate-700'}>
         {value}
       </p>
+    </div>
+  );
+}
+
+function formatDayRange(
+  from?: number | null,
+  to?: number | null,
+): string {
+  if (from == null || to == null) {
+    return '—';
+  }
+
+  return `${from}–${to} дней`;
+}
+
+function QuoteCommercialTermsSection({
+  quote,
+  canMutate,
+  canEditNote,
+  pending,
+  onSave,
+}: {
+  quote: Quote;
+  canMutate: boolean;
+  canEditNote: boolean;
+  pending: boolean;
+  onSave?: (
+    payload: Omit<UpdateQuoteCommercialTermsPayload, 'id'>,
+  ) => Promise<unknown> | unknown;
+}) {
+  if (canMutate && onSave) {
+    return (
+      <QuoteDraftTermsForm
+        key={`${quote.id}:${quote.updatedAt}:${quote.finalizedAt ?? ''}`}
+        quote={quote}
+        canEditNote={canEditNote}
+        pending={pending}
+        onSave={onSave}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3 border-b border-slate-200 p-4 text-sm">
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <MetaField
+          label={PRODUCTION_PERIOD_LABEL}
+          value={
+            quote.productionTerms?.trim() ||
+            formatDayRange(quote.productionDaysFrom, quote.productionDaysTo)
+          }
+        />
+        <MetaField
+          label={DELIVERY_PERIOD_LABEL}
+          value={
+            quote.deliveryTerms?.trim() ||
+            formatDayRange(quote.deliveryDaysFrom, quote.deliveryDaysTo)
+          }
+        />
+        <MetaField label={DOCUMENT_DATE_LABEL} value={quoteAutomaticDate(quote)} />
+        <MetaField
+          label={VALID_UNTIL_LABEL}
+          value={formatDate(quote.validUntil)}
+        />
+      </dl>
+      <div>
+        <div className="font-medium text-slate-700">{COMMERCIAL_NOTE_LABEL}</div>
+        <p className="mt-1 whitespace-pre-wrap text-slate-700">
+          {quote.commercialNote?.trim() || '—'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function QuoteDraftTermsForm({
+  quote,
+  canEditNote,
+  pending,
+  onSave,
+}: {
+  quote: Quote;
+  canEditNote: boolean;
+  pending: boolean;
+  onSave: (
+    payload: Omit<UpdateQuoteCommercialTermsPayload, 'id'>,
+  ) => Promise<unknown> | unknown;
+}) {
+  const [productionTerms, setProductionTerms] = useState(
+    quote.productionTerms ?? '',
+  );
+  const [deliveryTerms, setDeliveryTerms] = useState(
+    quote.deliveryTerms ?? '',
+  );
+  const [productionDaysFrom, setProductionDaysFrom] = useState(
+    quote.productionDaysFrom != null ? String(quote.productionDaysFrom) : '',
+  );
+  const [productionDaysTo, setProductionDaysTo] = useState(
+    quote.productionDaysTo != null ? String(quote.productionDaysTo) : '',
+  );
+  const [deliveryDaysFrom, setDeliveryDaysFrom] = useState(
+    quote.deliveryDaysFrom != null ? String(quote.deliveryDaysFrom) : '',
+  );
+  const [deliveryDaysTo, setDeliveryDaysTo] = useState(
+    quote.deliveryDaysTo != null ? String(quote.deliveryDaysTo) : '',
+  );
+  const [validUntil, setValidUntil] = useState(
+    toDateInputValue(quote.validUntil),
+  );
+  const [commercialNote, setCommercialNote] = useState(
+    quote.commercialNote ?? '',
+  );
+  const [internalCommercialNote, setInternalCommercialNote] = useState(
+    quote.internalCommercialNote ?? '',
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async (): Promise<void> => {
+    const termsError = validateQuoteCommercialTerms({
+      productionTerms,
+      deliveryTerms,
+      productionDaysFrom,
+      productionDaysTo,
+      deliveryDaysFrom,
+      deliveryDaysTo,
+      validUntil,
+      commercialNote,
+      internalCommercialNote,
+    });
+    if (termsError) {
+      setError(termsError);
+      return;
+    }
+
+    setError(null);
+    await onSave(
+      buildQuoteCommercialTermsPayload(
+        {
+          productionTerms,
+          deliveryTerms,
+          productionDaysFrom,
+          productionDaysTo,
+          deliveryDaysFrom,
+          deliveryDaysTo,
+          validUntil,
+          commercialNote,
+          internalCommercialNote,
+        },
+        { includeNote: canEditNote },
+      ),
+    );
+  };
+
+  return (
+    <form
+      className="space-y-3 border-b border-slate-200 p-4 text-sm"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save().catch(() => undefined);
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            {PRODUCTION_PERIOD_LABEL}
+          </span>
+          <textarea
+            value={productionTerms}
+            maxLength={500}
+            rows={2}
+            placeholder="15–20 рабочих дней"
+            onChange={(event) => {
+              setProductionTerms(event.target.value);
+              setError(null);
+            }}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            {DELIVERY_PERIOD_LABEL}
+          </span>
+          <textarea
+            value={deliveryTerms}
+            maxLength={500}
+            rows={2}
+            placeholder="Ориентировочно 4 недели после утверждения декора"
+            onChange={(event) => {
+              setDeliveryTerms(event.target.value);
+              setError(null);
+            }}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+          />
+        </label>
+      </div>
+      {!productionTerms.trim() || !deliveryTerms.trim() ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+        <DayRangeInputs
+          label={PRODUCTION_PERIOD_LABEL}
+          from={productionDaysFrom}
+          to={productionDaysTo}
+          onFromChange={(value) => {
+            setProductionDaysFrom(value);
+            setError(null);
+          }}
+          onToChange={(value) => {
+            setProductionDaysTo(value);
+            setError(null);
+          }}
+        />
+        <DayRangeInputs
+          label={DELIVERY_PERIOD_LABEL}
+          from={deliveryDaysFrom}
+          to={deliveryDaysTo}
+          onFromChange={(value) => {
+            setDeliveryDaysFrom(value);
+            setError(null);
+          }}
+          onToChange={(value) => {
+            setDeliveryDaysTo(value);
+            setError(null);
+          }}
+        />
+      </div>
+      ) : null}
+      <label className="block max-w-xs">
+        <span className="mb-1 block text-sm font-medium text-slate-700">
+          {VALID_UNTIL_LABEL}
+        </span>
+        <input
+          type="date"
+          value={validUntil}
+          aria-label={VALID_UNTIL_LABEL}
+          onChange={(event) => {
+            setValidUntil(event.target.value);
+            setError(null);
+          }}
+          className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+        />
+      </label>
+      <div>
+        <div className="text-xs text-slate-500">{DOCUMENT_DATE_LABEL}</div>
+        <div className="mt-1 font-medium text-slate-900">
+          {quoteAutomaticDate(quote)}
+        </div>
+      </div>
+      {canEditNote ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            {COMMERCIAL_NOTE_LABEL}
+          </span>
+          <textarea
+            value={commercialNote}
+            aria-label={COMMERCIAL_NOTE_LABEL}
+            rows={3}
+            onChange={(event) => {
+              setCommercialNote(event.target.value);
+              setError(null);
+            }}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            Внутреннее коммерческое примечание
+          </span>
+          <textarea
+            value={internalCommercialNote}
+            aria-label="Внутреннее коммерческое примечание"
+            rows={3}
+            maxLength={2000}
+            onChange={(event) => {
+              setInternalCommercialNote(event.target.value);
+              setError(null);
+            }}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+          />
+        </label>
+        </div>
+      ) : (
+        <div>
+          <div className="font-medium text-slate-700">{COMMERCIAL_NOTE_LABEL}</div>
+          <p className="mt-1 whitespace-pre-wrap text-slate-700">
+            {quote.commercialNote?.trim() || '—'}
+          </p>
+        </div>
+      )}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <Button type="submit" size="sm" disabled={pending}>
+        {pending ? 'Сохранение...' : 'Сохранить условия КП'}
+      </Button>
+    </form>
+  );
+}
+
+function DayRangeInputs({
+  label,
+  from,
+  to,
+  onFromChange,
+  onToChange,
+}: {
+  label: string;
+  from: string;
+  to: string;
+  onFromChange: (value: string) => void;
+  onToChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <span className="mb-1 block text-sm font-medium text-slate-700">
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={from}
+          aria-label={`${label} от`}
+          onChange={(event) => onFromChange(event.target.value)}
+          className="w-20 rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+        />
+        <span className="text-slate-500">—</span>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={to}
+          aria-label={`${label} до`}
+          onChange={(event) => onToChange(event.target.value)}
+          className="w-20 rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+        />
+        <span className="text-sm text-slate-600">дней</span>
+      </div>
     </div>
   );
 }

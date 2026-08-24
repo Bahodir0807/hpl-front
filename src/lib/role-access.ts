@@ -18,7 +18,7 @@ export function hasRole(
 export function isManagerOnly(user: RoleAccessUser): boolean {
   return (
     hasRole(user, "MANAGER") &&
-    !hasRole(user, "HEAD", "ADMIN", "DIRECTOR", "FINANCIER")
+    !hasRole(user, "HEAD", "ADMIN", "DIRECTOR")
   );
 }
 

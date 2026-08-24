@@ -3,7 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
+import { toDecimalNumber } from '../lib/hpl-domain';
 import { showError, showSuccess } from '../lib/toast';
+import { normalizePanelTypeCode } from '../lib/hpl-domain';
 import {
   HplListResponse,
   PanelColor,
@@ -39,6 +41,53 @@ export type UpdatePanelColorPayload = {
   hex?: string | null;
 };
 
+function normalizePanelType(raw: PanelType): PanelType {
+  return {
+    id: raw.id,
+    code: raw.code,
+    displayNameRu: raw.displayNameRu,
+    isActive: raw.isActive,
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+  };
+}
+
+function normalizePanelColor(raw: PanelColor & {
+  colorName?: string | null;
+  colorCode?: string | null;
+  name?: string | null;
+  code?: string | null;
+}): PanelColor {
+  const colorName =
+    raw.colorName?.trim() || raw.name?.trim() || '';
+  const colorCode = raw.colorCode?.trim() || raw.code?.trim() || '';
+
+  return {
+    id: raw.id,
+    supplierId: raw.supplierId,
+    name: colorName,
+    code: colorCode || null,
+    colorName,
+    colorCode: colorCode || null,
+    hex: raw.hex,
+  };
+}
+
+function normalizePanelSize(raw: PanelSize): PanelSize {
+  const widthMm = toDecimalNumber(raw.widthMm) ?? 0;
+  const heightMm = toDecimalNumber(raw.heightMm) ?? 0;
+
+  return {
+    id: raw.id,
+    widthMm,
+    heightMm,
+    displayName: raw.displayName,
+    areaM2: raw.areaM2,
+    sortOrder: raw.sortOrder,
+    isActive: raw.isActive,
+  };
+}
+
 export function usePanelTypes() {
   return useQuery({
     queryKey: ['panel-types'],
@@ -46,7 +95,7 @@ export function usePanelTypes() {
       const response =
         await apiClient.get<HplListResponse<PanelType>>('/panel-types');
 
-      return unwrapHplList(response.data);
+      return unwrapHplList(response.data).map(normalizePanelType);
     },
     staleTime: REFERENCE_STALE_TIME,
   });
@@ -59,25 +108,32 @@ export function usePanelSizes() {
       const response =
         await apiClient.get<HplListResponse<PanelSize>>('/panel-sizes');
 
-      return unwrapHplList(response.data);
+      return unwrapHplList(response.data).map(normalizePanelSize);
     },
     staleTime: REFERENCE_STALE_TIME,
   });
 }
 
 export function usePanelColors(supplierId?: string) {
+  const scopedSupplierId = supplierId?.trim() || '';
+  const loadUnscopedCatalog = supplierId === undefined;
+
   return useQuery({
-    queryKey: ['panel-colors', supplierId],
+    queryKey: ['panel-colors', loadUnscopedCatalog ? 'all' : scopedSupplierId],
     queryFn: async (): Promise<PanelColor[]> => {
       const response = await apiClient.get<HplListResponse<PanelColor>>(
         '/panel-colors',
         {
-          params: supplierId ? { supplierId } : undefined,
+          params: {
+            limit: 100,
+            ...(scopedSupplierId ? { supplierId: scopedSupplierId } : {}),
+          },
         },
       );
 
-      return unwrapHplList(response.data);
+      return unwrapHplList(response.data).map(normalizePanelColor);
     },
+    enabled: loadUnscopedCatalog || Boolean(scopedSupplierId),
     staleTime: REFERENCE_STALE_TIME,
   });
 }
@@ -170,47 +226,90 @@ function toUnknownArray(data: unknown): unknown[] {
   return unwrapHplList(data as HplListResponse<unknown>);
 }
 
-function unwrapQualityClasses(data: unknown): QualityClass[] {
-  const arr = toUnknownArray(data);
-  const first = arr[0];
-
-  if (
-    first &&
-    typeof first === 'object' &&
-    'qualityClass' in first &&
-    (first as { qualityClass?: unknown }).qualityClass
-  ) {
-    return arr
-      .map((item) =>
-        item && typeof item === 'object'
-          ? (item as { qualityClass?: QualityClass | null }).qualityClass
-          : null,
-      )
-      .filter((item): item is QualityClass => Boolean(item));
+function asQualityClass(value: unknown): QualityClass | null {
+  if (!value || typeof value !== 'object') {
+    return null;
   }
 
-  return arr.filter((item): item is QualityClass => Boolean(item));
+  const record = value as QualityClass;
+  const id = record.id?.trim();
+  if (!id) {
+    return null;
+  }
+
+  const normalized: QualityClass = { id };
+  if (record.code != null) {
+    normalized.code = record.code;
+  }
+  if (record.nameRu != null) {
+    normalized.nameRu = record.nameRu;
+  }
+  if (record.name != null) {
+    normalized.name = record.name;
+  }
+
+  return normalized;
+}
+
+export function unwrapSupplierQualityClasses(data: unknown): QualityClass[] {
+  const arr = toUnknownArray(data);
+  const classes: QualityClass[] = [];
+  const seen = new Set<string>();
+
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+
+    const record = item as { qualityClass?: unknown };
+    const candidate = asQualityClass(record.qualityClass) ?? asQualityClass(item);
+    if (!candidate || seen.has(candidate.id)) {
+      continue;
+    }
+
+    seen.add(candidate.id);
+    classes.push(candidate);
+  }
+
+  return classes;
+}
+
+export function resolveQualityClassesSupplierParam(supplierCode: string): string {
+  return supplierCode.trim().toLowerCase();
+}
+
+export function resolveQualityClassesPanelTypeParam(
+  panelTypeCode?: string,
+): string {
+  const trimmed = panelTypeCode?.trim() ?? '';
+  if (!trimmed) {
+    return '';
+  }
+
+  return normalizePanelTypeCode(trimmed) ?? trimmed;
 }
 
 export function useSupplierQualityClasses(
   supplierCode: string,
   panelTypeCode?: string,
 ) {
-  const code = supplierCode.trim().toLowerCase();
-  const panelType = panelTypeCode?.trim().toLowerCase();
+  const code = resolveQualityClassesSupplierParam(supplierCode);
+  const panelType = resolveQualityClassesPanelTypeParam(panelTypeCode);
 
   return useQuery({
     queryKey: ['quality-classes', code, panelType],
     queryFn: async (): Promise<QualityClass[]> => {
       const response = await apiClient.get(
-        `/suppliers/${code}/quality-classes`,
+        `/suppliers/${encodeURIComponent(code)}/quality-classes`,
         {
-          params: panelType ? { panelType } : undefined,
+          params: { panelType },
         },
       );
-      return unwrapQualityClasses(response.data);
+      return unwrapSupplierQualityClasses(response.data);
     },
     enabled: Boolean(code && panelType),
-    staleTime: REFERENCE_STALE_TIME,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
 }

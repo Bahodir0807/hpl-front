@@ -106,8 +106,9 @@ export const leadStatusLabels: Record<LeadStatus, string> = {
   NEW: 'Новый',
   IN_PROGRESS: 'В работе',
   QUALIFIED: 'Квалифицирован',
-  UNQUALIFIED: 'Брак',
+  UNQUALIFIED: 'Не квалифицирован',
   CONVERTED: 'Конвертирован',
+  LOST: 'Проигран',
 };
 
 export const clientStatusLabels: Record<ClientStatus, string> = {
@@ -145,18 +146,53 @@ export const expectedReceiptStatusLabels: Record<ExpectedReceiptStatus, string> 
 
 export const roleLabels: Record<RoleName, string> = {
   ADMIN: 'Администратор',
+  DIRECTOR: 'Директор',
   HEAD: 'Руководитель',
   MANAGER: 'Менеджер',
+  ACCOUNTANT: 'Бухгалтер',
   STOREKEEPER: 'Кладовщик',
-  OBSERVER: 'Наблюдатель',
+  INSTALLER: 'Монтажник',
 };
+
+export const ADMIN_PROVISIONABLE_ROLES: RoleName[] = [
+  'ADMIN',
+  'MANAGER',
+  'STOREKEEPER',
+  'INSTALLER',
+];
+
+export const ADMIN_PROTECTED_ASSIGNMENT_ROLES: RoleName[] = [
+  'DIRECTOR',
+  'HEAD',
+  'ACCOUNTANT',
+];
+
+export const CANONICAL_ROLES: RoleName[] = [
+  'ADMIN',
+  'DIRECTOR',
+  'HEAD',
+  'MANAGER',
+  'ACCOUNTANT',
+  'STOREKEEPER',
+  'INSTALLER',
+];
 
 // relatedType приходит от backend строкой, поэтому Record<string, string>.
 export const relatedTypeLabels: Record<string, string> = {
   lead: 'Лид',
+  Lead: 'Лид',
   deal: 'Сделка',
+  Deal: 'Сделка',
   client: 'Клиент',
+  Client: 'Клиент',
   order: 'Заказ',
+  Order: 'Заказ',
+  supplierOrder: 'Заказ поставщику',
+  SupplierOrder: 'Заказ поставщику',
+  DealInstallation: 'Монтаж',
+  dealInstallation: 'Монтаж',
+  LeadRecovery: 'Восстановление лида',
+  DealRecovery: 'Восстановление сделки',
   task: 'Задача',
 };
 
@@ -172,21 +208,35 @@ export function enumLabel(
 }
 
 export const supplierDisplayNames: Record<SupplierCode, string> = {
-  wuya: 'Буя',
+  wuya: 'Вуя',
   tianran: 'Тианран',
   polybet: 'Полибет',
 };
+
+const LEGACY_WUYA_DISPLAY_NAMES = new Set([
+  'буя',
+  'buya',
+  'wuya',
+]);
 
 export function formatSupplierName(
   code?: string | null,
   name?: string | null,
   fallback = 'Поставщик',
 ): string {
-  const normalized = code?.toLowerCase();
+  const normalized = code?.trim().toLowerCase();
   if (normalized && normalized in supplierDisplayNames) {
     return supplierDisplayNames[normalized as SupplierCode];
   }
 
   const trimmed = name?.trim();
-  return trimmed || fallback;
+  if (!trimmed) {
+    return fallback;
+  }
+
+  if (LEGACY_WUYA_DISPLAY_NAMES.has(trimmed.toLowerCase())) {
+    return supplierDisplayNames.wuya;
+  }
+
+  return trimmed;
 }

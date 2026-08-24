@@ -17,6 +17,7 @@ type SearchComboboxProps = {
   emptyLabel?: string;
   disabled?: boolean;
   loading?: boolean;
+  ariaLabel?: string;
   onSearchChange?: (query: string) => void;
 };
 
@@ -29,6 +30,7 @@ export function SearchCombobox({
   emptyLabel = "Ничего не найдено",
   disabled = false,
   loading = false,
+  ariaLabel,
   onSearchChange,
 }: SearchComboboxProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +81,7 @@ export function SearchCombobox({
     <div ref={containerRef} className="relative">
       <button
         type="button"
+        aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => setIsOpen((current) => !current)}
         className="flex w-full items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 outline-none focus:border-slate-500 disabled:bg-slate-100"

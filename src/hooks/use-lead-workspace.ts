@@ -24,6 +24,7 @@ export type NormalizedLeadWorkspace = {
   calls: LeadCall[];
   notes: LeadNote[];
   activities: LeadActivity[];
+  catalog: NonNullable<LeadWorkspace['catalog']>;
 };
 
 export function normalizeLeadWorkspace(
@@ -40,6 +41,7 @@ export function normalizeLeadWorkspace(
     calls: data.calls ?? [],
     notes: data.notes ?? [],
     activities: data.activities ?? data.timeline ?? [],
+    catalog: data.catalog ?? {},
   };
 }
 

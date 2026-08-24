@@ -3,65 +3,41 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { z } from 'zod';
 import { useClient, useClients } from '../../hooks/use-clients';
 import { useDebouncedValue } from '../../hooks/use-debounced-value';
 import { Lead, useQualifyLead } from '../../hooks/use-leads';
 import { usePanelSizes, usePanelTypes } from '../../hooks/use-panels';
 import { apiClient } from '../../lib/api-client';
+import {
+  displayContactValue,
+  resolveClientContactPresentation,
+} from '../../lib/client-contact';
 import { formatContactName } from '../../lib/display-names';
+import { getErrorMessage } from '../../lib/errors';
+import {
+  CUSTOM_SIZE_PRICING_NOTE,
+  findPanelTypeIdByApplication,
+  isValidThicknessForApplication,
+  panelSizeLabel,
+  toDecimalNumber,
+} from '../../lib/hpl-domain';
+import { HplApplicationField } from './hpl-application-field';
+import { HplThicknessField } from './hpl-thickness-field';
 import {
   InstallationRequiredField,
   installationSelectionToBoolean,
 } from './installation-required-field';
-import { MoneyInput } from '../ui/money-input';
+import {
+  QualifyLeadFormInput,
+  QualifyLeadFormValues,
+  buildQualifyLeadPayload,
+  defaultApplicationFromQualification,
+  defaultContactMode,
+  defaultObjectMode,
+  defaultSizeModeFromQualification,
+  qualifyLeadSchema,
+} from './qualify-lead-form';
 import { SearchCombobox } from '../ui/search-combobox';
-
-const optionalUuid = z
-  .string()
-  .trim()
-  .optional()
-  .refine((value) => !value || z.string().uuid().safeParse(value).success, {
-    message: 'Выберите значение из списка',
-  });
-
-const qualifyLeadSchema = z
-  .object({
-    clientId: z.string().trim().uuid('Выберите клиента'),
-    projectObjectId: optionalUuid,
-    newObjectName: z.string().trim().optional(),
-    contactId: optionalUuid,
-    contactName: z.string().trim().optional(),
-    needDescription: z.string().trim().min(5, 'Опишите потребность'),
-    estimatedAmount: z.coerce.number().positive('Сумма должна быть больше 0'),
-    estimatedAmountCurrency: z.enum(['USD', 'UZS']),
-    targetDate: z.string().trim().min(1, 'Укажите срок реализации'),
-    decisionMakerContact: z.string().trim().min(1, 'Укажите ЛПР'),
-    application: z.enum(['INTERIOR', 'EXTERIOR']),
-    panelTypeId: z.string().trim().uuid('Выберите тип панели'),
-    thicknessMm: z.coerce.number().int().positive('Укажите толщину'),
-    panelSizeId: z.string().trim().uuid('Выберите размер'),
-    colorCode: z.string().trim().min(1, 'Укажите цвет'),
-    colorName: z.string().trim().optional(),
-    requiredAreaM2: z.coerce.number().positive('Площадь должна быть больше 0'),
-    installationRequired: z.enum(['yes', 'no'], {
-      message: 'Укажите монтаж',
-    }),
-    stockOnly: z.boolean(),
-    urgent: z.boolean(),
-    willingToWait: z.boolean(),
-  })
-  .refine((value) => Boolean(value.projectObjectId || value.newObjectName), {
-    message: 'Выберите объект или укажите название нового',
-    path: ['projectObjectId'],
-  })
-  .refine((value) => Boolean(value.contactId || value.contactName), {
-    message: 'Выберите контакт или укажите данные контакта',
-    path: ['contactId'],
-  });
-
-type QualifyLeadFormValues = z.infer<typeof qualifyLeadSchema>;
-type QualifyLeadFormInput = z.input<typeof qualifyLeadSchema>;
 
 type ProjectObjectResponse = { id: string };
 type ContactResponse = { id: string };
@@ -72,16 +48,12 @@ type QualifyLeadModalProps = {
   onClose: () => void;
 };
 
-function splitPersonName(fullName: string): { firstName: string; lastName?: string } {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  return {
-    firstName: parts[0] ?? fullName.trim(),
-    lastName: parts.slice(1).join(' ') || undefined,
-  };
-}
-
 function FieldError({ message }: { message?: string }) {
   return message ? <span className="mt-1 block text-sm text-red-600">{message}</span> : null;
+}
+
+function RequiredMark() {
+  return <span className="text-red-600"> *</span>;
 }
 
 export function QualifyLeadModal({ lead, isOpen, onClose }: QualifyLeadModalProps) {
@@ -106,8 +78,8 @@ function QualifyLeadModalContent({
   const panelSizesQuery = usePanelSizes();
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCreatingObject, setIsCreatingObject] = useState(false);
   const submitLockRef = useRef(false);
+  const previousClientIdRef = useRef(lead.clientId ?? '');
   const [clientSearch, setClientSearch] = useState('');
   const debouncedClientSearch = useDebouncedValue(clientSearch, 300);
   const clientsQuery = useClients({
@@ -121,36 +93,57 @@ function QualifyLeadModalContent({
     reset,
     control,
     setValue,
-    formState: { errors, isValid },
+    formState: { errors, isSubmitted, isValid },
   } = useForm<QualifyLeadFormInput, unknown, QualifyLeadFormValues>({
     resolver: zodResolver(qualifyLeadSchema),
     mode: 'onChange',
     defaultValues: {
       clientId: lead.clientId ?? '',
+      objectMode: defaultObjectMode(lead.projectObjectId),
       projectObjectId: lead.projectObjectId ?? '',
       newObjectName: '',
+      contactMode: defaultContactMode(lead.contactId),
       contactId: lead.contactId ?? '',
-      contactName: '',
+      contactFirstName: '',
+      contactLastName: '',
+      contactPhone: '',
+      contactEmail: '',
       needDescription: lead.needDescription ?? '',
-      estimatedAmount: Number(lead.estimatedAmount ?? 0),
-      estimatedAmountCurrency: 'UZS',
-      targetDate: lead.targetDate ? lead.targetDate.slice(0, 10) : '',
       decisionMakerContact: lead.decisionMakerContact ?? '',
-      application: 'INTERIOR',
-      panelTypeId: '',
-      thicknessMm: 0,
-      panelSizeId: '',
-      colorCode: '',
-      colorName: '',
-      requiredAreaM2: 0,
-      installationRequired: undefined,
-      stockOnly: false,
-      urgent: false,
-      willingToWait: false,
+      application: defaultApplicationFromQualification(
+        lead.qualification?.application,
+        lead.qualification?.panelType?.code,
+      ),
+      panelTypeId: lead.qualification?.panelTypeId ?? '',
+      thicknessMm: toDecimalNumber(lead.qualification?.thicknessMm) ?? '',
+      sizeMode: defaultSizeModeFromQualification(lead.qualification),
+      panelSizeId: lead.qualification?.panelSizeId ?? '',
+      customWidthMm: toDecimalNumber(lead.qualification?.customWidthMm) ?? '',
+      customHeightMm: toDecimalNumber(lead.qualification?.customHeightMm) ?? '',
+      colorCode: lead.qualification?.colorCode ?? '',
+      colorName: lead.qualification?.colorName ?? '',
+      requiredAreaM2: (() => {
+        const area = toDecimalNumber(lead.qualification?.requiredAreaM2);
+        return area !== null && area > 0 ? area : '';
+      })(),
+      installationRequired:
+        lead.qualification?.installationRequired === true
+          ? 'yes'
+          : lead.qualification?.installationRequired === false
+            ? 'no'
+            : undefined,
+      urgent: lead.qualification?.urgent ?? false,
+      willingToWait: lead.qualification?.willingToWait ?? false,
     },
   });
 
   const selectedClientId = useWatch({ control, name: 'clientId' });
+  const selectedApplication = useWatch({ control, name: 'application' });
+  const selectedSizeMode = useWatch({ control, name: 'sizeMode' });
+  const selectedThickness = useWatch({ control, name: 'thicknessMm' });
+  const objectMode = useWatch({ control, name: 'objectMode' });
+  const contactMode = useWatch({ control, name: 'contactMode' });
+  const selectedContactId = useWatch({ control, name: 'contactId' });
   const clientDetailsQuery = useClient(selectedClientId || null);
 
   const clientOptions = (() => {
@@ -179,8 +172,9 @@ function QualifyLeadModalContent({
     return items;
   })();
 
+  const contacts = clientDetailsQuery.data?.contacts ?? [];
   const contactOptions = (() => {
-    const items = (clientDetailsQuery.data?.contacts ?? []).map((contact) => ({
+    const items = contacts.map((contact) => ({
       value: contact.id,
       label: formatContactName(contact),
       description: [contact.position, contact.phone, contact.email].filter(Boolean).join(' · '),
@@ -191,21 +185,36 @@ function QualifyLeadModalContent({
     return items;
   })();
 
-  const panelTypeOptions = (panelTypesQuery.data ?? []).map((type) => ({
-    value: type.id,
-    label: type.name || type.code,
-    description: type.code,
-  }));
+  const selectedContact =
+    contacts.find((contact) => contact.id === selectedContactId) ??
+    (lead.contact?.id === selectedContactId ? lead.contact : null);
+  const selectedClient = clientDetailsQuery.data ?? lead.client ?? null;
+  const selectedContactPresentation = resolveClientContactPresentation({
+    client: selectedClient
+      ? {
+          name: selectedClient.name,
+          phone: selectedClient.phone,
+          email: selectedClient.email,
+        }
+      : null,
+    contact: selectedContact,
+  });
 
   const panelSizeOptions = (panelSizesQuery.data ?? []).map((size) => ({
     value: size.id,
-    label: size.label ?? `${size.width} x ${size.length} мм`,
+    label: panelSizeLabel(size),
     description: size.areaM2 ? `${size.areaM2} м2` : undefined,
   }));
 
   useEffect(() => {
+    if (selectedClientId === previousClientIdRef.current) {
+      return;
+    }
+    previousClientIdRef.current = selectedClientId ?? '';
     setValue('projectObjectId', '');
     setValue('contactId', '');
+    setValue('objectMode', 'EXISTING', { shouldValidate: true });
+    setValue('contactMode', 'EXISTING', { shouldValidate: true });
   }, [selectedClientId, setValue]);
 
   const onSubmit = async (values: QualifyLeadFormValues): Promise<void> => {
@@ -215,20 +224,16 @@ function QualifyLeadModalContent({
     setIsSubmitting(true);
 
     try {
-      let projectObjectId = values.projectObjectId;
-      let contactId = values.contactId || undefined;
+      let projectObjectId =
+        values.objectMode === 'EXISTING' ? values.projectObjectId : undefined;
+      let contactId = values.contactMode === 'EXISTING' ? values.contactId : undefined;
 
-      if (!projectObjectId && values.newObjectName) {
-        setIsCreatingObject(true);
-        try {
-          const objectResponse = await apiClient.post<ProjectObjectResponse>(
-            `/clients/${values.clientId}/objects`,
-            { name: values.newObjectName },
-          );
-          projectObjectId = objectResponse.data.id;
-        } finally {
-          setIsCreatingObject(false);
-        }
+      if (values.objectMode === 'NEW' && values.newObjectName) {
+        const objectResponse = await apiClient.post<ProjectObjectResponse>(
+          `/clients/${values.clientId}/objects`,
+          { name: values.newObjectName },
+        );
+        projectObjectId = objectResponse.data.id;
       }
 
       if (!projectObjectId) {
@@ -236,55 +241,59 @@ function QualifyLeadModalContent({
         return;
       }
 
-      if (!contactId && values.contactName) {
+      if (values.contactMode === 'NEW' && values.contactFirstName) {
         const contactResponse = await apiClient.post<ContactResponse>(
           `/clients/${values.clientId}/contacts`,
-          splitPersonName(values.contactName),
+          {
+            firstName: values.contactFirstName,
+            ...(values.contactLastName ? { lastName: values.contactLastName } : {}),
+            ...(values.contactPhone?.trim() ? { phone: values.contactPhone.trim() } : {}),
+            ...(values.contactEmail?.trim() ? { email: values.contactEmail.trim() } : {}),
+            isPrimary: true,
+          },
         );
         contactId = contactResponse.data.id;
       }
 
-      if (contactId) {
-        await apiClient.patch(`/leads/${lead.id}`, { contactId });
+      if (!contactId) {
+        setFormError('Не удалось определить контакт.');
+        return;
       }
 
-      await qualifyLead.mutateAsync({
-        id: lead.id,
-        clientId: values.clientId,
-        projectObjectId,
-        needDescription: values.needDescription,
-        estimatedAmount: values.estimatedAmount,
-        targetDate: new Date(values.targetDate).toISOString(),
-        decisionMakerContact: values.decisionMakerContact,
-        qualification: {
-          application: values.application,
-          panelTypeId: values.panelTypeId,
-          thicknessMm: values.thicknessMm,
-          panelSizeId: values.panelSizeId,
-          colorCode: values.colorCode,
-          colorName: values.colorName || null,
-          requiredAreaM2: values.requiredAreaM2,
+      const panelTypeId = findPanelTypeIdByApplication(
+        panelTypesQuery.data ?? [],
+        values.application,
+      );
+      if (!panelTypeId) {
+        setFormError('Не удалось определить тип панели.');
+        return;
+      }
+
+      await qualifyLead.mutateAsync(
+        buildQualifyLeadPayload({
+          leadId: lead.id,
+          clientId: values.clientId,
+          contactId,
+          projectObjectId,
+          values: { ...values, panelTypeId },
+          panelTypeId,
           installationRequired: installationSelectionToBoolean(
             values.installationRequired,
           ),
-          stockOnly: values.stockOnly,
-          urgent: values.urgent,
-          willingToWait: values.willingToWait,
-          customerRequirements: values.needDescription,
-        },
-      });
+        }),
+      );
 
       reset();
       onClose();
-    } catch {
-      setFormError('Не удалось квалифицировать лид.');
+    } catch (error) {
+      setFormError(getErrorMessage(error, 'Не удалось квалифицировать лид.'));
     } finally {
       submitLockRef.current = false;
       setIsSubmitting(false);
     }
   };
 
-  const busy = isSubmitting || isCreatingObject || qualifyLead.isPending;
+  const busy = isSubmitting || qualifyLead.isPending;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
@@ -302,93 +311,259 @@ function QualifyLeadModalContent({
         <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="min-h-0 flex-1 overflow-y-auto p-5">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Клиент</span>
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Клиент
+                <RequiredMark />
+              </span>
               <Controller name="clientId" control={control} render={({ field }) => (
                 <SearchCombobox value={field.value ?? ''} onChange={field.onChange} options={clientOptions} placeholder="Выберите клиента" searchPlaceholder="Поиск клиента" emptyLabel="Клиенты не найдены" loading={clientsQuery.isFetching} onSearchChange={setClientSearch} />
               )} />
               <FieldError message={errors.clientId?.message} />
             </label>
 
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Объект</span>
-              <Controller name="projectObjectId" control={control} render={({ field }) => (
-                <SearchCombobox value={field.value ?? ''} onChange={field.onChange} options={projectObjectOptions} placeholder="Выберите объект" searchPlaceholder="Поиск объекта" emptyLabel="Объекты не найдены" disabled={!selectedClientId} loading={clientDetailsQuery.isFetching} />
-              )} />
-              <FieldError message={errors.projectObjectId?.message} />
-            </label>
+            <fieldset className="md:col-span-2">
+              <legend className="mb-1 block text-sm font-medium text-slate-700">
+                Объект
+                <RequiredMark />
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
+                  <input
+                    type="radio"
+                    value="EXISTING"
+                    checked={objectMode === 'EXISTING'}
+                    onChange={() => {
+                      setValue('objectMode', 'EXISTING', { shouldValidate: true });
+                      setValue('newObjectName', '');
+                    }}
+                  />
+                  Существующий объект
+                </label>
+                <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
+                  <input
+                    type="radio"
+                    value="NEW"
+                    checked={objectMode === 'NEW'}
+                    onChange={() => {
+                      setValue('objectMode', 'NEW', { shouldValidate: true });
+                      setValue('projectObjectId', '');
+                    }}
+                  />
+                  Новый объект
+                </label>
+              </div>
+              {objectMode === 'EXISTING' ? (
+                <div className="mt-3">
+                  <Controller name="projectObjectId" control={control} render={({ field }) => (
+                    <SearchCombobox value={field.value ?? ''} onChange={field.onChange} options={projectObjectOptions} placeholder="Выберите объект" searchPlaceholder="Поиск объекта" emptyLabel="Объекты не найдены" disabled={!selectedClientId} loading={clientDetailsQuery.isFetching} />
+                  )} />
+                  <FieldError message={errors.projectObjectId?.message} />
+                </div>
+              ) : (
+                <label className="mt-3 block">
+                  <span className="mb-1 block text-sm font-medium text-slate-700">Название нового объекта</span>
+                  <input className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500" {...register('newObjectName')} />
+                  <FieldError message={errors.newObjectName?.message} />
+                </label>
+              )}
+            </fieldset>
+
+            <fieldset className="md:col-span-2">
+              <legend className="mb-1 block text-sm font-medium text-slate-700">
+                Контакт
+                <RequiredMark />
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
+                  <input
+                    type="radio"
+                    value="EXISTING"
+                    checked={contactMode === 'EXISTING'}
+                    onChange={() => {
+                      setValue('contactMode', 'EXISTING', { shouldValidate: true });
+                      setValue('contactFirstName', '');
+                      setValue('contactLastName', '');
+                      setValue('contactPhone', '');
+                      setValue('contactEmail', '');
+                    }}
+                  />
+                  Существующий контакт
+                </label>
+                <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
+                  <input
+                    type="radio"
+                    value="NEW"
+                    checked={contactMode === 'NEW'}
+                    onChange={() => {
+                      setValue('contactMode', 'NEW', { shouldValidate: true });
+                      setValue('contactId', '');
+                    }}
+                  />
+                  Новый контакт
+                </label>
+              </div>
+              {contactMode === 'EXISTING' ? (
+                <div className="mt-3 space-y-3">
+                  <Controller name="contactId" control={control} render={({ field }) => (
+                    <SearchCombobox value={field.value ?? ''} onChange={field.onChange} options={contactOptions} placeholder="Выберите контакт" searchPlaceholder="Поиск контакта" emptyLabel="Контакты не найдены" disabled={!selectedClientId} loading={clientDetailsQuery.isFetching} />
+                  )} />
+                  <FieldError message={errors.contactId?.message} />
+                  <dl className="grid grid-cols-1 gap-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm sm:grid-cols-3">
+                    <div>
+                      <dt className="text-xs uppercase text-slate-500">Контакт</dt>
+                      <dd className="mt-1 text-slate-900">
+                        {displayContactValue(selectedContactPresentation.contactName)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase text-slate-500">Телефон</dt>
+                      <dd className="mt-1 text-slate-900">
+                        {displayContactValue(selectedContactPresentation.phone)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase text-slate-500">Email</dt>
+                      <dd className="mt-1 text-slate-900">
+                        {displayContactValue(selectedContactPresentation.email)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ) : (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Имя контакта</span>
+                    <input className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('contactFirstName')} />
+                    <FieldError message={errors.contactFirstName?.message} />
+                  </label>
+                  <label>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Фамилия контакта</span>
+                    <input className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('contactLastName')} />
+                  </label>
+                  <label>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Телефон контакта</span>
+                    <input type="tel" className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('contactPhone')} />
+                    <FieldError message={errors.contactPhone?.message} />
+                  </label>
+                  <label>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Email контакта</span>
+                    <input type="email" className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('contactEmail')} />
+                    <FieldError message={errors.contactEmail?.message} />
+                  </label>
+                </div>
+              )}
+            </fieldset>
 
             <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Новый объект</span>
-              <input className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500" {...register('newObjectName')} />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Контакт</span>
-              <Controller name="contactId" control={control} render={({ field }) => (
-                <SearchCombobox value={field.value ?? ''} onChange={field.onChange} options={contactOptions} placeholder="Выберите контакт" searchPlaceholder="Поиск контакта" emptyLabel="Контакты не найдены" disabled={!selectedClientId} loading={clientDetailsQuery.isFetching} />
-              )} />
-              <FieldError message={errors.contactId?.message} />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Данные контакта</span>
-              <input className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500" {...register('contactName')} />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Срок реализации</span>
-              <input type="date" className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500" {...register('targetDate')} />
-              <FieldError message={errors.targetDate?.message} />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Оценка суммы</span>
-              <Controller name="estimatedAmount" control={control} render={({ field: amountField }) => (
-                <Controller name="estimatedAmountCurrency" control={control} render={({ field: currencyField }) => (
-                  <MoneyInput value={amountField.value ? String(amountField.value) : ''} currency={currencyField.value} onValueChange={(nextValue) => amountField.onChange(nextValue === '' ? '' : Number(nextValue))} onCurrencyChange={currencyField.onChange} />
-                )} />
-              )} />
-              <FieldError message={errors.estimatedAmount?.message} />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">ЛПР</span>
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                ЛПР / лицо, принимающее решение
+                <RequiredMark />
+              </span>
               <input className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500" {...register('decisionMakerContact')} />
               <FieldError message={errors.decisionMakerContact?.message} />
             </label>
 
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Применение</span>
-              <select className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('application')}>
-                <option value="INTERIOR">Интерьер</option>
-                <option value="EXTERIOR">Экстерьер</option>
-              </select>
-            </label>
+            <Controller
+              name="application"
+              control={control}
+              render={({ field }) => (
+                <HplApplicationField
+                  value={field.value}
+                  onChange={(nextApplication) => {
+                    field.onChange(nextApplication);
+                    if (
+                      selectedThickness !== '' &&
+                      selectedThickness !== undefined &&
+                      !isValidThicknessForApplication(
+                        nextApplication,
+                        selectedThickness,
+                      )
+                    ) {
+                      setValue('thicknessMm', '', { shouldValidate: true });
+                    }
+                  }}
+                  error={errors.application?.message}
+                />
+              )}
+            />
+            {errors.panelTypeId?.message ? (
+              <FieldError message={errors.panelTypeId.message} />
+            ) : null}
+
+            <Controller
+              name="thicknessMm"
+              control={control}
+              render={({ field }) => (
+                <HplThicknessField
+                  application={selectedApplication}
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.thicknessMm?.message}
+                />
+              )}
+            />
+
+            <fieldset className="md:col-span-2">
+              <legend className="mb-1 block text-sm font-medium text-slate-700">
+                Размер
+                <RequiredMark />
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
+                  <input
+                    type="radio"
+                    value="STANDARD"
+                    checked={selectedSizeMode === 'STANDARD'}
+                    onChange={() => {
+                      setValue('sizeMode', 'STANDARD', { shouldValidate: true });
+                      setValue('customWidthMm', '');
+                      setValue('customHeightMm', '');
+                    }}
+                  />
+                  Стандартный размер
+                </label>
+                <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
+                  <input
+                    type="radio"
+                    value="CUSTOM"
+                    checked={selectedSizeMode === 'CUSTOM'}
+                    onChange={() => {
+                      setValue('sizeMode', 'CUSTOM', { shouldValidate: true });
+                      setValue('panelSizeId', '');
+                    }}
+                  />
+                  Нестандартный размер
+                </label>
+              </div>
+              {selectedSizeMode === 'STANDARD' ? (
+                <div className="mt-3">
+                  <Controller name="panelSizeId" control={control} render={({ field }) => (
+                    <SearchCombobox value={field.value ?? ''} onChange={field.onChange} options={panelSizeOptions} placeholder="Выберите стандартный размер" searchPlaceholder="Поиск размера" emptyLabel="Размеры не найдены" loading={panelSizesQuery.isFetching} />
+                  )} />
+                  <FieldError message={errors.panelSizeId?.message} />
+                </div>
+              ) : (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Ширина, мм</span>
+                    <input type="number" min="1" step="1" className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('customWidthMm')} />
+                    <FieldError message={errors.customWidthMm?.message} />
+                  </label>
+                  <label>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Высота, мм</span>
+                    <input type="number" min="1" step="1" className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('customHeightMm')} />
+                    <FieldError message={errors.customHeightMm?.message} />
+                  </label>
+                  <p className="text-sm text-amber-700 sm:col-span-2">{CUSTOM_SIZE_PRICING_NOTE}</p>
+                </div>
+              )}
+            </fieldset>
 
             <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Тип панели</span>
-              <Controller name="panelTypeId" control={control} render={({ field }) => (
-                <SearchCombobox value={field.value ?? ''} onChange={field.onChange} options={panelTypeOptions} placeholder="Выберите тип" searchPlaceholder="Поиск типа" emptyLabel="Типы не найдены" loading={panelTypesQuery.isFetching} />
-              )} />
-              <FieldError message={errors.panelTypeId?.message} />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Толщина, мм</span>
-              <input type="number" min="1" className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('thicknessMm')} />
-              <FieldError message={errors.thicknessMm?.message} />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Размер</span>
-              <Controller name="panelSizeId" control={control} render={({ field }) => (
-                <SearchCombobox value={field.value ?? ''} onChange={field.onChange} options={panelSizeOptions} placeholder="Выберите размер" searchPlaceholder="Поиск размера" emptyLabel="Размеры не найдены" loading={panelSizesQuery.isFetching} />
-              )} />
-              <FieldError message={errors.panelSizeId?.message} />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Цвет / код</span>
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Цвет / код
+                <RequiredMark />
+              </span>
               <input className="w-full rounded border border-slate-300 px-3 py-2 text-sm" placeholder="RAL-9005" {...register('colorCode')} />
               <FieldError message={errors.colorCode?.message} />
             </label>
@@ -399,8 +574,18 @@ function QualifyLeadModalContent({
             </label>
 
             <label>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Площадь, м2</span>
-              <input type="number" min="0" step="0.01" className="w-full rounded border border-slate-300 px-3 py-2 text-sm" {...register('requiredAreaM2')} />
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Площадь, м2
+                <RequiredMark />
+              </span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="Например, 24"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                {...register('requiredAreaM2')}
+              />
               <FieldError message={errors.requiredAreaM2?.message} />
             </label>
 
@@ -417,10 +602,6 @@ function QualifyLeadModalContent({
             />
 
             <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" {...register('stockOnly')} />
-              Только склад
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" {...register('urgent')} />
               Срочно
             </label>
@@ -430,19 +611,27 @@ function QualifyLeadModalContent({
             </label>
 
             <label className="md:col-span-2">
-              <span className="mb-1 block text-sm font-medium text-slate-700">Потребность</span>
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Потребность
+                <RequiredMark />
+              </span>
               <textarea rows={4} className="w-full resize-none rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500" {...register('needDescription')} />
               <FieldError message={errors.needDescription?.message} />
             </label>
           </div>
 
+          {isSubmitted && !isValid ? (
+            <p className="mt-4 text-sm text-red-600">
+              Заполните обязательные поля, отмеченные *.
+            </p>
+          ) : null}
           {formError ? <p className="mt-4 text-sm text-red-600">{formError}</p> : null}
 
           <div className="mt-5 flex justify-end gap-2 border-t border-slate-200 pt-4">
             <button type="button" onClick={onClose} className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
               Отмена
             </button>
-            <button type="submit" disabled={!isValid || busy} className="inline-flex items-center gap-2 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-500 disabled:opacity-60">
+            <button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-500 disabled:opacity-60">
               {busy ? 'Сохранение...' : 'Квалифицировать'}
             </button>
           </div>

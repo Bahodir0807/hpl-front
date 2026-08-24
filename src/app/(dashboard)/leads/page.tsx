@@ -6,12 +6,13 @@ import { AlertCircle, Plus, RotateCcw, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CreateLeadModal } from '../../../components/leads/create-lead-modal';
 import { UnqualifyLeadModal } from '../../../components/leads/unqualify-lead-modal';
+import { LoseOpportunityModal } from '../../../components/opportunities/lose-opportunity-modal';
 import { Button } from '../../../components/ui/button';
 import { Pagination } from '../../../components/ui/pagination';
 import { SearchCombobox } from '../../../components/ui/search-combobox';
 import { useAuth } from '../../../context/auth-context';
 import { useDebouncedValue } from '../../../hooks/use-debounced-value';
-import { Lead, LeadStatus, useLeads } from '../../../hooks/use-leads';
+import { Lead, LeadStatus, useLeads, useLoseLead } from '../../../hooks/use-leads';
 import { useUsersList } from '../../../hooks/use-users';
 import { formatMoney } from '../../../lib/currency';
 import {
@@ -19,7 +20,9 @@ import {
   resolveUserName,
 } from '../../../lib/display-names';
 import { formatDateTime } from '../../../lib/format';
+import { getErrorMessage } from '../../../lib/errors';
 import { leadStatusLabels } from '../../../lib/labels';
+import { lossReasonLabel } from '../../../lib/loss-reasons';
 import { resolveLeadWorkflowState } from '../../../lib/lead-workflow';
 
 const QualifyLeadModal = dynamic(
@@ -40,6 +43,7 @@ const statusOptions: { value: StatusFilter; label: string }[] = [
   { value: 'IN_PROGRESS', label: leadStatusLabels.IN_PROGRESS },
   { value: 'QUALIFIED', label: leadStatusLabels.QUALIFIED },
   { value: 'UNQUALIFIED', label: leadStatusLabels.UNQUALIFIED },
+  { value: 'LOST', label: leadStatusLabels.LOST },
   { value: 'CONVERTED', label: leadStatusLabels.CONVERTED },
 ];
 
@@ -74,6 +78,7 @@ export default function LeadsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [qualifyingLead, setQualifyingLead] = useState<Lead | null>(null);
   const [unqualifyingLead, setUnqualifyingLead] = useState<Lead | null>(null);
+  const [losingLead, setLosingLead] = useState<Lead | null>(null);
 
   const debouncedSearch = useDebouncedValue(search, 400);
   const debouncedSource = useDebouncedValue(source, 400);
@@ -82,6 +87,7 @@ export default function LeadsPage() {
     Boolean(user?.permissions.includes('users:read'));
   const canCommerciallyQualify =
     user?.permissions.includes('leads:commercial_qualify') ?? false;
+  const canLoseLead = user?.permissions.includes('leads:update') ?? false;
 
   const filters = useMemo(
     () => ({
@@ -95,6 +101,7 @@ export default function LeadsPage() {
     [canFilterOwners, debouncedSearch, debouncedSource, ownerId, page, status],
   );
   const leadsQuery = useLeads(filters);
+  const loseLead = useLoseLead();
   const usersQuery = useUsersList(canFilterOwners, {
     role: 'MANAGER',
     limit: 100,
@@ -351,6 +358,11 @@ export default function LeadsPage() {
                             Требует действия
                           </div>
                         ) : null}
+                        {lead.status === 'LOST' ? (
+                          <div className="mt-1 text-xs text-slate-500">
+                            {lossReasonLabel(lead.lostReasonCode)}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-3 py-3">
                         <div className="text-slate-700">
@@ -373,11 +385,27 @@ export default function LeadsPage() {
                           <button
                             type="button"
                             onClick={() => setUnqualifyingLead(lead)}
-                            disabled={lead.status === 'UNQUALIFIED'}
+                            disabled={
+                              lead.status === 'UNQUALIFIED' ||
+                              lead.status === 'LOST'
+                            }
                             className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
                           >
-                            Брак
+                            Не квалифицирован
                           </button>
+                          {canLoseLead ? (
+                            <button
+                              type="button"
+                              onClick={() => setLosingLead(lead)}
+                              disabled={
+                                lead.status === 'LOST' ||
+                                lead.status === 'CONVERTED'
+                              }
+                              className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
+                            >
+                              Проигран
+                            </button>
+                          ) : null}
                           <Link
                             href={`/leads/${lead.id}`}
                             className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -417,6 +445,25 @@ export default function LeadsPage() {
         lead={unqualifyingLead}
         isOpen={Boolean(unqualifyingLead)}
         onClose={() => setUnqualifyingLead(null)}
+      />
+      <LoseOpportunityModal
+        isOpen={Boolean(losingLead)}
+        title={losingLead?.title ?? ''}
+        entityLabel="лид"
+        pending={loseLead.isPending}
+        error={loseLead.isError ? getErrorMessage(loseLead.error) : null}
+        onClose={() => setLosingLead(null)}
+        onSubmit={async (payload) => {
+          if (!losingLead) {
+            return;
+          }
+          await loseLead.mutateAsync({
+            id: losingLead.id,
+            reason: payload.reason,
+            comment: payload.comment,
+          });
+          setLosingLead(null);
+        }}
       />
     </>
   );

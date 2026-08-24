@@ -2,7 +2,8 @@
 
 import { isAxiosError } from "axios";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Pagination } from "../../../components/ui/pagination";
 import { useAuth } from "../../../context/auth-context";
 import {
@@ -11,15 +12,20 @@ import {
   dealStages,
   isHplCalculatorDeal,
   useChangeDealStage,
+  useDeal,
   useDeals,
 } from "../../../hooks/use-deals";
 import { useSuppliers } from "../../../hooks/use-panels";
 import {
   normalizeSupplierOrderStatus,
   supplierOrderStatusLabels,
+  useSupplierOrder,
 } from "../../../hooks/use-supplier-orders";
 import { useUsersList, User } from "../../../hooks/use-users";
+import { dealWorkspaceHref } from "../../../lib/entity-routes";
+import { isCommerciallyWon, isOperationallyCompleted } from "../../../lib/deal-completion";
 import { getErrorMessage } from "../../../lib/errors";
+import { formatDateTime } from "../../../lib/format";
 import { formatMoney } from "../../../lib/currency";
 import {
   localizeStageRequirementMessage,
@@ -151,10 +157,31 @@ function NextActionBadge({ nextActionAt }: { nextActionAt?: string | null }) {
 }
 
 export default function DealsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
+          Загрузка сделок...
+        </div>
+      }
+    >
+      <DealsPageContent />
+    </Suspense>
+  );
+}
+
+function DealsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const dealIdParam = searchParams.get("dealId");
+  const supplierOrderIdParam = searchParams.get("supplierOrderId");
+  const installationParam = searchParams.get("installation");
+  const openInstallation = installationParam === "1" || installationParam === "true";
   const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [source, setSource] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [showCompleted, setShowCompleted] = useState(false);
   const dealsQuery = useDeals({
     page,
     limit: 50,
@@ -166,11 +193,52 @@ export default function DealsPage() {
     user?.permissions.includes("users:read") ?? false,
   );
   const changeStage = useChangeDealStage();
-  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const resolvedSupplierOrderQuery = useSupplierOrder(
+    supplierOrderIdParam && !dealIdParam ? supplierOrderIdParam : null,
+  );
   const [pendingStageChange, setPendingStageChange] =
     useState<PendingStageChange | null>(null);
   const total = dealsQuery.data?.total ?? 0;
   const totalPages = Math.ceil(total / 50);
+
+  const selectedDealId =
+    dealIdParam ?? resolvedSupplierOrderQuery.data?.dealId ?? null;
+  const linkedDealQuery = useDeal(dealIdParam);
+
+  useEffect(() => {
+    if (
+      !dealIdParam &&
+      supplierOrderIdParam &&
+      resolvedSupplierOrderQuery.data?.dealId
+    ) {
+      router.replace(
+        dealWorkspaceHref({
+          dealId: resolvedSupplierOrderQuery.data.dealId,
+          supplierOrderId: supplierOrderIdParam,
+        }),
+        { scroll: false },
+      );
+    }
+  }, [
+    dealIdParam,
+    resolvedSupplierOrderQuery.data?.dealId,
+    router,
+    supplierOrderIdParam,
+  ]);
+
+  const openDeal = (dealId: string, supplierOrderId?: string | null): void => {
+    router.replace(
+      dealWorkspaceHref({
+        dealId,
+        supplierOrderId: supplierOrderId ?? undefined,
+      }),
+      { scroll: false },
+    );
+  };
+
+  const closeDeal = (): void => {
+    router.replace("/deals", { scroll: false });
+  };
 
   const dealsByStage = useMemo(() => {
     const map = new Map<DealStage, Deal[]>();
@@ -180,6 +248,10 @@ export default function DealsPage() {
     }
 
     const items = (dealsQuery.data?.items ?? []).filter((deal) => {
+      if (!showCompleted && deal.completedAt) {
+        return false;
+      }
+
       if (source && (deal.source ?? "").toLowerCase() !== source) {
         return false;
       }
@@ -201,7 +273,7 @@ export default function DealsPage() {
     }
 
     return map;
-  }, [dealsQuery.data?.items, source, supplierId]);
+  }, [dealsQuery.data?.items, showCompleted, source, supplierId]);
 
   const changeDealStage = async (
     dealId: string,
@@ -275,7 +347,25 @@ export default function DealsPage() {
               ))}
             </select>
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={showCompleted}
+              onChange={(event) => setShowCompleted(event.target.checked)}
+              className="h-4 w-4"
+            />
+            Показать операционно завершённые
+          </label>
         </div>
+
+        {dealIdParam &&
+        linkedDealQuery.isError &&
+        isAxiosError(linkedDealQuery.error) &&
+        linkedDealQuery.error.response?.status === 404 ? (
+          <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            Сделка не найдена.
+          </div>
+        ) : null}
 
         {dealsQuery.isLoading ? (
           <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
@@ -340,7 +430,7 @@ export default function DealsPage() {
                           >
                             <button
                               type="button"
-                              onClick={() => setSelectedDealId(deal.id)}
+                              onClick={() => openDeal(deal.id)}
                               className="block w-full text-left"
                             >
                               <div className="flex items-start justify-between gap-2">
@@ -361,6 +451,27 @@ export default function DealsPage() {
                                 {resolveEntityName(deal.client, deal.clientId)}
                               </div>
                             </button>
+                            {isCommerciallyWon(deal) ? (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                <span className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                  Коммерчески выиграна
+                                </span>
+                                {isOperationallyCompleted(deal) ? (
+                                  <span className="rounded border border-slate-900 bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                    Операционно завершена
+                                  </span>
+                                ) : (
+                                  <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                    В исполнении
+                                  </span>
+                                )}
+                              </div>
+                            ) : null}
+                            {deal.completedAt ? (
+                              <div className="mt-1 text-[11px] text-slate-500">
+                                Завершена {formatDateTime(deal.completedAt)}
+                              </div>
+                            ) : null}
 
                             <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                               <div className="min-w-0">
@@ -383,9 +494,15 @@ export default function DealsPage() {
                             </div>
 
                             <div className="mt-3 flex items-center justify-between gap-2">
-                              <NextActionBadge
-                                nextActionAt={deal.nextActionAt}
-                              />
+                              {isOperationallyCompleted(deal) ? (
+                                <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                                  завершена
+                                </span>
+                              ) : (
+                                <NextActionBadge
+                                  nextActionAt={deal.nextActionAt}
+                                />
+                              )}
                               <div className="flex shrink-0 items-center gap-1">
                                 {previousStage ? (
                                   <button
@@ -444,8 +561,11 @@ export default function DealsPage() {
       </div>
 
       <DealDetailsModal
+        key={`${selectedDealId ?? "none"}:${supplierOrderIdParam ?? ""}:${openInstallation ? "installation" : ""}`}
         dealId={selectedDealId}
-        onClose={() => setSelectedDealId(null)}
+        supplierOrderId={supplierOrderIdParam}
+        installation={openInstallation}
+        onClose={closeDeal}
       />
       <StageExceptionModal
         dealId={pendingStageChange?.dealId ?? null}

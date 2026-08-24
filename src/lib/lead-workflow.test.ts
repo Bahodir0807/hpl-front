@@ -19,6 +19,7 @@ describe('resolveLeadWorkflowState', () => {
     ],
     ['UNQUALIFIED', undefined, 'Не квалифицирован', false],
     ['CONVERTED', undefined, 'Конвертирован', false],
+    ['LOST', undefined, 'Проигран', false],
   ] as const)(
     'maps %s to the expected frontend workflow state',
     (status, commercialQualification, label, needsCommercialAction) => {
@@ -33,4 +34,15 @@ describe('resolveLeadWorkflowState', () => {
       );
     },
   );
+
+  it('marks Manager-to-HEAD handoff as waiting for commercial action', () => {
+    const result = resolveLeadWorkflowState({
+      status: 'QUALIFIED',
+      commercialQualification: null,
+      managerCommercialInputReadyAt: '2026-08-20T10:00:00.000Z',
+    });
+
+    expect(result.label).toBe('Передано руководителю');
+    expect(result.needsCommercialAction).toBe(true);
+  });
 });

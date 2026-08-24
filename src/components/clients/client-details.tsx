@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ExternalLink, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useAuth } from "../../context/auth-context";
@@ -15,12 +15,14 @@ import {
   useAddContact,
   useClient,
   useClientTimeline,
+  useUpdateClient,
 } from "../../hooks/use-clients";
 import { useUsersList, User } from "../../hooks/use-users";
 import { formatDate, formatDateTime, formatNumber } from "../../lib/format";
 import { formatMoney } from "../../lib/currency";
 import { resolveUserName } from "../../lib/display-names";
 import { optionalPhoneSchema } from "../../lib/validations/phone";
+import { buildUpdateClientContactPayload } from "../../lib/client-contact";
 import {
   clientSegmentLabels,
   clientStatusLabels,
@@ -31,6 +33,7 @@ import {
 } from "../../lib/labels";
 import { AddObjectModal } from "./add-object-modal";
 import { ClientDocuments } from "./client-documents";
+import { ClientQuotes } from "./client-quotes";
 
 type ClientDetailsProps = {
   clientId: string;
@@ -43,6 +46,7 @@ type TabId =
   | "objects"
   | "leads"
   | "deals"
+  | "quotes"
   | "documents"
   | "timeline";
 
@@ -52,6 +56,7 @@ const tabs: { id: TabId; label: string }[] = [
   { id: "objects", label: "Объекты" },
   { id: "leads", label: "Лиды" },
   { id: "deals", label: "Сделки" },
+  { id: "quotes", label: "Коммерческие предложения" },
   { id: "documents", label: "Документы" },
   { id: "timeline", label: "История" },
 ];
@@ -71,6 +76,19 @@ const contactSchema = z.object({
 });
 
 type ContactFormValues = z.infer<typeof contactSchema>;
+
+const clientContactSchema = z.object({
+  phone: optionalPhoneSchema,
+  email: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || z.string().email().safeParse(value).success, {
+      message: "Некорректный email",
+    }),
+});
+
+type ClientContactFormValues = z.infer<typeof clientContactSchema>;
 
 function contactName(contact: Contact): string {
   return `${contact.firstName} ${contact.lastName ?? ""}`.trim();
@@ -135,6 +153,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
   const timelineQuery = useClientTimeline(clientId, canReadAudit);
   const { usersById } = useUsersList(canReadUsers, { limit: 100 });
   const addContact = useAddContact();
+  const canUpdateClient = user?.permissions.includes("clients:update") ?? false;
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [isAddObjectOpen, setIsAddObjectOpen] = useState(false);
   const {
@@ -289,6 +308,10 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                     />
                   </dl>
                 </section>
+
+                {canUpdateClient ? (
+                  <ClientPhoneEmailForm client={client} />
+                ) : null}
 
                 <section>
                   <h3 className="text-sm font-semibold text-slate-950">
@@ -609,6 +632,10 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
               )
             ) : null}
 
+            {activeTab === "quotes" ? (
+              <ClientQuotes clientId={clientId} />
+            ) : null}
+
             {activeTab === "documents" ? (
               <ClientDocuments clientId={clientId} />
             ) : null}
@@ -676,6 +703,91 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
         onClose={() => setIsAddObjectOpen(false)}
       />
     </div>
+  );
+}
+
+function ClientPhoneEmailForm({ client }: { client: Client }) {
+  const updateClient = useUpdateClient();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isValid, isDirty },
+  } = useForm<ClientContactFormValues>({
+    resolver: zodResolver(clientContactSchema),
+    mode: "onChange",
+    defaultValues: {
+      phone: client.phone ?? "",
+      email: client.email ?? "",
+    },
+  });
+
+  useEffect(() => {
+    reset({
+      phone: client.phone ?? "",
+      email: client.email ?? "",
+    });
+  }, [client.email, client.phone, reset]);
+
+  const onSubmit = async (values: ClientContactFormValues): Promise<void> => {
+    await updateClient.mutateAsync({
+      id: client.id,
+      ...buildUpdateClientContactPayload(values),
+    });
+  };
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-slate-950">
+        Телефон и email клиента
+      </h3>
+      <form
+        className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
+        onSubmit={(event) => {
+          void handleSubmit(onSubmit)(event);
+        }}
+      >
+        <label>
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            Телефон
+          </span>
+          <input
+            type="tel"
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+            {...register("phone")}
+          />
+          {errors.phone ? (
+            <span className="mt-1 block text-sm text-red-600">
+              {errors.phone.message}
+            </span>
+          ) : null}
+        </label>
+        <label>
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            Email
+          </span>
+          <input
+            type="email"
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+            {...register("email")}
+          />
+          {errors.email ? (
+            <span className="mt-1 block text-sm text-red-600">
+              {errors.email.message}
+            </span>
+          ) : null}
+        </label>
+        <div className="sm:col-span-2">
+          <button
+            type="submit"
+            disabled={!isValid || !isDirty || updateClient.isPending}
+            className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
+          >
+            {updateClient.isPending ? "Сохранение..." : "Сохранить"}
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 

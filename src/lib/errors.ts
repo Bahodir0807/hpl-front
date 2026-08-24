@@ -1,4 +1,8 @@
 import { AxiosError } from 'axios';
+import { localizeHplBusinessError } from './hpl-errors';
+import { localizeInstallationError } from './installation-errors';
+import { localizeOperationalError } from './operational-errors';
+import { localizeSupplierOrderError } from './supplier-order-errors';
 
 export interface ApiError {
   message: string;
@@ -40,6 +44,15 @@ export function normalizeError(error: unknown): ApiError {
 }
 
 export function getErrorMessage(error: unknown, fallback?: string): string {
+  const localized =
+    localizeHplBusinessError(error) ??
+    localizeSupplierOrderError(error) ??
+    localizeInstallationError(error) ??
+    localizeOperationalError(error);
+  if (localized) {
+    return localized;
+  }
+
   const normalized = normalizeError(error);
 
   if (fallback && normalized.message === DEFAULT_MESSAGE) {

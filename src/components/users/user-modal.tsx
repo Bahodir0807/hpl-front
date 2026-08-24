@@ -5,24 +5,12 @@ import { useEffect, useMemo } from "react";
 import { Controller, Resolver, useForm } from "react-hook-form";
 import { z } from "zod";
 import { SearchCombobox } from "../ui/search-combobox";
-import {
-  RoleName,
-  User,
-  useCreateUser,
-  useUpdateUser,
-  useUsersList,
-} from "../../hooks/use-users";
+import { RoleName, User, useCreateUser, useUpdateUser, useUsersList } from "../../hooks/use-users";
 import { formatPersonName } from "../../lib/display-names";
-import { roleLabels } from "../../lib/labels";
+import { ADMIN_PROVISIONABLE_ROLES, roleLabels } from "../../lib/labels";
 import { optionalPhoneSchema } from "../../lib/validations/phone";
 
-const roles: RoleName[] = [
-  "ADMIN",
-  "HEAD",
-  "MANAGER",
-  "STOREKEEPER",
-  "OBSERVER",
-];
+const roles: RoleName[] = ADMIN_PROVISIONABLE_ROLES;
 
 const optionalUuid = z
   .string()
@@ -38,7 +26,7 @@ const userBaseSchema = z.object({
   lastName: z.string().trim().min(1, "Укажите фамилию"),
   phone: optionalPhoneSchema,
   managerId: optionalUuid,
-  roleName: z.enum(["ADMIN", "HEAD", "MANAGER", "STOREKEEPER", "OBSERVER"]),
+  roleName: z.enum(["ADMIN", "MANAGER", "STOREKEEPER", "INSTALLER"]),
   isActive: z.boolean(),
 });
 
@@ -262,17 +250,27 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
               <span className="mb-1 block text-sm font-medium text-slate-700">
                 Роль
               </span>
-              <select
-                disabled={isEditing}
-                className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
-                {...register("roleName")}
-              >
-                {roles.map((role) => (
-                  <option key={role} value={role}>
-                    {roleLabels[role]}
-                  </option>
-                ))}
-              </select>
+              {isEditing ? (
+                <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {(user?.roles ?? [])
+                    .map((item) =>
+                      item.role?.name ? roleLabels[item.role.name] : null,
+                    )
+                    .filter(Boolean)
+                    .join(', ') || '—'}
+                </div>
+              ) : (
+                <select
+                  className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+                  {...register("roleName")}
+                >
+                  {roles.map((role) => (
+                    <option key={role} value={role}>
+                      {roleLabels[role]}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
 
             <label>

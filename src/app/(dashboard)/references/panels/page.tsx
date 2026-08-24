@@ -11,14 +11,9 @@ import {
   useUpdatePanelColor,
 } from '@/hooks/use-panels';
 import { formatNumber } from '@/lib/format';
+import { panelSizeLabel, panelTypeLabel } from '@/lib/hpl-domain';
 import { formatSupplierName } from '@/lib/labels';
 import { PanelColor, Supplier } from '@/types/hpl';
-
-const PANEL_TYPE_LABELS: Record<string, string> = {
-  exterior: 'Экстерьер',
-  interior: 'Интерьер',
-  laboratory: 'Лабораторная',
-};
 
 function supplierName(
   supplierId: string,
@@ -250,10 +245,10 @@ export default function PanelReferencesPage() {
               {(sizesQuery.data ?? []).map((size) => (
                 <tr key={size.id}>
                   <td className="px-3 py-2 text-slate-900">
-                    {size.label ?? `${size.width} × ${size.length}`}
+                    {panelSizeLabel(size)}
                   </td>
-                  <td className="px-3 py-2 text-slate-700">{size.width}</td>
-                  <td className="px-3 py-2 text-slate-700">{size.length}</td>
+                  <td className="px-3 py-2 text-slate-700">{size.widthMm}</td>
+                  <td className="px-3 py-2 text-slate-700">{size.heightMm}</td>
                   <td className="px-3 py-2 text-slate-700">
                     {formatNumber(size.areaM2)}
                   </td>
@@ -285,7 +280,7 @@ export default function PanelReferencesPage() {
                     {type.code}
                   </td>
                   <td className="px-3 py-2 text-slate-900">
-                    {PANEL_TYPE_LABELS[type.code] ?? type.name}
+                    {panelTypeLabel(type)}
                   </td>
                 </tr>
               ))}

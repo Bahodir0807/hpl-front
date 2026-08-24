@@ -44,6 +44,7 @@ import {
   quoteStatusClassNames,
   quoteStatusLabels,
 } from '@/lib/quote-presentation';
+import { MIXED_CURRENCY_TOTAL_HINT, quoteUsesMixedCurrencies } from '@/lib/quote-pricing';
 import type { Quote } from '@/types/hpl';
 
 const KPI_ICON_CLASS = 'h-4 w-4';
@@ -533,13 +534,17 @@ function QuoteActivitySection({
         {quotes.map((quote) => (
           <Link
             key={quote.id}
-            href={`/leads/${quote.leadId}`}
+            href={quote.leadId ? `/leads/${quote.leadId}` : `/clients/${quote.clientId ?? ''}`}
             className="rounded border border-slate-200 bg-white p-3 hover:border-slate-400"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-slate-950">КП · {compactQuoteId(quote.id)}</div>
-                <div className="mt-1 text-xs text-slate-500">Лид · {quote.leadId.slice(0, 8).toUpperCase()}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {quote.leadId
+                    ? `Лид · ${quote.leadId.slice(0, 8).toUpperCase()}`
+                    : 'КП'}
+                </div>
               </div>
               <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${quoteStatusClassNames[quote.status]}`}>
                 {quoteStatusLabels[quote.status]}
@@ -548,7 +553,9 @@ function QuoteActivitySection({
             <div className="mt-3 flex items-end justify-between gap-3">
               <span className="text-xs text-slate-500">{formatDateTime(quote.createdAt)}</span>
               <span className="text-sm font-semibold text-slate-950">
-                {formatMoney(quote.totalAmount, normalizeCurrency(quote.displayCurrency))}
+                {quoteUsesMixedCurrencies(quote)
+                  ? MIXED_CURRENCY_TOTAL_HINT
+                  : formatMoney(quote.totalAmount, normalizeCurrency(quote.displayCurrency))}
               </span>
             </div>
           </Link>

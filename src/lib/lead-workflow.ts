@@ -9,6 +9,7 @@ export type LeadWorkflowState = {
 type LeadWorkflowInput = {
   status: LeadStatus;
   commercialQualification?: unknown | null;
+  managerCommercialInputReadyAt?: string | null;
 };
 
 export function resolveLeadWorkflowState(
@@ -29,6 +30,14 @@ export function resolveLeadWorkflowState(
   }
 
   if (lead.status === 'QUALIFIED' && !lead.commercialQualification) {
+    if (lead.managerCommercialInputReadyAt) {
+      return {
+        label: 'Передано руководителю',
+        className: 'border-orange-200 bg-orange-50 text-orange-800',
+        needsCommercialAction: true,
+      };
+    }
+
     return {
       label: 'Ожидает коммерческой квалификации',
       className: 'border-orange-200 bg-orange-50 text-orange-800',
@@ -47,6 +56,13 @@ export function resolveLeadWorkflowState(
     return {
       label: 'Конвертирован',
       className: 'border-green-200 bg-green-50 text-green-700',
+    };
+  }
+
+  if (lead.status === 'LOST') {
+    return {
+      label: 'Проигран',
+      className: 'border-red-200 bg-red-50 text-red-700',
     };
   }
 

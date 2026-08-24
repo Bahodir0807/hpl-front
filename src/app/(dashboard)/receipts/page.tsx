@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ProductSearchSelect } from "../../../components/products/product-search-select";
 import { useAuth } from "../../../context/auth-context";
 import {
   ExpectedReceipt,
@@ -21,7 +22,7 @@ function itemsText(receipt: ExpectedReceipt): string {
   return receipt.items
     .map(
       (item) =>
-        `${item.product?.sku ?? item.productId}: ${item.receivedQuantity}/${item.quantity}`,
+        `${item.product?.name ?? item.product?.sku ?? "Товар"}: ${item.receivedQuantity}/${item.quantity}`,
     )
     .join(", ");
 }
@@ -49,6 +50,10 @@ export default function ReceiptsPage() {
   const [receivedQuantities, setReceivedQuantities] = useState<
     Record<string, string>
   >({});
+  const [rejectedQuantities, setRejectedQuantities] = useState<
+    Record<string, string>
+  >({});
+  const [receiveComment, setReceiveComment] = useState("");
   const receipts = receiptsQuery.data?.items ?? [];
 
   const submitCreate = async (): Promise<void> => {
@@ -74,15 +79,24 @@ export default function ReceiptsPage() {
 
     await receiveReceipt.mutateAsync({
       id: receivingReceipt.id,
+      comment: receiveComment.trim() || undefined,
       items: receivingReceipt.items
-        .map((item) => ({
-          itemId: item.id,
-          receivedQuantity: Number(receivedQuantities[item.id] ?? 0),
-        }))
-        .filter((item) => item.receivedQuantity > 0),
+        .map((item) => {
+          const acceptedQuantity = Number(receivedQuantities[item.id] ?? 0);
+          const rejectedQuantity = Number(rejectedQuantities[item.id] ?? 0);
+          return {
+            itemId: item.id,
+            receivedQuantity: acceptedQuantity,
+            acceptedQuantity,
+            ...(rejectedQuantity > 0 ? { rejectedQuantity } : {}),
+          };
+        })
+        .filter((item) => item.acceptedQuantity > 0),
     });
     setReceivingReceipt(null);
     setReceivedQuantities({});
+    setRejectedQuantities({});
+    setReceiveComment("");
   };
 
   useEffect(() => {
@@ -138,12 +152,13 @@ export default function ReceiptsPage() {
               onChange={(event) => setExpectedDate(event.target.value)}
               className="rounded border border-slate-300 px-3 py-2 text-sm"
             />
-            <input
-              value={productId}
-              onChange={(event) => setProductId(event.target.value)}
-              placeholder="UUID товара"
-              className="rounded border border-slate-300 px-3 py-2 text-sm md:col-span-2"
-            />
+            <div className="md:col-span-2">
+              <ProductSearchSelect
+                value={productId}
+                onChange={setProductId}
+                disabled={createReceipt.isPending}
+              />
+            </div>
             <input
               type="number"
               value={quantity}
@@ -243,29 +258,66 @@ export default function ReceiptsPage() {
             </h2>
             <div className="mt-4 space-y-3">
               {receivingReceipt.items.map((item) => (
-                <label key={item.id} className="block">
-                  <span className="mb-1 block text-sm font-medium text-slate-700">
-                    {item.product?.sku ?? item.productId} · ожидается{" "}
+                <div key={item.id} className="space-y-2">
+                  <div className="text-sm font-medium text-slate-700">
+                    {item.product?.name ?? "Товар"}
+                    {item.product?.sku ? ` · ${item.product.sku}` : ""} · ожидается{" "}
                     {item.quantity - item.receivedQuantity}
-                  </span>
-                  <input
-                    type="number"
-                    value={receivedQuantities[item.id] ?? ""}
-                    onChange={(event) =>
-                      setReceivedQuantities((current) => ({
-                        ...current,
-                        [item.id]: event.target.value,
-                      }))
-                    }
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                  />
-                </label>
+                  </div>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-slate-500">
+                      Принято
+                    </span>
+                    <input
+                      type="number"
+                      value={receivedQuantities[item.id] ?? ""}
+                      onChange={(event) =>
+                        setReceivedQuantities((current) => ({
+                          ...current,
+                          [item.id]: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-slate-500">
+                      Отклонено
+                    </span>
+                    <input
+                      type="number"
+                      value={rejectedQuantities[item.id] ?? ""}
+                      onChange={(event) =>
+                        setRejectedQuantities((current) => ({
+                          ...current,
+                          [item.id]: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    />
+                  </label>
+                </div>
               ))}
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-slate-700">
+                  Комментарий
+                </span>
+                <textarea
+                  value={receiveComment}
+                  onChange={(event) => setReceiveComment(event.target.value)}
+                  rows={2}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setReceivingReceipt(null)}
+                onClick={() => {
+                  setReceivingReceipt(null);
+                  setRejectedQuantities({});
+                  setReceiveComment("");
+                }}
                 className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700"
               >
                 Отмена

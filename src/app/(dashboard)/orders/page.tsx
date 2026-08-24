@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { Pagination } from "../../../components/ui/pagination";
 import { SearchCombobox } from "../../../components/ui/search-combobox";
+import { useAuth } from "../../../context/auth-context";
 import {
   OrderStatus,
   PaymentStatus,
@@ -11,6 +12,7 @@ import {
   useOrders,
 } from "../../../hooks/use-orders";
 import { useDeals } from "../../../hooks/use-deals";
+import { prefersAccountantWorkspace } from "../../../lib/auth-routing";
 import { getErrorMessage } from "../../../lib/errors";
 import { formatDate } from "../../../lib/format";
 import { formatMoney } from "../../../lib/currency";
@@ -57,9 +59,13 @@ function paymentStatusFilterLabel(value: PaymentStatusFilter): string {
 }
 
 export default function OrdersPage() {
+  const { user } = useAuth();
+  const isAccountantWorkspace = prefersAccountantWorkspace(user?.permissions);
   const [status, setStatus] = useState<OrderStatusFilter>("ALL");
-  const [paymentStatus, setPaymentStatus] =
-    useState<PaymentStatusFilter>("ALL");
+  const [paymentStatusOverride, setPaymentStatusOverride] =
+    useState<PaymentStatusFilter | null>(null);
+  const paymentStatus: PaymentStatusFilter =
+    paymentStatusOverride ?? (isAccountantWorkspace ? "UNPAID" : "ALL");
   const [dealId, setDealId] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -108,7 +114,9 @@ export default function OrdersPage() {
         <div>
           <h2 className="text-xl font-semibold text-slate-950">Заказы</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Заказы из выигранных сделок, оплаты и отгрузки.
+            {isAccountantWorkspace
+              ? "Заказы, ожидающие подтверждения оплаты."
+              : "Заказы из выигранных сделок, оплаты и отгрузки."}
           </p>
         </div>
 
@@ -141,20 +149,25 @@ export default function OrdersPage() {
               <select
                 value={paymentStatus}
                 onChange={(event) => {
-                  setPaymentStatus(event.target.value as PaymentStatusFilter);
+                  setPaymentStatusOverride(
+                    event.target.value as PaymentStatusFilter,
+                  );
                   setPage(1);
                 }}
                 className="rounded border border-slate-300 bg-white px-3 py-2 text-sm"
               >
                 {paymentStatuses.map((item) => (
                   <option key={item} value={item}>
-                    {paymentStatusFilterLabel(item)}
+                    {item === "UNPAID"
+                      ? "Ожидает подтверждения оплаты"
+                      : paymentStatusFilterLabel(item)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
 
+          {!isAccountantWorkspace ? (
           <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
             <SearchCombobox
               value={dealId}
@@ -182,6 +195,7 @@ export default function OrdersPage() {
               Создать из сделки
             </button>
           </div>
+          ) : null}
         </div>
 
         {createOrder.isError ? (

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { HplThicknessField } from '@/components/leads/hpl-thickness-field';
 import {
   CalculationPreviewPayload,
   CreateCalculationItemPayload,
@@ -20,14 +21,62 @@ import {
 import { useConvertCalculationToQuote } from '@/hooks/use-quotes';
 import { useAuth } from '@/context/auth-context';
 import { formatMoney } from '@/lib/currency';
-import { formatNumber } from '@/lib/format';
+import { getErrorMessage } from '@/lib/errors';
+import { formatDate, formatNumber } from '@/lib/format';
+import { PRICING_NOT_CONFIGURED_MESSAGE } from '@/lib/hpl-errors';
+import {
+  STANDARD_DISCRETE_THICKNESSES_MM,
+  applicationFromPanelTypeCode,
+  CUSTOM_SIZE_PRICING_NOTE,
+  findPanelTypeIdByApplication,
+  formatAreaM2,
+  formatColorLabel,
+  formatQualificationSize,
+  formatThicknessMm,
+  hplApplicationLabel,
+  isStandardPanelTypeCode,
+  isValidThicknessForApplication,
+  normalizePanelTypeCode,
+  panelSizeLabel,
+  panelTypeLabel,
+  resolveSheetAreaM2,
+  toDecimalNumber,
+  type SizeMode,
+} from '@/lib/hpl-domain';
+import {
+  buildCalculationSizeFields,
+  canSubmitCalculationGeometry,
+  prefillCalculatorFromQualification,
+  type CalculatorPrefillSource,
+} from '@/lib/hpl-calculator';
+import {
+  COMMERCIAL_CALCULATION_WAITING_COPY,
+  HPL_SELLING_COEFFICIENT,
+  PURCHASE_PRICE_LABEL,
+  canEnterManualPurchasePrice,
+  canRunCommercialCalculation,
+  formatCnyUsdRateLabel,
+  validateManualPurchasePriceCny,
+} from '@/lib/calculation-presentation';
+import {
+  COMMERCIAL_TERMS_SECTION_LABEL,
+  CONVERT_TO_QUOTE_LABEL,
+  DOCUMENT_DATE_LABEL,
+  DELIVERY_PERIOD_LABEL,
+  PRODUCTION_PERIOD_LABEL,
+  VALID_UNTIL_LABEL,
+  buildQuoteCommercialTermsPayload,
+  defaultQuoteValidUntilInput,
+  validateQuoteCommercialTerms,
+} from '@/lib/quote-commercial-terms';
+import { useCurrentCurrencyRate } from '@/hooks/use-currency-rates';
 import { formatSupplierName } from '@/lib/labels';
-import { isManagerOnly } from '@/lib/role-access';
+import { QUALITY_LINES_EMPTY_MESSAGE, qualityLineLabel } from '@/lib/quality-line-presentation';
 import {
   CalculationPreview,
+  PanelColor,
   PanelSize,
   PanelType,
-  QualityClass,
   Supplier,
 } from '@/types/hpl';
 
@@ -41,20 +90,7 @@ type SavedCalculationRef = {
   status?: 'draft' | 'finalized';
 };
 
-const FALLBACK_THICKNESSES_MM = [6, 8, 10, 12, 16, 20];
-
-const PANEL_TYPE_LABELS: Record<string, string> = {
-  exterior: 'Экстерьер',
-  interior: 'Интерьер',
-  laboratory: 'Лабораторная',
-};
-
-const qualityClassLabels: Record<string, string> = {
-  economy: 'Эконом',
-  econom: 'Эконом',
-  medium: 'Медиум',
-  premium: 'Премиум',
-};
+const EMPTY_COLORS: PanelColor[] = [];
 
 const WIZARD_STEPS: { step: WizardStep; label: string }[] = [
   { step: 1, label: 'Тип' },
@@ -71,127 +107,23 @@ type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 type HplCalculatorWizardProps = {
   leadId: string;
+  qualification?: CalculatorPrefillSource | null;
+  commercialSupplierId?: string | null;
+  commercialQualityClassId?: string | null;
   onClose: () => void;
   onSuccess?: () => void;
 };
-
-function panelTypeLabel(type: PanelType): string {
-  return PANEL_TYPE_LABELS[type.code] ?? type.name;
-}
 
 function supplierLabel(supplier: Supplier): string {
   return formatSupplierName(supplier.code, supplier.name);
 }
 
 function toSupplierCode(supplier?: Supplier | null): string {
-  const code = supplier?.code?.trim().toLowerCase() ?? '';
-  if (code === 'wuya' || code === 'tianran' || code === 'polybet') {
-    return code;
-  }
-
-  return '';
+  return supplier?.code?.trim().toLowerCase() ?? '';
 }
 
 function toPanelTypeCode(type?: PanelType | null): string {
-  const code = type?.code?.trim().toLowerCase() ?? '';
-  if (code === 'exterior' || code === 'interior' || code === 'laboratory') {
-    return code;
-  }
-
-  return '';
-}
-
-function normalizeQualityCode(value?: string | null): string {
-  const raw = value?.trim().toLowerCase() ?? '';
-  if (!raw) {
-    return '';
-  }
-
-  if (raw.includes('premium') || raw.includes('премиум')) {
-    return 'premium';
-  }
-
-  if (raw.includes('medium') || raw.includes('медиум')) {
-    return 'medium';
-  }
-
-  if (raw.includes('econom') || raw.includes('эконом')) {
-    return 'economy';
-  }
-
-  return raw;
-}
-
-function resolveQualityCode(item: QualityClass): string {
-  const candidates = [
-    item.code,
-    item.slug,
-    item.nameRu,
-    item.displayName,
-    item.name,
-    item.title,
-    item.label,
-  ];
-
-  for (const candidate of candidates) {
-    const code = normalizeQualityCode(candidate);
-    if (code && qualityClassLabels[code]) {
-      return code === 'econom' ? 'economy' : code;
-    }
-  }
-
-  return '';
-}
-
-function isLaboratoryOnlyTianran(
-  supplierCode?: string | null,
-  panelTypeCode?: string | null,
-): boolean {
-  return (
-    panelTypeCode?.toLowerCase() === 'laboratory' &&
-    supplierCode?.toLowerCase() !== 'tianran'
-  );
-}
-
-function isQualityClassAllowed(
-  supplierCode?: string | null,
-  panelTypeCode?: string | null,
-  qualityCode?: string | null,
-): boolean {
-  const supplier = supplierCode?.toLowerCase() ?? '';
-  const panel = panelTypeCode?.toLowerCase() ?? '';
-  const quality = qualityCode?.toLowerCase() ?? '';
-
-  if (panel === 'laboratory') {
-    return (
-      supplier === 'tianran' &&
-      (quality === 'economy' ||
-        quality === 'medium' ||
-        quality === 'premium')
-    );
-  }
-
-  if (supplier === 'wuya') {
-    return (
-      (panel === 'exterior' || panel === 'interior') && quality === 'economy'
-    );
-  }
-
-  if (supplier === 'polybet') {
-    return (
-      (panel === 'exterior' || panel === 'interior') && quality === 'premium'
-    );
-  }
-
-  if (supplier === 'tianran') {
-    return (
-      quality === 'economy' ||
-      quality === 'medium' ||
-      quality === 'premium'
-    );
-  }
-
-  return false;
+  return normalizePanelTypeCode(type?.code) ?? type?.code?.trim() ?? '';
 }
 
 function hasMoneyAmount(
@@ -200,25 +132,25 @@ function hasMoneyAmount(
   return value !== undefined && value !== null && value !== '';
 }
 
-function resolveSheetArea(size: PanelSize): number | null {
-  const fromSize = Number(size.areaM2);
-  if (!Number.isNaN(fromSize) && fromSize > 0) {
-    return fromSize;
-  }
+function resolveSheetArea(size?: PanelSize | null): number | null {
+  return resolveSheetAreaM2(size);
+}
 
-  if (size.length > 0 && size.width > 0) {
-    return (size.length * size.width) / 1_000_000;
+function formatSize(size?: PanelSize | null): string {
+  return panelSizeLabel(size);
+}
+
+function resolveCustomSheetArea(
+  widthMm: unknown,
+  heightMm: unknown,
+): number | null {
+  const width = toDecimalNumber(widthMm);
+  const height = toDecimalNumber(heightMm);
+  if (width !== null && height !== null && width > 0 && height > 0) {
+    return (width * height) / 1_000_000;
   }
 
   return null;
-}
-
-function formatSize(size: PanelSize): string {
-  if (size.label) {
-    return size.label;
-  }
-
-  return `${formatNumber(size.width)} × ${formatNumber(size.length)} мм`;
 }
 
 function OptionCard({
@@ -344,28 +276,53 @@ function ColorInlineForm({
 
 export function HplCalculatorWizard({
   leadId,
+  qualification,
+  commercialSupplierId,
+  commercialQualityClassId,
   onClose,
   onSuccess,
 }: HplCalculatorWizardProps) {
   const { user } = useAuth();
-  const hideSupplierStep = isManagerOnly(user);
+  const permissions = user?.permissions ?? [];
+  const canRunCalculation = canRunCommercialCalculation(permissions);
+  const canEnterPurchasePrice = canEnterManualPurchasePrice(permissions);
+  const currentRateQuery = useCurrentCurrencyRate(canEnterPurchasePrice);
+  const prefill = prefillCalculatorFromQualification(qualification);
   const [step, setStep] = useState<WizardStep>(1);
-  const [panelTypeId, setPanelTypeId] = useState('');
-  const [supplierId, setSupplierId] = useState('');
-  const [qualityClassId, setQualityClassId] = useState('');
-  const [thickness, setThickness] = useState<number | null>(null);
-  const [panelSizeId, setPanelSizeId] = useState('');
+  const [panelTypeId, setPanelTypeId] = useState(prefill.panelTypeId);
+  const [supplierId, setSupplierId] = useState(commercialSupplierId ?? '');
+  const [qualityClassId, setQualityClassId] = useState(
+    commercialQualityClassId ?? '',
+  );
+  const [thickness, setThickness] = useState<number | null>(prefill.thicknessMm);
+  const [sizeMode, setSizeMode] = useState<SizeMode>(prefill.sizeMode);
+  const [panelSizeId, setPanelSizeId] = useState(prefill.panelSizeId);
+  const [customWidthMm, setCustomWidthMm] = useState(prefill.customWidthMm);
+  const [customHeightMm, setCustomHeightMm] = useState(prefill.customHeightMm);
   const [colorId, setColorId] = useState('');
-  const [requiredAreaM2, setRequiredAreaM2] = useState('');
+  const [requiredAreaM2, setRequiredAreaM2] = useState(prefill.requiredAreaM2);
   const [sizeQuery, setSizeQuery] = useState('');
   const [preview, setPreview] = useState<CalculationPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [unpricedEstimate, setUnpricedEstimate] =
     useState<GeometryEstimate | null>(null);
   const [savedCalculation, setSavedCalculation] =
     useState<SavedCalculationRef | null>(null);
+  const [purchasePriceCny, setPurchasePriceCny] = useState('');
+  const [purchasePriceError, setPurchasePriceError] = useState<string | null>(
+    null,
+  );
+  const [productionDaysFrom, setProductionDaysFrom] = useState('');
+  const [productionDaysTo, setProductionDaysTo] = useState('');
+  const [deliveryDaysFrom, setDeliveryDaysFrom] = useState('');
+  const [deliveryDaysTo, setDeliveryDaysTo] = useState('');
+  const [validUntil, setValidUntil] = useState(defaultQuoteValidUntilInput);
+  const [commercialTermsError, setCommercialTermsError] = useState<string | null>(
+    null,
+  );
 
   const typesQuery = usePanelTypes();
-  const suppliersQuery = useSuppliers(!hideSupplierStep);
+  const suppliersQuery = useSuppliers();
   const sizesQuery = usePanelSizes();
   const colorsQuery = usePanelColors(supplierId || undefined);
   const previewMutation = useCalculationPreview();
@@ -373,36 +330,36 @@ export function HplCalculatorWizard({
   const finalizeCalculation = useFinalizeCalculation();
   const convertToQuote = useConvertCalculationToQuote();
 
-  const panelTypes = typesQuery.data ?? [];
+  const panelTypes = (typesQuery.data ?? []).filter((type) =>
+    isStandardPanelTypeCode(type.code),
+  );
   const suppliers = suppliersQuery.data ?? [];
   const sizes = sizesQuery.data ?? [];
-  const colors = colorsQuery.data ?? [];
+  const colors = colorsQuery.data ?? EMPTY_COLORS;
+  const resolvedPanelTypeId =
+    panelTypeId ||
+    findPanelTypeIdByApplication(panelTypes, prefill.application) ||
+    '';
+  const matchedColorId =
+    colors.find(
+      (color) =>
+        (prefill.colorCode && color.code === prefill.colorCode) ||
+        (prefill.colorName && color.name === prefill.colorName),
+    )?.id ?? '';
+  const resolvedColorId = colorId || matchedColorId;
 
-  const selectedType = panelTypes.find((item) => item.id === panelTypeId);
+  const selectedType = panelTypes.find((item) => item.id === resolvedPanelTypeId);
   const selectedSupplier = suppliers.find((item) => item.id === supplierId);
   const selectedSize = sizes.find((item) => item.id === panelSizeId);
-  const selectedColor = colors.find((item) => item.id === colorId);
+  const selectedColor = colors.find((item) => item.id === resolvedColorId);
   const supplierCode = toSupplierCode(selectedSupplier);
   const panelTypeCode = toPanelTypeCode(selectedType);
+  const selectedApplication = applicationFromPanelTypeCode(selectedType?.code);
 
   const qualityQuery = useSupplierQualityClasses(supplierCode, panelTypeCode);
-  const qualityClasses = (() => {
-    const classes = qualityQuery.data ?? [];
-    const allowed = classes.filter((item) =>
-      isQualityClassAllowed(
-        supplierCode,
-        panelTypeCode,
-        resolveQualityCode(item),
-      ),
-    );
+  const qualityClasses = qualityQuery.data ?? [];
 
-    return allowed.length > 0 ? allowed : classes;
-  })();
-
-  const availableSuppliers = suppliers.filter(
-    (supplier) =>
-      !isLaboratoryOnlyTianran(supplier.code, selectedType?.code),
-  );
+  const availableSuppliers = suppliers;
 
   const filteredSizes = (() => {
     const query = sizeQuery.trim().toLowerCase();
@@ -411,7 +368,7 @@ export function HplCalculatorWizard({
     }
 
     return sizes.filter((size) => {
-      const haystack = `${size.label ?? ''} ${size.width} ${size.length} ${size.width}x${size.length}`;
+      const haystack = `${panelSizeLabel(size)} ${size.widthMm} ${size.heightMm} ${size.widthMm}x${size.heightMm}`;
       return haystack.toLowerCase().includes(query);
     });
   })();
@@ -421,11 +378,10 @@ export function HplCalculatorWizard({
       : '';
   const selectedQualityClassId = qualityClassId || soleQualityClassId;
   const currentStep =
-    (hideSupplierStep && (step === 2 || step === 3)) ||
-    (step === 3 &&
-      Boolean(soleQualityClassId) &&
-      !qualityQuery.isLoading &&
-      !qualityQuery.isFetching)
+    step === 3 &&
+    Boolean(soleQualityClassId) &&
+    !qualityQuery.isLoading &&
+    !qualityQuery.isFetching
       ? 4
       : step;
 
@@ -434,16 +390,13 @@ export function HplCalculatorWizard({
       return;
     }
 
-    if (currentStep === 3 && hideSupplierStep) {
-      setStep(1);
+    if (currentStep === 3) {
+      setStep(2);
       return;
     }
 
-    if (
-      currentStep === 4 &&
-      (hideSupplierStep || qualityClasses.length <= 1)
-    ) {
-      setStep(hideSupplierStep ? 1 : 2);
+    if (currentStep === 4 && qualityClasses.length <= 1) {
+      setStep(2);
       return;
     }
 
@@ -456,73 +409,112 @@ export function HplCalculatorWizard({
     }
 
     setQualityClassId('');
-    setPreview(null);
-    setUnpricedEstimate(null);
-    setSavedCalculation(null);
+    markDirty();
     setSupplierId(nextSupplier.id);
     setStep(3);
   };
 
   const markDirty = (): void => {
     setPreview(null);
+    setPreviewError(null);
     setUnpricedEstimate(null);
     setSavedCalculation(null);
+    setPurchasePriceError(null);
   };
 
-  const canUseLeadCommercialPricing = hideSupplierStep;
+  const selectedQuality = qualityClasses.find(
+    (item) => item.id === selectedQualityClassId,
+  );
+
   const hasCatalogPricingInputs = Boolean(
     supplierId && selectedQualityClassId,
   );
-  const canRequestPricedPreview =
-    hasCatalogPricingInputs || canUseLeadCommercialPricing;
+  const canRequestPricedPreview = hasCatalogPricingInputs;
 
-  const buildPreviewPayload = (): CalculationPreviewPayload => {
-    const area = Number(requiredAreaM2);
+  const sizeFields = buildCalculationSizeFields({
+    sizeMode,
+    panelSizeId,
+    customWidthMm,
+    customHeightMm,
+  });
+
+  const buildPreviewPayload = (
+    purchasePricePerM2Cny?: string,
+  ): CalculationPreviewPayload => {
+    const area = toDecimalNumber(requiredAreaM2);
 
     return {
-      panelTypeId,
-      ...(canUseLeadCommercialPricing ? { leadId } : {}),
+      leadId,
+      panelTypeId: resolvedPanelTypeId,
       ...(supplierId ? { supplierId } : {}),
       ...(selectedQualityClassId
         ? { qualityClassId: selectedQualityClassId }
         : {}),
       thicknessMm: thickness ?? 0,
-      panelSizeId,
-      ...(colorId ? { colorId } : {}),
-      requiredAreaM2: Number.isNaN(area) ? 0 : area,
+      ...sizeFields,
+      ...(resolvedColorId ? { colorId: resolvedColorId } : {}),
+      requiredAreaM2: area ?? 0,
+      ...(purchasePricePerM2Cny
+        ? { purchasePricePerM2Cny }
+        : {}),
     };
   };
 
   const buildCreateItems = (): CreateCalculationItemPayload[] => {
+    const trimmedPrice = purchasePriceCny.trim().replace(',', '.');
+
     return [
       {
-        panelTypeId,
-        panelSizeId,
+        panelTypeId: resolvedPanelTypeId,
+        ...sizeFields,
         ...(supplierId ? { supplierId } : {}),
         ...(selectedQualityClassId
           ? { qualityClassId: selectedQualityClassId }
           : {}),
         thicknessMm: thickness ?? 0,
-        ...(colorId ? { colorId } : {}),
+        ...(resolvedColorId ? { colorId: resolvedColorId } : {}),
         requiredAreaM2: String(requiredAreaM2),
+        ...(canEnterPurchasePrice && trimmedPrice
+          ? { purchasePricePerM2Cny: trimmedPrice }
+          : {}),
       },
     ];
   };
 
   const buildGeometryEstimate = (): GeometryEstimate => {
-    const area = Number(requiredAreaM2);
-    const sheet = selectedSize ? resolveSheetArea(selectedSize) : null;
+    const area = toDecimalNumber(requiredAreaM2) ?? 0;
+    const sheet =
+      sizeMode === 'CUSTOM'
+        ? resolveCustomSheetArea(customWidthMm, customHeightMm)
+        : selectedSize
+          ? resolveSheetArea(selectedSize)
+          : null;
     const sheetsCount =
-      sheet && sheet > 0 && !Number.isNaN(area) && area > 0
-        ? Math.ceil(area / sheet)
-        : null;
+      sheet && sheet > 0 && area > 0 ? Math.ceil(area / sheet) : null;
     const totalArea =
       sheet && sheetsCount && sheetsCount > 0 ? sheetsCount * sheet : area;
 
     return {
       sheetsCount,
-      areaM2: Number.isNaN(totalArea) ? 0 : totalArea,
+      areaM2: totalArea,
     };
+  };
+
+  const applyPreviewResult = (result: CalculationPreview): void => {
+    if (
+      hasMoneyAmount(result.total) &&
+      hasMoneyAmount(result.clientPricePerM2)
+    ) {
+      setPreview(result);
+      setUnpricedEstimate(null);
+      return;
+    }
+
+    setPreview(null);
+    setUnpricedEstimate({
+      sheetsCount: result.sheetsCount,
+      areaM2: toDecimalNumber(result.areaM2) ?? 0,
+    });
   };
 
   const runPreview = async (): Promise<void> => {
@@ -536,10 +528,38 @@ export function HplCalculatorWizard({
 
     try {
       const result = await previewMutation.mutateAsync(buildPreviewPayload());
-      setUnpricedEstimate(null);
-      setPreview(result);
+      setPreviewError(null);
       setSavedCalculation(null);
+      applyPreviewResult(result);
       setStep(8);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setPreview(null);
+      setUnpricedEstimate(buildGeometryEstimate());
+      setPreviewError(
+        canEnterPurchasePrice && message === PRICING_NOT_CONFIGURED_MESSAGE
+          ? null
+          : message,
+      );
+      setStep(8);
+    }
+  };
+
+  const runPricedCalculation = async (): Promise<void> => {
+    const error = validateManualPurchasePriceCny(purchasePriceCny);
+    if (error) {
+      setPurchasePriceError(error);
+      return;
+    }
+
+    setPurchasePriceError(null);
+    try {
+      const result = await previewMutation.mutateAsync(
+        buildPreviewPayload(purchasePriceCny.trim().replace(',', '.')),
+      );
+      setPreviewError(null);
+      setSavedCalculation(null);
+      applyPreviewResult(result);
     } catch {
       // mutation onError already toasted
     }
@@ -576,6 +596,19 @@ export function HplCalculatorWizard({
   };
 
   const onCreateQuote = async (): Promise<void> => {
+    const termsError = validateQuoteCommercialTerms({
+      productionDaysFrom,
+      productionDaysTo,
+      deliveryDaysFrom,
+      deliveryDaysTo,
+      validUntil,
+    });
+    if (termsError) {
+      setCommercialTermsError(termsError);
+      return;
+    }
+
+    setCommercialTermsError(null);
     try {
       const calculation = await saveCalculation();
       if (!calculation) {
@@ -594,7 +627,16 @@ export function HplCalculatorWizard({
         });
       }
 
-      await convertToQuote.mutateAsync({ calculationId: calculation.id });
+      await convertToQuote.mutateAsync({
+        calculationId: calculation.id,
+        ...buildQuoteCommercialTermsPayload({
+          productionDaysFrom,
+          productionDaysTo,
+          deliveryDaysFrom,
+          deliveryDaysTo,
+          validUntil,
+        }),
+      });
       onSuccess?.();
       onClose();
     } catch {
@@ -602,28 +644,66 @@ export function HplCalculatorWizard({
     }
   };
 
-  const requiredArea = Number(requiredAreaM2);
-  const canCalculate =
-    Boolean(panelTypeId) &&
-    thickness !== null &&
-    Boolean(panelSizeId) &&
-    requiredArea > 0 &&
-    !Number.isNaN(requiredArea);
-
-  const sheetArea = selectedSize ? resolveSheetArea(selectedSize) : null;
+  const canCalculate = canSubmitCalculationGeometry({
+    panelTypeId: resolvedPanelTypeId,
+    application: selectedApplication,
+    thicknessMm: thickness,
+    sizeMode,
+    panelSizeId,
+    customWidthMm,
+    customHeightMm,
+    requiredAreaM2,
+  });
+  const sheetArea =
+    sizeMode === 'CUSTOM'
+      ? resolveCustomSheetArea(customWidthMm, customHeightMm)
+      : selectedSize
+        ? resolveSheetArea(selectedSize)
+        : null;
   const isSaving =
     createCalculation.isPending ||
     finalizeCalculation.isPending ||
     convertToQuote.isPending;
   const resultSheetsCount = preview?.sheetsCount ?? unpricedEstimate?.sheetsCount;
-  const resultAreaM2 = preview?.areaM2 ?? unpricedEstimate?.areaM2;
-  const visibleSteps = hideSupplierStep
-    ? WIZARD_STEPS.filter((item) => item.step !== 2)
-    : WIZARD_STEPS;
+  const coveredAreaM2 =
+    sheetArea != null && resultSheetsCount
+      ? sheetArea * resultSheetsCount
+      : toDecimalNumber(unpricedEstimate?.areaM2);
+  const activeFxRate = preview?.cnyUsdRate ?? currentRateQuery.data?.rate;
+  const sellingCoefficient =
+    toDecimalNumber(preview?.sellingCoefficient) ?? HPL_SELLING_COEFFICIENT;
+  const snapshotPurchaseCny =
+    preview?.purchasePricePerM2Cny ?? preview?.supplierPricePerM2;
+  const snapshotClientUsd = preview?.clientPricePerM2;
+  const snapshotConvertedUsd =
+    hasMoneyAmount(snapshotClientUsd) && sellingCoefficient
+      ? Number(snapshotClientUsd) / sellingCoefficient
+      : null;
+  const visibleSteps = WIZARD_STEPS;
   const currentVisibleIndex = Math.max(
     1,
     visibleSteps.findIndex((item) => item.step === currentStep) + 1,
   );
+
+  if (!canRunCalculation) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
+        <div className="w-full max-w-lg rounded border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-950">
+            Калькулятор HPL-панелей
+          </h2>
+          <p className="mt-3 text-sm text-slate-700">
+            {COMMERCIAL_CALCULATION_WAITING_COPY}
+          </p>
+          <div className="mt-4 flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>
+              Закрыть
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
@@ -641,6 +721,8 @@ export function HplCalculatorWizard({
             Закрыть
           </Button>
         </div>
+
+        <Stage1ReadOnlyContext qualification={qualification} />
 
         <div className="overflow-x-auto border-b border-slate-200 px-5 py-3">
           <div className="flex w-max min-w-full gap-1">
@@ -685,27 +767,30 @@ export function HplCalculatorWizard({
               {typesQuery.isError ? (
                 <p className="text-sm text-red-600">Не удалось загрузить типы панелей.</p>
               ) : null}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {panelTypes.map((type) => (
                   <OptionCard
                     key={type.id}
                     title={panelTypeLabel(type)}
-                    selected={panelTypeId === type.id}
+                    selected={resolvedPanelTypeId === type.id}
                     onClick={() => {
-                      if (type.id !== panelTypeId) {
+                      if (type.id !== resolvedPanelTypeId) {
                         setQualityClassId('');
+                        const nextApplication = applicationFromPanelTypeCode(
+                          type.code,
+                        );
                         if (
-                          type.code === 'laboratory' &&
-                          selectedSupplier &&
-                          selectedSupplier.code?.toLowerCase() !== 'tianran'
+                          !isValidThicknessForApplication(
+                            nextApplication,
+                            thickness,
+                          )
                         ) {
-                          setSupplierId('');
-                          setColorId('');
+                          setThickness(null);
                         }
                       }
                       setPanelTypeId(type.id);
                       markDirty();
-                      setStep(hideSupplierStep ? 4 : 2);
+                      setStep(2);
                     }}
                   />
                 ))}
@@ -713,7 +798,7 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {!hideSupplierStep && currentStep === 2 ? (
+          {currentStep === 2 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
                 Поставщик
@@ -759,24 +844,16 @@ export function HplCalculatorWizard({
               !qualityQuery.isFetching &&
               qualityQuery.isSuccess &&
               qualityClasses.length === 0 ? (
-                <p className="text-sm text-red-600">
-                  Нет доступных классов
+                <p className="text-sm text-amber-700">
+                  {QUALITY_LINES_EMPTY_MESSAGE}
                 </p>
               ) : null}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {qualityClasses.map((item) => {
-                  const code = (item.code ?? '').toLowerCase();
-                  const title =
-                    qualityClassLabels[code] ||
-                    item.nameRu ||
-                    item.name ||
-                    item.code ||
-                    '';
-
                   return (
                     <OptionCard
                       key={item.id}
-                      title={title}
+                      title={qualityLineLabel(item)}
                       selected={selectedQualityClassId === item.id}
                       onClick={() => {
                         setQualityClassId(item.id);
@@ -795,26 +872,51 @@ export function HplCalculatorWizard({
               <h3 className="text-sm font-semibold text-slate-900">
                 Толщина, мм
               </h3>
-              <div className="flex flex-wrap gap-2">
-                {FALLBACK_THICKNESSES_MM.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => {
-                      setThickness(value);
+              {selectedApplication === 'FURNITURE' ? (
+                <>
+                  <HplThicknessField
+                    application={selectedApplication}
+                    value={thickness}
+                    onChange={(nextValue) => {
+                      setThickness(toDecimalNumber(nextValue));
                       markDirty();
-                      setStep(5);
                     }}
-                    className={`min-w-16 rounded border px-3 py-2 text-sm font-medium ${
-                      thickness === value
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
-                    }`}
+                  />
+                  <Button
+                    type="button"
+                    disabled={
+                      !isValidThicknessForApplication(
+                        selectedApplication,
+                        thickness,
+                      )
+                    }
+                    onClick={() => setStep(5)}
                   >
-                    {value} мм
-                  </button>
-                ))}
-              </div>
+                    Далее
+                  </Button>
+                </>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {STANDARD_DISCRETE_THICKNESSES_MM.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        setThickness(value);
+                        markDirty();
+                        setStep(5);
+                      }}
+                      className={`min-w-16 rounded border px-3 py-2 text-sm font-medium ${
+                        thickness === value
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                      }`}
+                    >
+                      {value} мм
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -823,37 +925,120 @@ export function HplCalculatorWizard({
               <h3 className="text-sm font-semibold text-slate-900">
                 Размер панели
               </h3>
-              <input
-                value={sizeQuery}
-                onChange={(event) => setSizeQuery(event.target.value)}
-                placeholder="Поиск: 1220×2440"
-                className="w-full max-w-sm rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-              />
-              {sizesQuery.isLoading ? (
-                <p className="text-sm text-slate-600">Загрузка размеров...</p>
-              ) : null}
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {filteredSizes.map((size) => (
-                  <OptionCard
-                    key={size.id}
-                    title={formatSize(size)}
-                    description={
-                      resolveSheetArea(size)
-                        ? `${formatNumber(resolveSheetArea(size))} м²`
-                        : undefined
-                    }
-                    selected={panelSizeId === size.id}
-                    onClick={() => {
-                      setPanelSizeId(size.id);
-                      markDirty();
-                      setStep(6);
-                    }}
-                  />
-                ))}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSizeMode('STANDARD');
+                    setCustomWidthMm('');
+                    setCustomHeightMm('');
+                    markDirty();
+                  }}
+                  className={`rounded border px-3 py-2 text-sm font-medium ${
+                    sizeMode === 'STANDARD'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  Стандартный размер
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSizeMode('CUSTOM');
+                    setPanelSizeId('');
+                    markDirty();
+                  }}
+                  className={`rounded border px-3 py-2 text-sm font-medium ${
+                    sizeMode === 'CUSTOM'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  Нестандартный размер
+                </button>
               </div>
-              {!sizesQuery.isLoading && filteredSizes.length === 0 ? (
-                <p className="text-sm text-slate-500">Размеры не найдены.</p>
-              ) : null}
+              {sizeMode === 'STANDARD' ? (
+                <>
+                  <input
+                    value={sizeQuery}
+                    onChange={(event) => setSizeQuery(event.target.value)}
+                    placeholder="Поиск: 1220×2440"
+                    className="w-full max-w-sm rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  />
+                  {sizesQuery.isLoading ? (
+                    <p className="text-sm text-slate-600">Загрузка размеров...</p>
+                  ) : null}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {filteredSizes.map((size) => (
+                      <OptionCard
+                        key={size.id}
+                        title={formatSize(size)}
+                        description={
+                          resolveSheetArea(size)
+                            ? `${formatNumber(resolveSheetArea(size))} м²`
+                            : undefined
+                        }
+                        selected={panelSizeId === size.id}
+                        onClick={() => {
+                          setPanelSizeId(size.id);
+                          markDirty();
+                          setStep(6);
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {!sizesQuery.isLoading && filteredSizes.length === 0 ? (
+                    <p className="text-sm text-slate-500">Размеры не найдены.</p>
+                  ) : null}
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-slate-700">
+                        Ширина, мм
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={customWidthMm}
+                        onChange={(event) => {
+                          setCustomWidthMm(event.target.value);
+                          markDirty();
+                        }}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-slate-700">
+                        Высота, мм
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={customHeightMm}
+                        onChange={(event) => {
+                          setCustomHeightMm(event.target.value);
+                          markDirty();
+                        }}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-sm text-amber-700">{CUSTOM_SIZE_PRICING_NOTE}</p>
+                  <Button
+                    type="button"
+                    disabled={
+                      (toDecimalNumber(customWidthMm) ?? 0) <= 0 ||
+                      (toDecimalNumber(customHeightMm) ?? 0) <= 0
+                    }
+                    onClick={() => setStep(6)}
+                  >
+                    Далее
+                  </Button>
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -869,7 +1054,7 @@ export function HplCalculatorWizard({
                     key={color.id}
                     title={color.name}
                     description={color.code ?? undefined}
-                    selected={colorId === color.id}
+                    selected={resolvedColorId === color.id}
                     onClick={() => {
                       setColorId(color.id);
                       markDirty();
@@ -889,7 +1074,7 @@ export function HplCalculatorWizard({
               <div className="pt-1">
                 <Button
                   type="button"
-                  disabled={!hideSupplierStep && !colorId}
+                  disabled={!resolvedColorId}
                   onClick={() => setStep(7)}
                 >
                   Далее
@@ -932,12 +1117,20 @@ export function HplCalculatorWizard({
             </div>
           ) : null}
 
-          {currentStep === 8 && (preview || unpricedEstimate) ? (
+          {currentStep === 8 && (preview || unpricedEstimate || previewError || canEnterPurchasePrice) ? (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">
                 Результат расчёта
               </h3>
-              {!preview ? (
+              {previewError ? (
+                <p className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {previewError}
+                </p>
+              ) : null}
+              {!preview &&
+              !previewError &&
+              unpricedEstimate &&
+              !canEnterPurchasePrice ? (
                 <p className="text-sm text-slate-600">
                   Коммерческая цена недоступна: не заданы поставщик и класс
                   качества. Показана оценка количества листов.
@@ -945,23 +1138,48 @@ export function HplCalculatorWizard({
               ) : null}
               <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm">
                 <PreviewRow
-                  label="Тип / поставщик"
-                  value={`${selectedType ? panelTypeLabel(selectedType) : '—'} · ${
-                    selectedSupplier ? supplierLabel(selectedSupplier) : '—'
-                  }`}
+                  label="Тип"
+                  value={selectedType ? panelTypeLabel(selectedType) : '—'}
                 />
                 <PreviewRow
-                  label="Размер / толщина / цвет"
-                  value={`${selectedSize ? formatSize(selectedSize) : '—'} · ${thickness ?? '—'} мм · ${
-                    selectedColor?.name ?? '—'
-                  }`}
+                  label="Поставщик"
+                  value={selectedSupplier ? supplierLabel(selectedSupplier) : '—'}
                 />
                 <PreviewRow
-                  label={
-                    preview
-                      ? 'Количество листов'
-                      : 'Количество листов (оценка)'
+                  label="Линейка"
+                  value={
+                    selectedQuality ? qualityLineLabel(selectedQuality) : '—'
                   }
+                />
+                <PreviewRow
+                  label="Размер"
+                  value={
+                    sizeMode === 'CUSTOM'
+                      ? `Нестандартный: ${customWidthMm} × ${customHeightMm} мм`
+                      : selectedSize
+                        ? formatSize(selectedSize)
+                        : '—'
+                  }
+                />
+                <PreviewRow
+                  label="Толщина"
+                  value={`${thickness ?? '—'} мм`}
+                />
+                <PreviewRow
+                  label="Цвет"
+                  value={
+                    selectedColor?.name ??
+                    prefill.colorName ??
+                    prefill.colorCode ??
+                    '—'
+                  }
+                />
+                <PreviewRow
+                  label="Запрошенная площадь"
+                  value={`${formatNumber(requiredAreaM2)} м²`}
+                />
+                <PreviewRow
+                  label="Количество листов"
                   value={formatNumber(resultSheetsCount)}
                 />
                 <PreviewRow
@@ -969,42 +1187,130 @@ export function HplCalculatorWizard({
                   value={`${formatNumber(sheetArea)} м²`}
                 />
                 <PreviewRow
-                  label={preview ? 'Площадь' : 'Площадь (оценка)'}
-                  value={`${formatNumber(resultAreaM2)} м²`}
-                />
-                {preview && hasMoneyAmount(preview.wastePercent) ? (
-                  <PreviewRow
-                    label="Отходы"
-                    value={`${formatNumber(preview.wastePercent)} %`}
-                  />
-                ) : null}
-                {preview && hasMoneyAmount(preview.supplierPricePerM2) ? (
-                  <PreviewRow
-                    label="Цена за м² (закуп)"
-                    value={formatMoney(preview.supplierPricePerM2)}
-                  />
-                ) : null}
-                <PreviewRow
-                  label="Цена за м² (клиент)"
-                  value={formatMoney(preview?.clientPricePerM2)}
-                />
-                <PreviewRow
-                  label="Цена за лист"
-                  value={formatMoney(preview?.pricePerSheet)}
-                />
-                <PreviewRow
-                  label="Итого"
-                  value={formatMoney(preview?.total)}
-                />
-                <PreviewRow
-                  label="Срок поставки"
-                  value={
-                    selectedSupplier?.deliveryDays
-                      ? `${selectedSupplier.deliveryDays} дн.`
-                      : '—'
-                  }
+                  label="Покрываемая площадь"
+                  value={`${formatNumber(coveredAreaM2)} м²`}
                 />
               </div>
+
+              {canEnterPurchasePrice ? (
+                <div className="space-y-3 rounded border border-slate-200 p-4">
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    {COMMERCIAL_TERMS_SECTION_LABEL}
+                  </h4>
+                  <label className="block max-w-xs">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">
+                      {PURCHASE_PRICE_LABEL}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={purchasePriceCny}
+                      aria-label={PURCHASE_PRICE_LABEL}
+                      onChange={(event) => {
+                        setPurchasePriceCny(event.target.value);
+                        setPurchasePriceError(null);
+                        setPreview(null);
+                        setSavedCalculation(null);
+                      }}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                    />
+                    {purchasePriceError ? (
+                      <span className="mt-1 block text-sm text-red-600">
+                        {purchasePriceError}
+                      </span>
+                    ) : null}
+                  </label>
+                  <PreviewRow
+                    label="Курс"
+                    value={formatCnyUsdRateLabel(activeFxRate)}
+                  />
+                  <PreviewRow
+                    label="Коэффициент"
+                    value={Number(sellingCoefficient).toFixed(1)}
+                  />
+                  <DayRangeFields
+                    label={PRODUCTION_PERIOD_LABEL}
+                    from={productionDaysFrom}
+                    to={productionDaysTo}
+                    onFromChange={(value) => {
+                      setProductionDaysFrom(value);
+                      setCommercialTermsError(null);
+                    }}
+                    onToChange={(value) => {
+                      setProductionDaysTo(value);
+                      setCommercialTermsError(null);
+                    }}
+                  />
+                  <DayRangeFields
+                    label={DELIVERY_PERIOD_LABEL}
+                    from={deliveryDaysFrom}
+                    to={deliveryDaysTo}
+                    onFromChange={(value) => {
+                      setDeliveryDaysFrom(value);
+                      setCommercialTermsError(null);
+                    }}
+                    onToChange={(value) => {
+                      setDeliveryDaysTo(value);
+                      setCommercialTermsError(null);
+                    }}
+                  />
+                  <label className="block max-w-xs">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">
+                      {VALID_UNTIL_LABEL}
+                    </span>
+                    <input
+                      type="date"
+                      value={validUntil}
+                      aria-label={VALID_UNTIL_LABEL}
+                      onChange={(event) => {
+                        setValidUntil(event.target.value);
+                        setCommercialTermsError(null);
+                      }}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                    />
+                  </label>
+                  <PreviewRow
+                    label={DOCUMENT_DATE_LABEL}
+                    value={formatDate(new Date())}
+                  />
+                  {commercialTermsError ? (
+                    <p className="text-sm text-red-600">{commercialTermsError}</p>
+                  ) : null}
+                  <Button
+                    type="button"
+                    disabled={previewMutation.isPending}
+                    onClick={() => {
+                      void runPricedCalculation();
+                    }}
+                  >
+                    {previewMutation.isPending
+                      ? 'Расчёт...'
+                      : 'Рассчитать стоимость'}
+                  </Button>
+                </div>
+              ) : null}
+
+              {preview ? (
+                <div className="rounded border border-slate-200 bg-white p-4 text-sm">
+                  <PreviewRow
+                    label="Цена после конвертации"
+                    value={`${formatNumber(snapshotPurchaseCny)} × ${
+                      activeFxRate ?? '—'
+                    } = ${formatNumber(snapshotConvertedUsd)} USD/м²`}
+                  />
+                  <PreviewRow
+                    label="Цена продажи"
+                    value={`${formatNumber(snapshotConvertedUsd)} × ${Number(
+                      sellingCoefficient,
+                    ).toFixed(1)} = ${formatNumber(snapshotClientUsd)} USD/м²`}
+                  />
+                  <PreviewRow
+                    label="Итого"
+                    value={formatMoney(preview.total, 'USD')}
+                  />
+                </div>
+              ) : null}
 
               {savedCalculation ? (
                 <p className="text-sm text-emerald-700">Расчёт сохранён.</p>
@@ -1039,7 +1345,7 @@ export function HplCalculatorWizard({
                 >
                   {finalizeCalculation.isPending || convertToQuote.isPending
                     ? 'Создание КП...'
-                    : 'Создать КП'}
+                    : CONVERT_TO_QUOTE_LABEL}
                 </Button>
               </div>
             </div>
@@ -1066,11 +1372,127 @@ export function HplCalculatorWizard({
   );
 }
 
+function DayRangeFields({
+  label,
+  from,
+  to,
+  onFromChange,
+  onToChange,
+}: {
+  label: string;
+  from: string;
+  to: string;
+  onFromChange: (value: string) => void;
+  onToChange: (value: string) => void;
+}) {
+  return (
+    <div className="max-w-md">
+      <span className="mb-1 block text-sm font-medium text-slate-700">
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={from}
+          aria-label={`${label} от`}
+          onChange={(event) => onFromChange(event.target.value)}
+          className="w-20 rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+        />
+        <span className="text-slate-500">—</span>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={to}
+          aria-label={`${label} до`}
+          onChange={(event) => onToChange(event.target.value)}
+          className="w-20 rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+        />
+        <span className="text-sm text-slate-600">дней</span>
+      </div>
+    </div>
+  );
+}
+
 function PreviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4 border-b border-slate-200 py-2 last:border-b-0">
       <span className="text-slate-600">{label}</span>
       <span className="text-right font-medium text-slate-950">{value}</span>
+    </div>
+  );
+}
+
+function installationRequiredLabel(value?: boolean | null): string {
+  if (value === true) {
+    return 'Да';
+  }
+
+  if (value === false) {
+    return 'Нет';
+  }
+
+  return 'Не указано';
+}
+
+function Stage1ReadOnlyContext({
+  qualification,
+}: {
+  qualification?: CalculatorPrefillSource | null;
+}) {
+  if (!qualification) {
+    return null;
+  }
+
+  const fields = [
+    {
+      label: 'Тип HPL',
+      value: hplApplicationLabel(qualification.application),
+    },
+    {
+      label: 'Тип панели',
+      value: panelTypeLabel(qualification.panelType),
+    },
+    {
+      label: 'Размер',
+      value: formatQualificationSize(qualification),
+    },
+    {
+      label: 'Толщина',
+      value: formatThicknessMm(qualification.thicknessMm),
+    },
+    {
+      label: 'Цвет',
+      value: formatColorLabel(qualification),
+    },
+    {
+      label: 'Площадь',
+      value: formatAreaM2(qualification.requiredAreaM2),
+    },
+    {
+      label: 'Монтаж',
+      value: installationRequiredLabel(qualification.installationRequired),
+    },
+  ];
+
+  return (
+    <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+      <h3 className="text-sm font-semibold text-slate-900">
+        Контекст Stage 1
+      </h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Только для просмотра. Коммерческий выбор не меняет потребность клиента.
+      </p>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+        {fields.map((field) => (
+          <div key={field.label}>
+            <dt className="text-slate-500">{field.label}</dt>
+            <dd className="mt-0.5 font-medium text-slate-900">{field.value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
