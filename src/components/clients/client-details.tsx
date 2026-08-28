@@ -212,12 +212,6 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
             >
               Создать лид
             </Link>
-            <Link
-              href={client ? `/deals?clientId=${client.id}` : "/deals"}
-              className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Создать сделку
-            </Link>
             {onClose ? (
               <button
                 type="button"

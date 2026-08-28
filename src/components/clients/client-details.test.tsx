@@ -101,4 +101,12 @@ describe('ClientDetails phone/email edit', () => {
       email: 'new@fasad.uz',
     });
   });
+
+  it('does not offer direct Deal creation from a Client card', () => {
+    render(<ClientDetails clientId="client-1" />);
+
+    expect(
+      screen.queryByRole('link', { name: 'Создать сделку' }),
+    ).not.toBeInTheDocument();
+  });
 });
