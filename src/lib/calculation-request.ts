@@ -2,8 +2,9 @@ import type {
   CalculationItem,
   CalculationRequest,
   CalculationSession,
+  LeadQualification,
   QualityClass,
-} from '@/types/hpl';
+} from "@/types/hpl";
 import {
   formatColorLabel,
   isOtherPanelType,
@@ -11,45 +12,45 @@ import {
   panelTypeCodeFromApplication,
   toCanonicalHplApplication,
   toDecimalNumber,
-} from '@/lib/hpl-domain';
+} from "@/lib/hpl-domain";
 import {
   CALCULATIONS_READ_PERMISSION,
   QUOTES_APPROVE_PERMISSION,
   canCreateCalculationRequest,
-} from '@/lib/calculation-presentation';
+} from "@/lib/calculation-presentation";
 
 export { canCreateCalculationRequest };
 
-export const SUBMIT_TO_HEAD_LABEL = 'Отправить руководителю';
-export const CREATE_CALCULATION_REQUEST_LABEL = 'Создать запрос расчёта';
-export const ADD_CALCULATION_LABEL = '+ Добавить расчёт';
-export const ADD_HPL_ROW_LABEL = '+ Добавить HPL-панель';
-export const CONVERT_REQUEST_TO_QUOTE_LABEL = 'Создать черновик КП';
-export const CUSTOM_TYPE_DESCRIPTION_LABEL = 'Описание нестандартного типа';
+export const SUBMIT_TO_HEAD_LABEL = "Отправить руководителю";
+export const CREATE_CALCULATION_REQUEST_LABEL = "Создать запрос расчёта";
+export const ADD_CALCULATION_LABEL = "+ Добавить расчёт";
+export const ADD_HPL_ROW_LABEL = "+ Добавить HPL-панель";
+export const CONVERT_REQUEST_TO_QUOTE_LABEL = "Создать черновик КП";
+export const CUSTOM_TYPE_DESCRIPTION_LABEL = "Описание нестандартного типа";
 export const CUSTOM_TYPE_DESCRIPTION_REQUIRED_MESSAGE =
-  'Для типа «Другой» укажите описание';
-export const HALF_FILLED_CUSTOM_SIZE_MESSAGE =
-  'Укажите ширину и высоту вместе';
+  "Для типа «Другой» укажите описание";
+export const HALF_FILLED_CUSTOM_SIZE_MESSAGE = "Укажите ширину и высоту вместе";
 export const CUSTOM_SIZE_INTEGER_MESSAGE =
-  'Ширина и высота должны быть целыми числами не меньше 1 мм';
+  "Ширина и высота должны быть целыми числами не меньше 1 мм";
 export const CUSTOM_SIZE_SNAPSHOT_HINT =
-  'Нестандартный размер сохраняется как снимок. Для текущего расчёта цены нужен стандартный размер.';
-export const SHEETS_COUNT_PLACEHOLDER = '—';
+  "Нестандартный размер сохраняется как снимок. Для текущего расчёта цены нужен стандартный размер.";
+export const SHEETS_COUNT_PLACEHOLDER = "—";
 
 export const calculationRequestStatusLabels: Record<string, string> = {
-  draft: 'Черновик',
-  submitted: 'Отправлен руководителю',
-  processing: 'На проверке',
-  quoted: 'КП создано',
+  draft: "Черновик",
+  submitted: "Отправлен руководителю",
+  processing: "На проверке",
+  quoted: "КП создано",
 };
 
 export type CalculationRequestItemForm = {
   key: string;
   id?: string;
   qualityClassId: string;
+  supplierId: string;
   panelTypeId: string;
   coating: string;
-  sizeMode: 'STANDARD' | 'CUSTOM';
+  sizeMode: "STANDARD" | "CUSTOM";
   panelSizeId: string;
   customWidthMm: string;
   customHeightMm: string;
@@ -60,6 +61,7 @@ export type CalculationRequestItemForm = {
   /** Display-only snapshot from GET/catalog. Never serialized. */
   colorName: string;
   colorId: string;
+  colorCode: string;
   texture: string;
   note: string;
   customTypeDescription: string;
@@ -79,10 +81,13 @@ export type CalculationRequestFormValues = {
 
 export type CalculationRequestItemPayload = {
   panelTypeId: string;
+  supplierId?: string;
   qualityClassId: string;
   thicknessMm: string;
   panelSizeId?: string;
   colorId?: string;
+  colorCode?: string;
+  colorName?: string;
   coating?: string;
   texture?: string;
   requiredAreaM2: string;
@@ -115,28 +120,33 @@ export type UpsertCalculationRequestPayload =
     });
 
 export const CALCULATION_REQUEST_CREATE_KEYS = [
-  'leadId',
-  'notes',
-  'calculations',
+  "leadId",
+  "notes",
+  "calculations",
 ] as const;
 
-export const CALCULATION_REQUEST_PATCH_KEYS = ['notes', 'calculations'] as const;
+export const CALCULATION_REQUEST_PATCH_KEYS = [
+  "notes",
+  "calculations",
+] as const;
 
-export const CALCULATION_REQUEST_GROUP_WRITE_KEYS = ['title', 'items'] as const;
+export const CALCULATION_REQUEST_GROUP_WRITE_KEYS = ["title", "items"] as const;
 
 export const CALCULATION_REQUEST_ITEM_WRITE_KEYS = [
-  'panelTypeId',
-  'qualityClassId',
-  'thicknessMm',
-  'panelSizeId',
-  'colorId',
-  'coating',
-  'texture',
-  'requiredAreaM2',
-  'customWidthMm',
-  'customHeightMm',
-  'note',
-  'customTypeDescription',
+  "panelTypeId",
+  "qualityClassId",
+  "thicknessMm",
+  "panelSizeId",
+  "colorId",
+  "colorCode",
+  "colorName",
+  "coating",
+  "texture",
+  "requiredAreaM2",
+  "customWidthMm",
+  "customHeightMm",
+  "note",
+  "customTypeDescription",
 ] as const;
 
 export type CalculationRequestItemErrors = Partial<
@@ -175,22 +185,24 @@ export function canFinalizeQuote(
 }
 
 export function isDraftCalculationRequest(status?: string | null): boolean {
-  return status === 'draft';
+  return status === "draft";
 }
 
 export function isSubmittedCalculationRequest(status?: string | null): boolean {
-  return status === 'submitted' || status === 'processing';
+  return status === "submitted" || status === "processing";
 }
 
 export function isQuotedCalculationRequest(status?: string | null): boolean {
-  return status === 'quoted';
+  return status === "quoted";
 }
 
-export function canConvertRequestToQuote(request?: {
-  status?: string | null;
-  quoteId?: string | null;
-  quotes?: unknown[] | null;
-} | null): boolean {
+export function canConvertRequestToQuote(
+  request?: {
+    status?: string | null;
+    quoteId?: string | null;
+    quotes?: unknown[] | null;
+  } | null,
+): boolean {
   if (!request || isQuotedCalculationRequest(request.status)) {
     return false;
   }
@@ -208,14 +220,14 @@ export function canConvertRequestToQuote(request?: {
 
 export function calculationRequestStatusLabel(status?: string | null): string {
   if (!status) {
-    return '—';
+    return "—";
   }
 
   return calculationRequestStatusLabels[status] ?? status;
 }
 
 export function unwrapRequestCalculations(
-  request?: Pick<CalculationRequest, 'calculations'> | null,
+  request?: Pick<CalculationRequest, "calculations"> | null,
 ): CalculationSession[] {
   return request?.calculations ?? [];
 }
@@ -292,7 +304,7 @@ export function formatSheetsCountDisplay(
 export function requestItemSheetsCountDisplay(
   item: Pick<
     CalculationRequestItemForm,
-    'id' | 'sheetsCount' | 'requiredAreaM2'
+    "id" | "sheetsCount" | "requiredAreaM2"
   >,
   size?: PanelSizeDimensions | null,
 ): string {
@@ -310,7 +322,7 @@ export function serializeDecimalInput(
   value: string,
   maxFractionDigits: number,
 ): string | undefined {
-  const trimmed = value.trim().replace(',', '.');
+  const trimmed = value.trim().replace(",", ".");
   if (!trimmed) {
     return undefined;
   }
@@ -321,14 +333,14 @@ export function serializeDecimalInput(
     if (parsed == null || parsed < 0) {
       return undefined;
     }
-    const [integer, fraction = ''] = String(parsed).split('.');
+    const [integer, fraction = ""] = String(parsed).split(".");
     return fraction
       ? `${integer}.${fraction.slice(0, maxFractionDigits)}`
       : integer;
   }
 
   const integer = match[1];
-  const fraction = (match[2] ?? '').slice(0, maxFractionDigits);
+  const fraction = (match[2] ?? "").slice(0, maxFractionDigits);
   return fraction ? `${integer}.${fraction}` : integer;
 }
 
@@ -341,11 +353,11 @@ export function parseCustomSizePair(
   invalid: boolean;
 } {
   const widthRaw =
-    typeof widthValue === 'string' ? widthValue.trim() : widthValue;
+    typeof widthValue === "string" ? widthValue.trim() : widthValue;
   const heightRaw =
-    typeof heightValue === 'string' ? heightValue.trim() : heightValue;
-  const hasWidth = widthRaw !== '' && widthRaw != null;
-  const hasHeight = heightRaw !== '' && heightRaw != null;
+    typeof heightValue === "string" ? heightValue.trim() : heightValue;
+  const hasWidth = widthRaw !== "" && widthRaw != null;
+  const hasHeight = heightRaw !== "" && heightRaw != null;
 
   if (!hasWidth && !hasHeight) {
     return { pair: null, halfFilled: false, invalid: false };
@@ -370,11 +382,11 @@ export function parseCustomSizePair(
 
 export function unknownCalculationRequestWriteKeys(
   payload: Record<string, unknown>,
-  mode: 'create' | 'patch' = 'create',
+  mode: "create" | "patch" = "create",
 ): string[] {
   const unknown: string[] = [];
   const rootAllowed = new Set<string>(
-    mode === 'create'
+    mode === "create"
       ? CALCULATION_REQUEST_CREATE_KEYS
       : CALCULATION_REQUEST_PATCH_KEYS,
   );
@@ -394,7 +406,7 @@ export function unknownCalculationRequestWriteKeys(
   const itemAllowed = new Set<string>(CALCULATION_REQUEST_ITEM_WRITE_KEYS);
 
   calculations.forEach((group, groupIndex) => {
-    if (!group || typeof group !== 'object') {
+    if (!group || typeof group !== "object") {
       return;
     }
 
@@ -410,13 +422,15 @@ export function unknownCalculationRequestWriteKeys(
     }
 
     items.forEach((item, itemIndex) => {
-      if (!item || typeof item !== 'object') {
+      if (!item || typeof item !== "object") {
         return;
       }
 
       for (const key of Object.keys(item as object)) {
         if (!itemAllowed.has(key)) {
-          unknown.push(`calculations[${groupIndex}].items[${itemIndex}].${key}`);
+          unknown.push(
+            `calculations[${groupIndex}].items[${itemIndex}].${key}`,
+          );
         }
       }
     });
@@ -427,22 +441,24 @@ export function unknownCalculationRequestWriteKeys(
 
 export function createEmptyRequestItem(): CalculationRequestItemForm {
   return {
-    key: nextClientKey('item'),
-    qualityClassId: '',
-    panelTypeId: '',
-    coating: '',
-    sizeMode: 'STANDARD',
-    panelSizeId: '',
-    customWidthMm: '',
-    customHeightMm: '',
-    thicknessMm: '',
-    sheetsCount: '',
-    requiredAreaM2: '',
-    colorName: '',
-    colorId: '',
-    texture: '',
-    note: '',
-    customTypeDescription: '',
+    key: nextClientKey("item"),
+    qualityClassId: "",
+    supplierId: "",
+    panelTypeId: "",
+    coating: "",
+    sizeMode: "STANDARD",
+    panelSizeId: "",
+    customWidthMm: "",
+    customHeightMm: "",
+    thicknessMm: "",
+    sheetsCount: "",
+    requiredAreaM2: "",
+    colorName: "",
+    colorId: "",
+    colorCode: "",
+    texture: "",
+    note: "",
+    customTypeDescription: "",
   };
 }
 
@@ -450,7 +466,7 @@ export function createEmptyRequestGroup(
   index = 0,
 ): CalculationRequestGroupForm {
   return {
-    key: nextClientKey('calc'),
+    key: nextClientKey("calc"),
     title: `Расчёт №${index + 1}`,
     items: [createEmptyRequestItem()],
   };
@@ -458,17 +474,19 @@ export function createEmptyRequestGroup(
 
 export function createEmptyRequestForm(): CalculationRequestFormValues {
   return {
-    notes: '',
+    notes: "",
     calculations: [createEmptyRequestGroup(0)],
   };
 }
 
 export function duplicateRequestItem(
   item: CalculationRequestItemForm,
+  preserveSupplier = false,
 ): CalculationRequestItemForm {
-  return {
-    key: nextClientKey('item'),
+  const duplicated: CalculationRequestItemForm = {
+    key: nextClientKey("item"),
     qualityClassId: item.qualityClassId,
+    supplierId: preserveSupplier ? item.supplierId : "",
     panelTypeId: item.panelTypeId,
     coating: item.coating,
     sizeMode: item.sizeMode,
@@ -476,31 +494,38 @@ export function duplicateRequestItem(
     customWidthMm: item.customWidthMm,
     customHeightMm: item.customHeightMm,
     thicknessMm: item.thicknessMm,
-    sheetsCount: '',
+    sheetsCount: "",
     requiredAreaM2: item.requiredAreaM2,
     colorName: item.colorName,
     colorId: item.colorId,
+    colorCode: item.colorCode,
     texture: item.texture,
     note: item.note,
     customTypeDescription: item.customTypeDescription,
   };
+  if (!preserveSupplier) {
+    delete (duplicated as Partial<CalculationRequestItemForm>).supplierId;
+  }
+  return duplicated;
 }
 
 export function requestItemColorDisplay(
-  item: Pick<CalculationItem, 'colorName' | 'color'> | CalculationRequestItemForm,
+  item:
+    | Pick<CalculationItem, "colorCode" | "colorName" | "color">
+    | CalculationRequestItemForm,
 ): string {
-  if ('key' in item) {
+  if ("key" in item) {
     return item.colorName.trim();
   }
 
   return formatColorLabel({
-    colorCode: item.color?.colorCode,
+    colorCode: item.colorCode?.trim() || item.color?.colorCode,
     colorName:
       item.colorName?.trim() ||
       item.color?.colorName?.trim() ||
       item.color?.name?.trim() ||
-      '',
-  }).replace(/^—$/, '');
+      "",
+  }).replace(/^—$/, "");
 }
 
 export function requestItemFromApi(
@@ -509,29 +534,34 @@ export function requestItemFromApi(
   const customWidth = toDecimalNumber(item.customWidthMm);
   const customHeight = toDecimalNumber(item.customHeightMm);
   const hasCustomPair =
-    customWidth != null && customHeight != null && customWidth > 0 && customHeight > 0;
+    customWidth != null &&
+    customHeight != null &&
+    customWidth > 0 &&
+    customHeight > 0;
   const sheets = toNonNegativeInteger(item.sheetsCount);
   const area = toDecimalNumber(item.requiredAreaM2 ?? item.areaM2);
   const thickness = toDecimalNumber(item.thicknessMm);
 
   return {
-    key: item.id ? `persisted-${item.id}` : nextClientKey('item'),
+    key: item.id ? `persisted-${item.id}` : nextClientKey("item"),
     id: item.id,
-    qualityClassId: item.qualityClassId ?? item.qualityClass?.id ?? '',
-    panelTypeId: item.panelTypeId ?? item.panelType?.id ?? '',
-    coating: item.coating?.trim() ?? '',
-    sizeMode: hasCustomPair ? 'CUSTOM' : 'STANDARD',
-    panelSizeId: item.panelSizeId ?? item.panelSize?.id ?? '',
-    customWidthMm: customWidth != null ? String(customWidth) : '',
-    customHeightMm: customHeight != null ? String(customHeight) : '',
-    thicknessMm: thickness != null ? String(thickness) : '',
-    sheetsCount: sheets != null ? String(sheets) : '',
-    requiredAreaM2: area != null ? String(area) : '',
+    qualityClassId: item.qualityClassId ?? item.qualityClass?.id ?? "",
+    supplierId: item.supplierId ?? item.supplier?.id ?? "",
+    panelTypeId: item.panelTypeId ?? item.panelType?.id ?? "",
+    coating: item.coating?.trim() ?? "",
+    sizeMode: hasCustomPair ? "CUSTOM" : "STANDARD",
+    panelSizeId: item.panelSizeId ?? item.panelSize?.id ?? "",
+    customWidthMm: customWidth != null ? String(customWidth) : "",
+    customHeightMm: customHeight != null ? String(customHeight) : "",
+    thicknessMm: thickness != null ? String(thickness) : "",
+    sheetsCount: sheets != null ? String(sheets) : "",
+    requiredAreaM2: area != null ? String(area) : "",
     colorName: requestItemColorDisplay(item),
-    colorId: item.colorId?.trim() || item.color?.id?.trim() || '',
-    texture: item.texture?.trim() ?? '',
-    note: item.note?.trim() ?? '',
-    customTypeDescription: item.customTypeDescription?.trim() ?? '',
+    colorId: item.colorId?.trim() || item.color?.id?.trim() || "",
+    colorCode: item.colorCode?.trim() || item.color?.colorCode?.trim() || "",
+    texture: item.texture?.trim() ?? "",
+    note: item.note?.trim() ?? "",
+    customTypeDescription: item.customTypeDescription?.trim() ?? "",
   };
 }
 
@@ -541,11 +571,11 @@ export function requestFormFromApi(
   const groups = unwrapRequestCalculations(request);
 
   return {
-    notes: request.notes ?? '',
+    notes: request.notes ?? "",
     calculations:
       groups.length > 0
         ? groups.map((group, index) => ({
-            key: group.id ? `persisted-${group.id}` : nextClientKey('calc'),
+            key: group.id ? `persisted-${group.id}` : nextClientKey("calc"),
             id: group.id,
             title: group.title?.trim() || `Расчёт №${index + 1}`,
             items:
@@ -554,6 +584,53 @@ export function requestFormFromApi(
                 : [createEmptyRequestItem()],
           }))
         : [createEmptyRequestGroup(0)],
+  };
+}
+
+export function requestFormFromQualification(
+  qualification?: LeadQualification | null,
+): CalculationRequestFormValues {
+  const sourceItems =
+    qualification?.items !== undefined
+      ? qualification.items
+      : qualification
+        ? [qualification]
+        : [];
+  const items = sourceItems.map((item) => {
+      const customWidth = toDecimalNumber(item.customWidthMm);
+      const customHeight = toDecimalNumber(item.customHeightMm);
+      const hasCustomPair =
+        customWidth != null &&
+        customHeight != null &&
+        customWidth > 0 &&
+        customHeight > 0;
+      const thickness = toDecimalNumber(item.thicknessMm);
+      const area = toDecimalNumber(item.requiredAreaM2);
+
+      return {
+        ...createEmptyRequestItem(),
+        panelTypeId: item.panelTypeId ?? "",
+        panelSizeId: item.panelSizeId ?? "",
+        sizeMode: (hasCustomPair ? "CUSTOM" : "STANDARD") as
+          "STANDARD" | "CUSTOM",
+        customWidthMm: customWidth == null ? "" : String(customWidth),
+        customHeightMm: customHeight == null ? "" : String(customHeight),
+        thicknessMm: thickness == null ? "" : String(thickness),
+        requiredAreaM2: area == null ? "" : String(area),
+        colorCode: item.colorCode?.trim() ?? "",
+        colorName: item.colorName?.trim() ?? "",
+      };
+    });
+
+  return {
+    notes: qualification?.customerRequirements ?? "",
+    calculations: [
+      {
+        key: nextClientKey("calc"),
+        title: "Расчёт №1",
+        items,
+      },
+    ],
   };
 }
 
@@ -570,7 +647,11 @@ export function qualityClassStillAvailable(
 
 export function validateRequestItem(
   item: CalculationRequestItemForm,
-  panelType?: { id: string; code: string; displayNameRu?: string | null } | null,
+  panelType?: {
+    id: string;
+    code: string;
+    displayNameRu?: string | null;
+  } | null,
 ): CalculationRequestItemErrors {
   const errors: CalculationRequestItemErrors = {};
   const application =
@@ -578,21 +659,24 @@ export function validateRequestItem(
     panelTypeCodeFromApplication(panelType?.code);
 
   if (!item.qualityClassId.trim()) {
-    errors.qualityClassId = 'Укажите класс';
+    errors.qualityClassId = "Укажите класс";
   }
   if (!item.panelTypeId.trim()) {
-    errors.panelTypeId = 'Укажите тип HPL';
+    errors.panelTypeId = "Укажите тип HPL";
   }
 
   if (!isValidThicknessForApplication(application, item.thicknessMm)) {
-    errors.thicknessMm = 'Укажите толщину';
+    errors.thicknessMm = "Укажите толщину";
   }
 
   if (!item.panelSizeId.trim()) {
-    errors.panelSizeId = 'Укажите размер';
+    errors.panelSizeId = "Укажите размер";
   }
 
-  const customPair = parseCustomSizePair(item.customWidthMm, item.customHeightMm);
+  const customPair = parseCustomSizePair(
+    item.customWidthMm,
+    item.customHeightMm,
+  );
   if (customPair.halfFilled) {
     errors.customWidthMm = HALF_FILLED_CUSTOM_SIZE_MESSAGE;
     errors.customHeightMm = HALF_FILLED_CUSTOM_SIZE_MESSAGE;
@@ -603,13 +687,10 @@ export function validateRequestItem(
 
   const area = toDecimalNumber(item.requiredAreaM2);
   if (area == null || area <= 0) {
-    errors.requiredAreaM2 = 'Укажите объём м²';
+    errors.requiredAreaM2 = "Укажите объём м²";
   }
 
-  if (
-    isOtherPanelType(panelType) &&
-    !item.customTypeDescription.trim()
-  ) {
+  if (isOtherPanelType(panelType) && !item.customTypeDescription.trim()) {
     errors.customTypeDescription = CUSTOM_TYPE_DESCRIPTION_REQUIRED_MESSAGE;
   }
 
@@ -618,7 +699,11 @@ export function validateRequestItem(
 
 export function validateRequestForm(
   form: CalculationRequestFormValues,
-  panelTypes: Array<{ id: string; code: string; displayNameRu?: string | null }>,
+  panelTypes: Array<{
+    id: string;
+    code: string;
+    displayNameRu?: string | null;
+  }>,
 ): {
   valid: boolean;
   itemErrors: Record<string, CalculationRequestItemErrors>;
@@ -656,12 +741,16 @@ function optionalText(value: string): string | undefined {
 
 function serializeRequestItem(
   item: CalculationRequestItemForm,
+  includeItemSuppliers = false,
 ): CalculationRequestItemPayload {
   const area =
     serializeDecimalInput(item.requiredAreaM2, 4) ?? item.requiredAreaM2.trim();
   const thickness =
     serializeDecimalInput(item.thicknessMm, 2) ?? item.thicknessMm.trim();
-  const customSize = parseCustomSizePair(item.customWidthMm, item.customHeightMm);
+  const customSize = parseCustomSizePair(
+    item.customWidthMm,
+    item.customHeightMm,
+  );
 
   const payload: CalculationRequestItemPayload = {
     panelTypeId: item.panelTypeId.trim(),
@@ -673,8 +762,21 @@ function serializeRequestItem(
   if (item.panelSizeId.trim()) {
     payload.panelSizeId = item.panelSizeId.trim();
   }
+  if (includeItemSuppliers && item.supplierId.trim()) {
+    payload.supplierId = item.supplierId.trim();
+  }
   if (item.colorId.trim()) {
     payload.colorId = item.colorId.trim();
+  }
+  if (!item.colorId.trim()) {
+    const colorCode = optionalText(item.colorCode);
+    if (colorCode) {
+      payload.colorCode = colorCode;
+    }
+    const colorName = optionalText(item.colorName);
+    if (colorName) {
+      payload.colorName = colorName;
+    }
   }
   const coating = optionalText(item.coating);
   if (coating) {
@@ -702,10 +804,13 @@ function serializeRequestItem(
 
 function serializeCalculationGroups(
   form: CalculationRequestFormValues,
+  includeItemSuppliers = false,
 ): CalculationRequestGroupPayload[] {
   return form.calculations.map((group, index) => ({
     title: group.title.trim() || `Расчёт №${index + 1}`,
-    items: group.items.map(serializeRequestItem),
+    items: group.items.map((item) =>
+      serializeRequestItem(item, includeItemSuppliers),
+    ),
   }));
 }
 
@@ -713,10 +818,14 @@ export function serializeCalculationRequest(
   form: CalculationRequestFormValues,
   context: {
     leadId?: string | null;
+    includeItemSuppliers?: boolean;
   } = {},
 ): UpsertCalculationRequestPayload {
   const notes = form.notes.trim();
-  const calculations = serializeCalculationGroups(form);
+  const calculations = serializeCalculationGroups(
+    form,
+    context.includeItemSuppliers,
+  );
 
   if (context.leadId) {
     return {
@@ -732,6 +841,7 @@ export function serializeCalculationRequest(
   };
 }
 
-export const LEGACY_CONVERT_TO_QUOTE_PATH = '/calculations/:id/convert-to-quote';
+export const LEGACY_CONVERT_TO_QUOTE_PATH =
+  "/calculations/:id/convert-to-quote";
 export const REQUEST_CONVERT_TO_QUOTE_PATH =
-  '/calculations/requests/:id/convert-to-quote';
+  "/calculations/requests/:id/convert-to-quote";

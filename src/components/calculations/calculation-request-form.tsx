@@ -7,6 +7,7 @@ import {
   PanelSize,
   PanelType,
   QualityClass,
+  Supplier,
 } from '@/hooks/use-panels';
 import {
   applicationFromPanelTypeCode,
@@ -44,6 +45,7 @@ type Catalogs = {
   panelSizes: PanelSize[];
   qualityClasses: QualityClass[];
   panelColors: PanelColor[];
+  suppliers?: Supplier[];
 };
 
 type CalculationRequestFormProps = {
@@ -58,6 +60,8 @@ type CalculationRequestFormProps = {
   submitPending?: boolean;
   onSaveDraft?: () => void;
   onSubmitToHead?: () => void;
+  canEditSupplier?: boolean;
+  saveLabel?: string;
 };
 
 function panelTypeById(types: PanelType[], id: string): PanelType | undefined {
@@ -74,6 +78,7 @@ function HplRequestRow({
   onChange,
   onDuplicate,
   onDelete,
+  canEditSupplier,
 }: {
   item: CalculationRequestItemForm;
   index: number;
@@ -84,6 +89,7 @@ function HplRequestRow({
   onChange: (item: CalculationRequestItemForm) => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  canEditSupplier: boolean;
 }) {
   const panelType = panelTypeById(catalogs.panelTypes, item.panelTypeId);
   const application = applicationFromPanelTypeCode(panelType?.code);
@@ -132,6 +138,24 @@ function HplRequestRow({
   return (
     <>
       <tr className={errors ? 'bg-red-50/60' : undefined}>
+        {canEditSupplier ? (
+          <td className="px-2 py-2">
+            <select
+              aria-label={`Поставщик, строка ${index + 1}`}
+              className={inputClass}
+              disabled={readOnly}
+              value={item.supplierId}
+              onChange={(event) => setField('supplierId', event.target.value)}
+            >
+              <option value="">Выберите</option>
+              {(catalogs.suppliers ?? []).map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          </td>
+        ) : null}
         <td className="px-2 py-2">
           <SearchCombobox
             ariaLabel={`Линейка, строка ${index + 1}`}
@@ -319,6 +343,15 @@ function HplRequestRow({
               </option>
             ) : null}
           </select>
+          {!item.colorId && (item.colorName.trim() || item.colorCode.trim()) ? (
+            <p className="mt-1 text-[11px] leading-4 text-slate-600">
+              Пожелание клиента:{' '}
+              {formatColorLabel({
+                colorCode: item.colorCode,
+                colorName: item.colorName,
+              })}
+            </p>
+          ) : null}
         </td>
         <td className="px-2 py-2">
           <input
@@ -407,6 +440,7 @@ function CalculationGroup({
   canDeleteGroup,
   onChange,
   onDelete,
+  canEditSupplier,
 }: {
   group: CalculationRequestGroupForm;
   index: number;
@@ -416,6 +450,7 @@ function CalculationGroup({
   canDeleteGroup: boolean;
   onChange: (group: CalculationRequestGroupForm) => void;
   onDelete: () => void;
+  canEditSupplier: boolean;
 }) {
   const updateItem = (itemIndex: number, item: CalculationRequestItemForm): void => {
     onChange({
@@ -442,6 +477,9 @@ function CalculationGroup({
         <table className="min-w-[1280px] w-full border-collapse text-sm">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-600">
+              {canEditSupplier ? (
+                <th className="px-2 py-2">Поставщик</th>
+              ) : null}
               <th className="px-2 py-2">Линейка</th>
               <th className="px-2 py-2">Тип HPL</th>
               <th className="px-2 py-2">Покрытие</th>
@@ -471,7 +509,7 @@ function CalculationGroup({
                     ...group,
                     items: [
                       ...group.items.slice(0, itemIndex + 1),
-                      duplicateRequestItem(item),
+                      duplicateRequestItem(item, canEditSupplier),
                       ...group.items.slice(itemIndex + 1),
                     ],
                   })
@@ -482,6 +520,7 @@ function CalculationGroup({
                     items: group.items.filter((_, current) => current !== itemIndex),
                   })
                 }
+                canEditSupplier={canEditSupplier}
               />
             ))}
           </tbody>
@@ -520,6 +559,8 @@ export function CalculationRequestForm({
   submitPending = false,
   onSaveDraft,
   onSubmitToHead,
+  canEditSupplier = false,
+  saveLabel = 'Сохранить черновик',
 }: CalculationRequestFormProps) {
   const busy = pending || submitPending;
 
@@ -539,6 +580,7 @@ export function CalculationRequestForm({
           catalogs={catalogs}
           itemErrors={itemErrors}
           readOnly={readOnly}
+          canEditSupplier={canEditSupplier}
           canDeleteGroup={value.calculations.length > 1}
           onChange={(next) =>
             onChange({
@@ -600,7 +642,7 @@ export function CalculationRequestForm({
               disabled={busy}
               onClick={onSaveDraft}
             >
-              {pending ? 'Сохранение...' : 'Сохранить черновик'}
+              {pending ? 'Сохранение...' : saveLabel}
             </Button>
           ) : null}
           {canSubmitToHead && onSubmitToHead ? (

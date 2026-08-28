@@ -157,11 +157,11 @@ export function useConvertCalculationRequestToQuote() {
   return useMutation({
     mutationFn: async (payload: {
       id: string;
-      supplierId: string;
+      supplierId?: string;
     }): Promise<Quote> => {
       const response = await apiClient.post<Quote>(
         `/calculations/requests/${payload.id}/convert-to-quote`,
-        { supplierId: payload.supplierId },
+        payload.supplierId ? { supplierId: payload.supplierId } : {},
       );
       return response.data;
     },

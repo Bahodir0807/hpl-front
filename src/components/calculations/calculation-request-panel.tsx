@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { CalculationRequestForm } from '@/components/calculations/calculation-request-form';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/context/auth-context';
+import { useMemo, useState } from "react";
+import { CalculationRequestForm } from "@/components/calculations/calculation-request-form";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/auth-context";
 import {
   useCalculationRequests,
   useConvertCalculationRequestToQuote,
   useCreateCalculationRequest,
   useSubmitCalculationRequest,
   useUpdateCalculationRequest,
-} from '@/hooks/use-calculation-requests';
-import { useLeadWorkspace } from '@/hooks/use-lead-workspace';
+} from "@/hooks/use-calculation-requests";
+import { useLeadWorkspace } from "@/hooks/use-lead-workspace";
 import {
   unwrapSupplierQualityClasses,
   usePanelColors,
   usePanelSizes,
   usePanelTypes,
   useSuppliers,
-} from '@/hooks/use-panels';
+} from "@/hooks/use-panels";
 import {
   ADD_CALCULATION_LABEL,
   CONVERT_REQUEST_TO_QUOTE_LABEL,
@@ -30,24 +30,26 @@ import {
   calculationRequestStatusLabel,
   createEmptyRequestForm,
   isDraftCalculationRequest,
+  isSubmittedCalculationRequest,
+  requestFormFromQualification,
   requestFormFromApi,
   serializeCalculationRequest,
   unwrapRequestCalculations,
   validateRequestForm,
   type CalculationRequestFormValues,
   type CalculationRequestItemErrors,
-} from '@/lib/calculation-request';
-import { showError } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/errors';
+} from "@/lib/calculation-request";
+import { showError } from "@/lib/toast";
+import { getErrorMessage } from "@/lib/errors";
 import {
   getApiErrorCode,
   QUOTE_SUPPLIER_REQUIRED,
   QUOTE_SUPPLIER_REQUIRED_MESSAGE,
-} from '@/lib/hpl-errors';
-import { formatDateTime } from '@/lib/format';
-import { formatPersonName } from '@/lib/display-names';
-import { formatSupplierName } from '@/lib/labels';
-import type { CalculationRequest, Supplier } from '@/types/hpl';
+} from "@/lib/hpl-errors";
+import { formatDateTime } from "@/lib/format";
+import { formatPersonName } from "@/lib/display-names";
+import { formatSupplierName } from "@/lib/labels";
+import type { CalculationRequest, Supplier } from "@/types/hpl";
 
 type CalculationRequestPanelProps = {
   leadId?: string | null;
@@ -63,6 +65,7 @@ function HeadConvertControls({
   pending,
   onSupplierChange,
   onConvert,
+  supplierRequired = true,
 }: {
   requestId: string;
   suppliers: Supplier[];
@@ -71,6 +74,7 @@ function HeadConvertControls({
   pending: boolean;
   onSupplierChange: (supplierId: string) => void;
   onConvert: () => void;
+  supplierRequired?: boolean;
 }) {
   const errorId = error ? `convert-supplier-${requestId}-error` : undefined;
 
@@ -86,8 +90,8 @@ function HeadConvertControls({
           aria-describedby={errorId}
           className={`w-full rounded border bg-white px-2 py-1.5 text-sm outline-none ${
             error
-              ? 'border-red-500 focus:border-red-600'
-              : 'border-slate-300 focus:border-slate-500'
+              ? "border-red-500 focus:border-red-600"
+              : "border-slate-300 focus:border-slate-500"
           }`}
           disabled={pending}
           value={supplierId}
@@ -109,10 +113,10 @@ function HeadConvertControls({
       <Button
         type="button"
         size="sm"
-        disabled={pending || !supplierId}
+        disabled={pending || (supplierRequired && !supplierId)}
         onClick={onConvert}
       >
-        {pending ? 'Создание КП...' : CONVERT_REQUEST_TO_QUOTE_LABEL}
+        {pending ? "Создание КП..." : CONVERT_REQUEST_TO_QUOTE_LABEL}
       </Button>
     </div>
   );
@@ -134,13 +138,13 @@ export function CalculationRequestPanel({
   const typesQuery = usePanelTypes();
   const sizesQuery = usePanelSizes();
   const colorsQuery = usePanelColors();
-  const workspaceQuery = useLeadWorkspace(leadId ?? '');
+  const workspaceQuery = useLeadWorkspace(leadId ?? "");
   const createRequest = useCreateCalculationRequest();
   const updateRequest = useUpdateCalculationRequest();
   const submitRequest = useSubmitCalculationRequest();
   const convertRequest = useConvertCalculationRequestToQuote();
 
-  const [editingId, setEditingId] = useState<string | 'new' | null>(null);
+  const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<CalculationRequestFormValues>(
     createEmptyRequestForm(),
   );
@@ -150,15 +154,27 @@ export function CalculationRequestPanel({
   const [convertSupplierIds, setConvertSupplierIds] = useState<
     Record<string, string>
   >({});
-  const [convertErrors, setConvertErrors] = useState<Record<string, string>>({});
+  const [convertErrors, setConvertErrors] = useState<Record<string, string>>(
+    {},
+  );
 
-  const requests = useMemo(() => requestsQuery.data ?? [], [requestsQuery.data]);
+  const requests = useMemo(
+    () => requestsQuery.data ?? [],
+    [requestsQuery.data],
+  );
   const editingRequest =
-    editingId && editingId !== 'new'
+    editingId && editingId !== "new"
       ? requests.find((item) => item.id === editingId)
       : null;
+  const headReviewEditable = Boolean(
+    editingRequest &&
+    isSubmittedCalculationRequest(editingRequest.status) &&
+    permissions.includes("quotes:approve"),
+  );
   const readOnly = Boolean(
-    editingRequest && !isDraftCalculationRequest(editingRequest.status),
+    editingRequest &&
+    !isDraftCalculationRequest(editingRequest.status) &&
+    !headReviewEditable,
   );
   const qualityClasses = useMemo(() => {
     const mappings = (workspaceQuery.data?.catalog.suppliers ?? []).flatMap(
@@ -178,20 +194,28 @@ export function CalculationRequestPanel({
       panelSizes: sizesQuery.data ?? [],
       qualityClasses,
       panelColors: colorsQuery.data ?? [],
+      suppliers: suppliersQuery.data ?? [],
     }),
-    [colorsQuery.data, qualityClasses, sizesQuery.data, typesQuery.data],
+    [
+      colorsQuery.data,
+      qualityClasses,
+      sizesQuery.data,
+      suppliersQuery.data,
+      typesQuery.data,
+    ],
   );
   const catalogError =
     typesQuery.isError ||
     sizesQuery.isError ||
     colorsQuery.isError ||
+    (canConvert && suppliersQuery.isError) ||
     (Boolean(leadId) && workspaceQuery.isError)
-      ? 'Не удалось загрузить справочник линеек, типов, размеров или декоров.'
+      ? "Не удалось загрузить справочник линеек, типов, размеров или декоров."
       : null;
 
   const openNew = (): void => {
-    setEditingId('new');
-    setForm(createEmptyRequestForm());
+    setEditingId("new");
+    setForm(requestFormFromQualification(workspaceQuery.data?.qualification));
     setItemErrors({});
   };
 
@@ -204,14 +228,16 @@ export function CalculationRequestPanel({
   const persist = async (
     current: CalculationRequestFormValues,
   ): Promise<CalculationRequest | null> => {
-    const isNew = !editingId || editingId === 'new';
+    const isNew = !editingId || editingId === "new";
     if (isNew && !leadId) {
-      showError('Запрос расчёта создаётся из карточки лида: нужен leadId.');
+      showError("Запрос расчёта создаётся из карточки лида: нужен leadId.");
       return null;
     }
     const payload = serializeCalculationRequest(
       current,
-      isNew && leadId ? { leadId } : {},
+      isNew && leadId
+        ? { leadId }
+        : { includeItemSuppliers: headReviewEditable },
     );
     if (!isNew) {
       const updated = await updateRequest.mutateAsync({
@@ -241,7 +267,11 @@ export function CalculationRequestPanel({
   };
 
   const onSubmitToHead = async (): Promise<void> => {
-    if (createRequest.isPending || updateRequest.isPending || submitRequest.isPending) {
+    if (
+      createRequest.isPending ||
+      updateRequest.isPending ||
+      submitRequest.isPending
+    ) {
       return;
     }
     if (!validate(form)) {
@@ -258,11 +288,11 @@ export function CalculationRequestPanel({
 
   const setConvertSupplier = (id: string, supplierId: string): void => {
     setConvertSupplierIds((current) => ({ ...current, [id]: supplierId }));
-    setConvertErrors((current) => ({ ...current, [id]: '' }));
+    setConvertErrors((current) => ({ ...current, [id]: "" }));
   };
 
   const onConvert = async (id: string): Promise<void> => {
-    const supplierId = convertSupplierIds[id]?.trim() ?? '';
+    const supplierId = convertSupplierIds[id]?.trim() ?? "";
     if (!supplierId) {
       setConvertErrors((current) => ({
         ...current,
@@ -271,7 +301,7 @@ export function CalculationRequestPanel({
       return;
     }
 
-    setConvertErrors((current) => ({ ...current, [id]: '' }));
+    setConvertErrors((current) => ({ ...current, [id]: "" }));
     try {
       await convertRequest.mutateAsync({ id, supplierId });
     } catch (error) {
@@ -280,7 +310,10 @@ export function CalculationRequestPanel({
         [id]:
           getApiErrorCode(error) === QUOTE_SUPPLIER_REQUIRED
             ? QUOTE_SUPPLIER_REQUIRED_MESSAGE
-            : getErrorMessage(error, 'Не удалось выполнить коммерческий расчёт.'),
+            : getErrorMessage(
+                error,
+                "Не удалось выполнить коммерческий расчёт.",
+              ),
       }));
     }
   };
@@ -358,7 +391,7 @@ export function CalculationRequestPanel({
                   <td className="px-3 py-2 text-slate-700">
                     {request.createdBy
                       ? formatPersonName(request.createdBy)
-                      : '—'}
+                      : "—"}
                   </td>
                   <td className="px-3 py-2 text-slate-700">{groups.length}</td>
                   <td className="px-3 py-2 text-right">
@@ -375,11 +408,11 @@ export function CalculationRequestPanel({
                         <HeadConvertControls
                           requestId={request.id}
                           suppliers={suppliersQuery.data ?? []}
-                          supplierId={convertSupplierIds[request.id] ?? ''}
+                          supplierId={convertSupplierIds[request.id] ?? ""}
                           error={
                             convertErrors[request.id] ||
                             (suppliersQuery.isError
-                              ? 'Не удалось загрузить поставщиков.'
+                              ? "Не удалось загрузить поставщиков."
                               : undefined)
                           }
                           pending={convertRequest.isPending}
@@ -387,6 +420,7 @@ export function CalculationRequestPanel({
                             setConvertSupplier(request.id, supplierId)
                           }
                           onConvert={() => void onConvert(request.id)}
+                          supplierRequired
                         />
                       ) : null}
                     </div>
@@ -408,16 +442,14 @@ export function CalculationRequestPanel({
           {editingRequest ? (
             <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-3">
               <div>
-                Клиент: {editingRequest.client?.name ?? clientId ?? '—'}
+                Клиент: {editingRequest.client?.name ?? clientId ?? "—"}
               </div>
-              <div>Лид: {editingRequest.lead?.title ?? leadId ?? '—'}</div>
+              <div>Лид: {editingRequest.lead?.title ?? leadId ?? "—"}</div>
               <div>
-                Автор:{' '}
+                Автор:{" "}
                 {editingRequest.createdBy
-                  ? formatPersonName(
-                      editingRequest.createdBy,
-                    )
-                  : '—'}
+                  ? formatPersonName(editingRequest.createdBy)
+                  : "—"}
               </div>
             </div>
           ) : null}
@@ -428,14 +460,20 @@ export function CalculationRequestPanel({
             catalogs={catalogs}
             catalogError={catalogError}
             readOnly={readOnly}
-            canSubmitToHead={canCreate && !readOnly}
+            canEditSupplier={headReviewEditable}
+            saveLabel={headReviewEditable ? "Сохранить изменения" : undefined}
+            canSubmitToHead={canCreate && !readOnly && !headReviewEditable}
             pending={createRequest.isPending || updateRequest.isPending}
             submitPending={submitRequest.isPending}
             onSaveDraft={
-              canCreate && !readOnly ? () => void onSaveDraft() : undefined
+              canCreate && (!readOnly || headReviewEditable)
+                ? () => void onSaveDraft()
+                : undefined
             }
             onSubmitToHead={
-              canCreate && !readOnly ? () => void onSubmitToHead() : undefined
+              canCreate && !readOnly && !headReviewEditable
+                ? () => void onSubmitToHead()
+                : undefined
             }
           />
           {readOnly && canConvert ? (
@@ -444,17 +482,17 @@ export function CalculationRequestPanel({
                 Примечание запроса доступно только для просмотра. Коммерческие
                 условия задаются в КП после создания черновика.
               </p>
-              {editingId !== 'new' &&
+              {editingId !== "new" &&
               editingRequest &&
               canConvertRequestToQuote(editingRequest) ? (
                 <HeadConvertControls
                   requestId={editingId}
                   suppliers={suppliersQuery.data ?? []}
-                  supplierId={convertSupplierIds[editingId] ?? ''}
+                  supplierId={convertSupplierIds[editingId] ?? ""}
                   error={
                     convertErrors[editingId] ||
                     (suppliersQuery.isError
-                      ? 'Не удалось загрузить поставщиков.'
+                      ? "Не удалось загрузить поставщиков."
                       : undefined)
                   }
                   pending={convertRequest.isPending}
@@ -462,6 +500,7 @@ export function CalculationRequestPanel({
                     setConvertSupplier(editingId, supplierId)
                   }
                   onConvert={() => void onConvert(editingId)}
+                  supplierRequired
                 />
               ) : null}
             </div>
