@@ -47,7 +47,7 @@ describe('HplApplicationField', () => {
     render(<ApplicationHarness onChange={onChange} />);
 
     await userEvent.selectOptions(
-      screen.getByLabelText('Тип HPL'),
+      screen.getByLabelText('Применение / тип HPL'),
       'EXTERIOR_WITH_UV',
     );
 

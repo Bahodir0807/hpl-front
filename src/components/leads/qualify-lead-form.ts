@@ -4,14 +4,13 @@ import type {
   UpsertLeadQualificationPayload,
 } from '@/hooks/use-leads';
 import {
-  CANONICAL_HPL_APPLICATIONS,
   buildSizePayload,
-  thicknessValidationMessage,
   toCanonicalHplApplication,
   toDecimalNumber,
   type HplApplication,
   type SizeMode,
 } from '@/lib/hpl-domain';
+import { dateInputToIso } from '@/lib/format';
 import { optionalPhoneSchema } from '@/lib/validations/phone';
 
 const optionalUuid = z
@@ -30,12 +29,8 @@ const optionalEmail = z
     message: 'Некорректный email',
   });
 
-const requiredAreaSchema = z.preprocess((value) => {
-  if (value === '' || value === null || value === undefined) {
-    return undefined;
-  }
-  return value;
-}, z.coerce.number().positive('Укажите площадь больше 0.'));
+export const TRI_STATE_SELECTIONS = ['yes', 'no', 'unknown'] as const;
+export type TriStateSelection = (typeof TRI_STATE_SELECTIONS)[number];
 
 export const qualifyLeadSchema = z
   .object({
@@ -45,6 +40,9 @@ export const qualifyLeadSchema = z
     }),
     projectObjectId: optionalUuid,
     newObjectName: z.string().trim().optional(),
+    newObjectAddress: z.string().trim().optional(),
+    objectStage: z.string().trim().max(255).optional(),
+    objectExpectedDate: z.string().trim().optional(),
     contactMode: z.enum(['EXISTING', 'NEW'], {
       message: 'Выберите существующий или новый контакт',
     }),
@@ -58,19 +56,11 @@ export const qualifyLeadSchema = z
       .string()
       .trim()
       .min(1, 'Укажите ЛПР / лицо, принимающее решение'),
-    application: z.enum(CANONICAL_HPL_APPLICATIONS),
-    panelTypeId: z.string().trim().optional(),
-    thicknessMm: z.union([z.string(), z.number()]),
-    sizeMode: z.enum(['STANDARD', 'CUSTOM']),
-    panelSizeId: z.string().trim().optional(),
-    customWidthMm: z.union([z.string(), z.number()]).optional(),
-    customHeightMm: z.union([z.string(), z.number()]).optional(),
-    colorCode: z.string().trim().min(1, 'Укажите цвет'),
-    colorName: z.string().trim().optional(),
-    requiredAreaM2: requiredAreaSchema,
     installationRequired: z.enum(['yes', 'no'], {
       message: 'Укажите монтаж',
     }),
+    ventFacadeExists: z.enum(TRI_STATE_SELECTIONS),
+    ventFacadeKitRequired: z.enum(TRI_STATE_SELECTIONS),
     urgent: z.boolean(),
     willingToWait: z.boolean(),
   })
@@ -107,49 +97,33 @@ export const qualifyLeadSchema = z
       });
     }
 
-    const thicknessError = thicknessValidationMessage(
-      value.application,
-      value.thicknessMm,
-    );
-    if (thicknessError) {
+    if (value.urgent && value.willingToWait) {
       ctx.addIssue({
         code: 'custom',
-        path: ['thicknessMm'],
-        message: thicknessError,
-      });
-    }
-
-    if (value.sizeMode === 'STANDARD') {
-      if (!z.string().uuid().safeParse(value.panelSizeId).success) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['panelSizeId'],
-          message: 'Выберите стандартный размер',
-        });
-      }
-      return;
-    }
-
-    const width = toDecimalNumber(value.customWidthMm);
-    const height = toDecimalNumber(value.customHeightMm);
-    if (width === null || width <= 0) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['customWidthMm'],
-        message: 'Укажите ширину больше 0',
-      });
-    }
-    if (height === null || height <= 0) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['customHeightMm'],
-        message: 'Укажите высоту больше 0',
+        path: ['willingToWait'],
+        message: 'Нельзя одновременно выбрать «Срочно» и «Готов ждать»',
       });
     }
   });
 
 export type QualifyLeadFormInput = z.input<typeof qualifyLeadSchema>;
 export type QualifyLeadFormValues = z.output<typeof qualifyLeadSchema>;
+
+export type QualificationItemPayload = NonNullable<
+  UpsertLeadQualificationPayload['items']
+>[number];
+
+export type QualificationItemPayloadInput = {
+  application: HplApplication;
+  thicknessMm?: string | number | null;
+  sizeMode: SizeMode;
+  panelSizeId?: string | null;
+  customWidthMm?: string | number | null;
+  customHeightMm?: string | number | null;
+  colorCode?: string | null;
+  colorName?: string | null;
+  requiredAreaM2: string | number;
+};
 
 export const MANAGER_STAGE1_FORBIDDEN_FIELDS = [
   'estimatedAmount',
@@ -164,46 +138,96 @@ export const MANAGER_STAGE1_FORBIDDEN_FIELDS = [
   'discount',
 ] as const;
 
+function optionalText(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
+
+/** Accepts a customer-entered decimal (including a Russian comma) and emits a safe m² number. */
+export function normalizeQualificationAreaM2(
+  value: string | number | null | undefined,
+): number | null {
+  const raw = typeof value === 'number' ? String(value) : value?.trim();
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw.replace(',', '.');
+  if (!/^\d+(?:\.\d{1,4})?$/.test(normalized)) {
+    return null;
+  }
+
+  const area = Number(normalized);
+  if (!Number.isFinite(area) || area <= 0) {
+    return null;
+  }
+
+  return Number(area.toFixed(4));
+}
+
+export function triStateSelectionToNullableBoolean(
+  value: TriStateSelection,
+): boolean | null {
+  if (value === 'yes') return true;
+  if (value === 'no') return false;
+  return null;
+}
+
+export function nullableBooleanToTriStateSelection(
+  value: boolean | null | undefined,
+): TriStateSelection {
+  if (value === true) return 'yes';
+  if (value === false) return 'no';
+  return 'unknown';
+}
+
 export function buildQualificationPayload(
   values: Pick<
     QualifyLeadFormValues,
-    | 'application'
-    | 'panelTypeId'
-    | 'thicknessMm'
-    | 'sizeMode'
-    | 'panelSizeId'
-    | 'customWidthMm'
-    | 'customHeightMm'
-    | 'colorCode'
-    | 'colorName'
-    | 'requiredAreaM2'
     | 'installationRequired'
+    | 'ventFacadeExists'
+    | 'ventFacadeKitRequired'
     | 'urgent'
     | 'willingToWait'
     | 'needDescription'
   >,
   installationRequired: boolean,
 ): UpsertLeadQualificationPayload {
+  return {
+    installationRequired,
+    ventFacadeExists: triStateSelectionToNullableBoolean(values.ventFacadeExists),
+    ventFacadeKitRequired: triStateSelectionToNullableBoolean(
+      values.ventFacadeKitRequired,
+    ),
+    urgent: values.urgent,
+    // Keep the API logically consistent even if a stale form state slips through.
+    willingToWait: values.urgent ? false : values.willingToWait,
+    customerRequirements: values.needDescription,
+  };
+}
+
+export function buildQualificationItemPayload(
+  values: QualificationItemPayloadInput,
+  panelTypeId: string,
+): QualificationItemPayload {
+  const area = normalizeQualificationAreaM2(values.requiredAreaM2);
+  if (area === null) {
+    throw new Error('Укажите корректную площадь больше 0');
+  }
+
   const thicknessMm = toDecimalNumber(values.thicknessMm);
-  const size = buildSizePayload({
-    sizeMode: values.sizeMode,
-    panelSizeId: values.panelSizeId,
-    customWidthMm: values.customWidthMm,
-    customHeightMm: values.customHeightMm,
-  });
+  const size = buildSizePayload(values);
 
   return {
     application: values.application,
-    panelTypeId: values.panelTypeId,
-    ...(thicknessMm !== null ? { thicknessMm } : {}),
-    ...size,
-    colorCode: values.colorCode,
-    colorName: values.colorName || null,
-    requiredAreaM2: values.requiredAreaM2,
-    installationRequired,
-    urgent: values.urgent,
-    willingToWait: values.willingToWait,
-    customerRequirements: values.needDescription,
+    panelTypeId,
+    thicknessMm: thicknessMm !== null && thicknessMm > 0 ? thicknessMm : null,
+    panelSizeId: size.panelSizeId ?? null,
+    customWidthMm: size.customWidthMm ?? null,
+    customHeightMm: size.customHeightMm ?? null,
+    colorCode: optionalText(values.colorCode) ?? null,
+    colorName: optionalText(values.colorName) ?? null,
+    requiredAreaM2: area,
   };
 }
 
@@ -213,31 +237,35 @@ export function buildQualifyLeadPayload(input: {
   contactId?: string;
   projectObjectId: string;
   values: QualifyLeadFormValues;
-  panelTypeId: string;
   installationRequired: boolean;
+  items: QualificationItemPayload[];
 }): QualifyLeadPayload {
   return {
     id: input.leadId,
     clientId: input.clientId,
     ...(input.contactId ? { contactId: input.contactId } : {}),
     projectObjectId: input.projectObjectId,
+    objectStage: optionalText(input.values.objectStage) ?? null,
+    objectExpectedDate:
+      dateInputToIso(input.values.objectExpectedDate ?? '') ?? null,
     needDescription: input.values.needDescription,
     decisionMakerContact: input.values.decisionMakerContact,
-    qualification: buildQualificationPayload(
-      { ...input.values, panelTypeId: input.panelTypeId },
-      input.installationRequired,
-    ),
+    qualification: {
+      ...buildQualificationPayload(input.values, input.installationRequired),
+      // An explicit empty array is meaningful: it clears legacy scalar HPL data.
+      items: input.items,
+    },
   };
 }
 
 export function defaultApplicationFromQualification(
   application?: string | null,
   panelTypeCode?: string | null,
-): HplApplication {
+): HplApplication | undefined {
   return (
     toCanonicalHplApplication(application) ??
     toCanonicalHplApplication(panelTypeCode) ??
-    'INTERIOR'
+    undefined
   );
 }
 
@@ -255,10 +283,14 @@ export function defaultSizeModeFromQualification(qualification?: {
   return 'STANDARD';
 }
 
-export function defaultObjectMode(projectObjectId?: string | null): 'EXISTING' | 'NEW' {
-  return projectObjectId ? 'EXISTING' : 'EXISTING';
+export function defaultObjectMode(
+  _projectObjectId?: string | null,
+): 'EXISTING' | 'NEW' {
+  return 'EXISTING';
 }
 
-export function defaultContactMode(contactId?: string | null): 'EXISTING' | 'NEW' {
-  return contactId ? 'EXISTING' : 'EXISTING';
+export function defaultContactMode(
+  _contactId?: string | null,
+): 'EXISTING' | 'NEW' {
+  return 'EXISTING';
 }

@@ -386,49 +386,145 @@ function panelCodeForQualification(
   );
 }
 
+const QUALIFICATION_CONTEXT_TITLE = 'Квалификация клиента';
+const SAVED_CALCULATION_ACTION_LABEL = 'Новый расчёт';
+
 function QualificationContext({
   qualification,
+  projectObject,
+  customerNeed,
 }: {
   qualification?: LeadQualification | null;
+  projectObject?: Lead['projectObject'];
+  customerNeed?: string | null;
 }) {
+  const items = qualification?.items;
+  const showLegacyScalars = items === undefined;
+
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <Field
-        label="Тип HPL"
-        value={hplApplicationLabel(qualification?.application)}
-      />
-      <Field
-        label="Тип панели"
-        value={panelTypeLabel(qualification?.panelType)}
-      />
-      <Field
-        label="Размер"
-        value={formatQualificationSize(qualification)}
-      />
-      <Field
-        label="Толщина"
-        value={formatThicknessMm(qualification?.thicknessMm)}
-      />
-      <Field
-        label="Цвет"
-        value={formatColorLabel(qualification)}
-      />
-      <Field
-        label="Площадь"
-        value={formatAreaM2(qualification?.requiredAreaM2)}
-      />
-      <Field
-        label="Монтаж"
-        value={installationLabel(qualification?.installationRequired)}
-      />
-      <div className="md:col-span-2">
+    <div className="space-y-4">
+      {items?.length ? (
+        <div className="space-y-3">
+          <div className="text-sm font-semibold text-slate-900">
+            HPL-позиции ({items.length})
+          </div>
+          {items.map((item, index) => (
+            <div
+              key={item.id}
+              className="rounded border border-slate-200 bg-slate-50 p-3"
+            >
+              <div className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                Позиция {index + 1}
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Field
+                  label="Применение / тип HPL"
+                  value={hplApplicationLabel(item.application)}
+                />
+                <Field label="Размер" value={formatQualificationSize(item)} />
+                <Field
+                  label="Толщина"
+                  value={formatThicknessMm(item.thicknessMm)}
+                />
+                <Field label="Цвет" value={formatColorLabel(item)} />
+                <Field
+                  label="Площадь"
+                  value={formatAreaM2(item.requiredAreaM2)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : items ? (
+        <p className="text-sm text-slate-500">HPL-позиции не добавлены.</p>
+      ) : null}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {showLegacyScalars ? (
+          <>
+            <Field
+              label="Применение / тип HPL"
+              value={hplApplicationLabel(qualification?.application)}
+            />
+            <Field
+              label="Размер"
+              value={formatQualificationSize(qualification)}
+            />
+            <Field
+              label="Толщина"
+              value={formatThicknessMm(qualification?.thicknessMm)}
+            />
+            <Field
+              label="Цвет"
+              value={formatColorLabel(qualification)}
+            />
+            <Field
+              label="Площадь"
+              value={formatAreaM2(qualification?.requiredAreaM2)}
+            />
+          </>
+        ) : null}
         <Field
-          label="Потребность"
-          value={qualification?.customerRequirements}
+          label="Дедлайн клиента"
+          value={
+            projectObject?.expectedDate
+              ? formatDate(projectObject.expectedDate)
+              : undefined
+          }
         />
+        <Field label="Стадия объекта" value={projectObject?.stage} />
+        <Field
+          label="Срочность"
+          value={urgencyLabel(
+            qualification?.urgent,
+            qualification?.willingToWait,
+          )}
+        />
+        <Field
+          label="Вентфасад уже есть?"
+          value={triStateLabel(qualification?.ventFacadeExists)}
+        />
+        <Field
+          label="Комплектация вентфасада"
+          value={triStateLabel(qualification?.ventFacadeKitRequired)}
+        />
+        <Field
+          label="Монтаж"
+          value={installationLabel(qualification?.installationRequired)}
+        />
+        <div className="md:col-span-2">
+          <Field
+            label="Потребность"
+            value={
+              qualification?.customerRequirements?.trim() || customerNeed
+            }
+          />
+        </div>
       </div>
     </div>
   );
+}
+
+function urgencyLabel(
+  urgent?: boolean | null,
+  willingToWait?: boolean | null,
+): string {
+  if (urgent) {
+    return 'Срочно';
+  }
+  if (willingToWait) {
+    return 'Готов ждать';
+  }
+  return 'Не указано';
+}
+
+function triStateLabel(value?: boolean | null): string {
+  if (value === true) {
+    return 'Да';
+  }
+  if (value === false) {
+    return 'Нет';
+  }
+  return 'Неизвестно';
 }
 
 function installationLabel(value?: boolean | null): string {
@@ -543,14 +639,12 @@ function CommercialQualificationPanel({
   currentSupplierId,
   currentQualityClassId,
   currentTargetDate,
-  managerNote,
 }: {
   leadId: string;
   qualification?: LeadQualification | null;
   currentSupplierId?: string | null;
   currentQualityClassId?: string | null;
   currentTargetDate?: string | null;
-  managerNote?: string | null;
 }) {
   const suppliersQuery = useSuppliers();
   const confirmCommercial = useConfirmLeadCommercialQualification();
@@ -585,27 +679,13 @@ function CommercialQualificationPanel({
     Boolean(supplierId && qualityClassId) && !confirmCommercial.isPending;
 
   return (
-    <div className="mt-5 border-t border-slate-200 pt-4">
+    <div className="mt-6 border-t border-slate-200 pt-4">
       <h4 className="text-sm font-semibold text-slate-900">
-        Контекст Stage 1
-      </h4>
-      <p className="mt-1 text-xs text-slate-500">
-        Только для просмотра. Коммерческий выбор не меняет потребность клиента.
-      </p>
-      <div className="mt-3">
-        <QualificationContext qualification={qualification} />
-      </div>
-      <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3">
-        <div className="text-xs font-medium uppercase text-amber-800">
-          {MANAGER_CUSTOMER_NOTE_HEAD_LABEL}
-        </div>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-slate-900">
-          {managerNote?.trim() || '—'}
-        </p>
-      </div>
-      <h4 className="mt-5 text-sm font-semibold text-slate-900">
         Коммерческая квалификация
       </h4>
+      <p className="mt-1 text-xs text-slate-500">
+        Коммерческий выбор не меняет потребность клиента.
+      </p>
       <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
         <SearchCombobox
           value={supplierId}
@@ -887,11 +967,6 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
             >
               Позвонить
             </Button>
-            {canRunCalculation ? (
-              <Button type="button" onClick={() => setIsCalculatorOpen(true)}>
-                Новый расчёт
-              </Button>
-            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -953,67 +1028,83 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                   value={resolveEntityName(lead.projectObject, lead.projectObjectId)}
                 />
                 <Field
+                  label="Адрес объекта"
+                  value={lead.projectObject?.address}
+                />
+                <Field
                   label="Сделка"
                   value={resolveEntityName(lead.deal, lead.dealId)}
                 />
                 <Field label="Оценка суммы" value={formatMoney(lead.estimatedAmount)} />
-                <div className="md:col-span-2">
-                  <Field label="Потребность" value={lead.needDescription} />
-                </div>
               </div>
               <div className="mt-6 border-t border-slate-200 pt-4">
                 <h4 className="text-sm font-semibold text-slate-900">
-                  Потребность HPL
+                  {QUALIFICATION_CONTEXT_TITLE}
                 </h4>
                 <div className="mt-4">
-                  <QualificationContext qualification={qualification} />
+                  <QualificationContext
+                    qualification={qualification}
+                    projectObject={lead.projectObject}
+                    customerNeed={lead.needDescription}
+                  />
                 </div>
               </div>
               <ManagerCustomerNotePanel
                 lead={lead}
                 canWrite={canWriteManagerNote}
               />
-              <div className="mt-6 border-t border-slate-200 pt-4">
-                <h4 className="text-sm font-semibold text-slate-900">
-                  Коммерческие данные
-                </h4>
-                <p className="mt-1 text-xs text-slate-500">
-                  Определяется руководителем на Stage 2
-                </p>
-                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field
-                    label="Поставщик"
-                    value={
-                      commercialQualification
-                        ? formatSupplierName(
-                            commercialQualification.supplier?.code,
-                            commercialQualification.supplier?.name,
-                            '—',
-                          )
-                        : '—'
-                    }
-                  />
-                  <Field
-                    label="Линейка"
-                    value={
-                      commercialQualification?.qualityClass
-                        ? qualityLineLabel(commercialQualification.qualityClass)
-                        : '—'
-                    }
-                  />
-                  <Field
-                    label="Срок реализации"
-                    value={
-                      lead.targetDate || commercialQualification?.targetDate
-                        ? formatDate(
-                            lead.targetDate ??
-                              commercialQualification?.targetDate,
-                          )
-                        : '—'
-                    }
-                  />
+              {commercialQualification ? (
+                <div className="mt-6 border-t border-slate-200 pt-4">
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    Коммерческие данные
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Подтверждено руководителем на Stage 2
+                  </p>
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <Field
+                      label="Поставщик"
+                      value={formatSupplierName(
+                        commercialQualification.supplier?.code,
+                        commercialQualification.supplier?.name,
+                        '—',
+                      )}
+                    />
+                    <Field
+                      label="Линейка"
+                      value={
+                        commercialQualification.qualityClass
+                          ? qualityLineLabel(commercialQualification.qualityClass)
+                          : '—'
+                      }
+                    />
+                    <Field
+                      label="Срок реализации"
+                      value={
+                        lead.targetDate || commercialQualification.targetDate
+                          ? formatDate(
+                              lead.targetDate ??
+                                commercialQualification.targetDate,
+                            )
+                          : '—'
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : null}
+              {canCommercialQualify && lead.status === 'QUALIFIED' ? (
+                <CommercialQualificationPanel
+                  leadId={lead.id}
+                  qualification={qualification}
+                  currentSupplierId={commercialQualification?.supplierId}
+                  currentQualityClassId={
+                    commercialQualification?.qualityClassId
+                  }
+                  currentTargetDate={
+                    lead.targetDate ?? commercialQualification?.targetDate
+                  }
+                />
+              ) : null}
 
               {canAssign ? (
                 <div className="mt-5 border-t border-slate-200 pt-4">
@@ -1074,10 +1165,6 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 <Field label="Создан" value={formatDateTime(lead.createdAt)} />
                 <Field label="Обновлён" value={formatDateTime(lead.updatedAt)} />
                 <Field label="ЛПР" value={lead.decisionMakerContact} />
-                <Field
-                  label="Монтаж"
-                  value={installationLabel(qualification?.installationRequired)}
-                />
                 <Field label="Причина неквалификации" value={lead.unqualificationReason} />
                 {lead.status === 'LOST' || lead.lostReasonCode ? (
                   <>
@@ -1118,20 +1205,6 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 >
                   Не квалифицирован
                 </Button>
-                {canCommercialQualify && lead.status === 'QUALIFIED' ? (
-                  <CommercialQualificationPanel
-                    leadId={lead.id}
-                    qualification={qualification}
-                    currentSupplierId={commercialQualification?.supplierId}
-                    currentQualityClassId={
-                      commercialQualification?.qualityClassId
-                    }
-                    currentTargetDate={
-                      lead.targetDate ?? commercialQualification?.targetDate
-                    }
-                    managerNote={lead.managerCommercialNote}
-                  />
-                ) : null}
               </div>
             </section>
           </div>
@@ -1205,7 +1278,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               <h3 className="text-base font-semibold text-slate-950">Сохранённые расчёты</h3>
               {canRunCalculation ? (
                 <Button type="button" size="sm" onClick={() => setIsCalculatorOpen(true)}>
-                  Новый расчёт
+                  {SAVED_CALCULATION_ACTION_LABEL}
                 </Button>
               ) : null}
             </div>

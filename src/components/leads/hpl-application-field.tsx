@@ -11,6 +11,8 @@ type HplApplicationFieldProps = {
   onChange: (value: HplApplication) => void;
   error?: string;
   name?: string;
+  label?: string;
+  disabled?: boolean;
 };
 
 export function HplApplicationField({
@@ -18,20 +20,23 @@ export function HplApplicationField({
   onChange,
   error,
   name = 'application',
+  label = 'Применение / тип HPL',
+  disabled = false,
 }: HplApplicationFieldProps) {
   const errorId = `${name}-error`;
 
   return (
     <label>
       <span className="mb-1 block text-sm font-medium text-slate-700">
-        Тип HPL
+        {label}
       </span>
       <select
         name={name}
-        aria-label="Тип HPL"
+        aria-label={label}
         aria-describedby={error ? errorId : undefined}
         value={value ?? ''}
         onChange={(event) => onChange(event.target.value as HplApplication)}
+        disabled={disabled}
         className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
       >
         <option value="" disabled>

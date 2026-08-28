@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Lead } from "@/hooks/use-leads";
@@ -456,6 +456,9 @@ describe("LeadWorkspace commercial calculation authority", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Расчёты" }));
     expect(
+      screen.queryByRole("button", { name: "Новый расчёт" }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.getByRole("button", { name: "Создать запрос расчёта" }),
     ).toBeInTheDocument();
     expect(
@@ -487,9 +490,12 @@ describe("LeadWorkspace commercial calculation authority", () => {
     expect(
       screen.queryByText("Коммерческий расчёт ожидает руководителя."),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Новый расчёт" }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Расчёты" }));
     await userEvent.click(screen.getByRole("button", { name: "Новый расчёт" }));
     expect(screen.getByText("Калькулятор HPL-панелей")).toBeInTheDocument();
-    expect(screen.getByText("Контекст Stage 1")).toBeInTheDocument();
   });
 
   it("does not expose commercial calculation to DIRECTOR without calculations:create", async () => {
@@ -518,6 +524,7 @@ describe("LeadWorkspace commercial calculation authority", () => {
 
     render(<LeadWorkspace leadId="lead-1" />);
 
+    await userEvent.click(screen.getByRole("button", { name: "Расчёты" }));
     await userEvent.click(screen.getByRole("button", { name: "Новый расчёт" }));
     expect(screen.getByText("Калькулятор HPL-панелей")).toBeInTheDocument();
   });
@@ -777,10 +784,12 @@ describe("LeadWorkspace Stage 2 commercial separation", () => {
 
     render(<LeadWorkspace leadId="lead-1" />);
 
-    expect(screen.getAllByText("Мебельный").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("2.9 мм").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Кухонные фасады").length).toBeGreaterThan(0);
-    expect(screen.getByText("Контекст Stage 1")).toBeInTheDocument();
+    expect(screen.getAllByText("Мебельный").length).toBe(1);
+    expect(screen.getAllByText("2.9 мм").length).toBe(1);
+    expect(screen.getAllByText("Кухонные фасады").length).toBe(1);
+    expect(screen.getByText("Квалификация клиента")).toBeInTheDocument();
+    expect(screen.queryByText("Контекст Stage 1")).not.toBeInTheDocument();
+    expect(screen.queryByText("Потребность HPL")).not.toBeInTheDocument();
   });
 
   it.each(["Вуя", "Тианран", "Полибет"] as const)(
@@ -1069,9 +1078,9 @@ describe("LeadWorkspace Manager customer note handoff", () => {
     render(<LeadWorkspace leadId="lead-1" />);
 
     expect(
-      screen.getAllByText("Примечание менеджера / пожелания клиента").length,
-    ).toBeGreaterThan(0);
-    expect(screen.getAllByText("Нужен CIP Tashkent").length).toBeGreaterThan(0);
+      screen.getByText("Примечание менеджера / пожелания клиента"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Нужен CIP Tashkent")).toBeInTheDocument();
     expect(
       screen.queryByLabelText("Примечание / пожелания клиента"),
     ).not.toBeInTheDocument();
@@ -1122,5 +1131,216 @@ describe("LeadWorkspace Manager customer note handoff", () => {
     expect(
       screen.queryByRole("button", { name: "Отправить руководителю" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("LeadWorkspace Info tab duplicate cleanup", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows customer need once in qualification context", () => {
+    const need = "HPL панели для фасада школы";
+    setupWorkspace({
+      permissions: MANAGER_PERMISSIONS,
+      roles: ["MANAGER"],
+      currentUserId: "manager-1",
+      leadData: lead({
+        needDescription: need,
+        qualification: furnitureQualification({
+          customerRequirements: need,
+        }),
+      }),
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+
+    expect(screen.getAllByText(need)).toHaveLength(1);
+    expect(screen.getAllByText("Потребность", { selector: ".uppercase" })).toHaveLength(
+      1,
+    );
+    expect(screen.queryByText("Потребность HPL")).not.toBeInTheDocument();
+  });
+
+  it("renders Stage 1 context once", () => {
+    setupWorkspace({
+      permissions: HEAD_PERMISSIONS,
+      roles: ["HEAD"],
+      currentUserId: "head-1",
+      leadData: lead({
+        qualification: furnitureQualification(),
+      }),
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+
+    expect(screen.getAllByText("Квалификация клиента")).toHaveLength(1);
+    expect(screen.queryByText("Контекст Stage 1")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Дедлайн клиента")).toHaveLength(1);
+    expect(screen.getAllByText("Стадия объекта")).toHaveLength(1);
+    expect(screen.getAllByText("Вентфасад уже есть?")).toHaveLength(1);
+    expect(screen.getAllByText("Комплектация вентфасада")).toHaveLength(1);
+  });
+
+  it("does not duplicate installation in Status", () => {
+    setupWorkspace({
+      permissions: MANAGER_PERMISSIONS,
+      roles: ["MANAGER"],
+      currentUserId: "manager-1",
+      leadData: lead({
+        qualification: furnitureQualification({ installationRequired: true }),
+      }),
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+
+    const qualification = screen.getByText("Квалификация клиента").parentElement;
+    expect(qualification).toHaveTextContent("Монтаж");
+    expect(qualification).toHaveTextContent("Да");
+
+    const status = screen.getByRole("heading", { name: "Статус" }).parentElement;
+    expect(status).not.toBeNull();
+    expect(within(status as HTMLElement).queryByText("Монтаж")).not.toBeInTheDocument();
+  });
+
+  it("hides empty commercial summary while HEAD still sees the editable form", () => {
+    setupWorkspace({
+      permissions: HEAD_PERMISSIONS,
+      roles: ["HEAD"],
+      currentUserId: "head-1",
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+
+    expect(screen.queryByText("Коммерческие данные")).not.toBeInTheDocument();
+    expect(screen.getByText("Коммерческая квалификация")).toBeInTheDocument();
+    expect(screen.getByLabelText("Срок реализации")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Подтвердить" })).toBeInTheDocument();
+  });
+
+  it("keeps saved commercial summary for MANAGER without the editable form", () => {
+    const targetDate = "2026-09-15T00:00:00.000Z";
+    setupWorkspace({
+      permissions: MANAGER_PERMISSIONS,
+      roles: ["MANAGER"],
+      currentUserId: "manager-1",
+      leadData: lead({ targetDate }),
+      commercialQualification: {
+        id: "cq-1",
+        leadId: "lead-1",
+        supplierId: "sup-wuya",
+        qualityClassId: "q-economy",
+        mappingId: "map-1",
+        status: "CONFIRMED",
+        targetDate,
+        confirmedById: "head-1",
+        confirmedAt: "2026-08-20T10:00:00.000Z",
+        supplier: { id: "sup-wuya", code: "wuya", name: "Wuya" },
+        qualityClass: { id: "q-economy", code: "economy", nameRu: "Economy" },
+      },
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+
+    const commercialSection = screen.getByText("Коммерческие данные").parentElement;
+    expect(commercialSection).toHaveTextContent("Вуя");
+    expect(commercialSection).toHaveTextContent("Эконом");
+    expect(screen.queryByText("Коммерческая квалификация")).not.toBeInTheDocument();
+  });
+
+  it("keeps the HEAD commercial form after confirmation alongside the saved summary", () => {
+    const targetDate = "2026-09-15T00:00:00.000Z";
+    setupWorkspace({
+      permissions: HEAD_PERMISSIONS,
+      roles: ["HEAD"],
+      currentUserId: "head-1",
+      leadData: lead({ targetDate }),
+      commercialQualification: {
+        id: "cq-1",
+        leadId: "lead-1",
+        supplierId: "sup-wuya",
+        qualityClassId: "q-economy",
+        mappingId: "map-1",
+        status: "CONFIRMED",
+        targetDate,
+        confirmedById: "head-1",
+        confirmedAt: "2026-08-20T10:00:00.000Z",
+        supplier: { id: "sup-wuya", code: "wuya", name: "Wuya" },
+        qualityClass: { id: "q-economy", code: "economy", nameRu: "Economy" },
+      },
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+
+    expect(screen.getByText("Коммерческие данные")).toBeInTheDocument();
+    expect(screen.getByText("Коммерческая квалификация")).toBeInTheDocument();
+    expect(screen.getByLabelText("Срок реализации")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Подтвердить" })).toBeInTheDocument();
+  });
+});
+
+describe("LeadWorkspace calculation action placement", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("keeps request and saved-calculation actions on the Calculations tab only", async () => {
+    setupWorkspace({
+      permissions: HEAD_PERMISSIONS,
+      roles: ["HEAD"],
+      currentUserId: "head-1",
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+
+    expect(
+      screen.queryByRole("button", { name: "Новый расчёт" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Создать запрос расчёта" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Расчёты" }));
+
+    expect(
+      screen.getByRole("button", { name: "Создать запрос расчёта" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Новый расчёт" })).toBeInTheDocument();
+    expect(screen.getByText("Сохранённые расчёты")).toBeInTheDocument();
+  });
+
+  it("does not show saved-calculation action to MANAGER", async () => {
+    setupWorkspace({
+      permissions: MANAGER_PERMISSIONS,
+      roles: ["MANAGER"],
+      currentUserId: "manager-1",
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+    await userEvent.click(screen.getByRole("button", { name: "Расчёты" }));
+
+    expect(
+      screen.getByRole("button", { name: "Создать запрос расчёта" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Новый расчёт" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps Quote tab copy unchanged", async () => {
+    setupWorkspace({
+      permissions: MANAGER_PERMISSIONS,
+      roles: ["MANAGER"],
+      currentUserId: "manager-1",
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+    await userEvent.click(screen.getByRole("button", { name: "КП" }));
+
+    expect(screen.getByText("Коммерческие предложения")).toBeInTheDocument();
+    expect(
+      screen.getByText("История предложений по этому лиду"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("КП пока нет.")).toBeInTheDocument();
   });
 });

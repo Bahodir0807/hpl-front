@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { installationSelectionToBoolean } from '@/components/leads/installation-required-field';
-import { buildQualificationPayload } from '@/components/leads/qualify-lead-form';
+import {
+  buildQualificationItemPayload,
+  buildQualificationPayload,
+} from '@/components/leads/qualify-lead-form';
 import {
   buildCalculationSizeFields,
   prefillCalculatorFromQualification,
@@ -68,10 +71,20 @@ describe('calculator custom size fields', () => {
 
 describe('Stage 1 qualification payload', () => {
   it('emits EXTERIOR_WITH_UV and custom dimensions without panelSizeId', () => {
-    const payload = buildQualificationPayload(
+    const qualification = buildQualificationPayload(
+      {
+        installationRequired: 'yes',
+        ventFacadeExists: 'unknown',
+        ventFacadeKitRequired: 'unknown',
+        urgent: false,
+        willingToWait: true,
+        needDescription: 'Фасад здания',
+      },
+      installationSelectionToBoolean('yes'),
+    );
+    const item = buildQualificationItemPayload(
       {
         application: 'EXTERIOR_WITH_UV',
-        panelTypeId: '11111111-1111-1111-1111-111111111111',
         thicknessMm: 8,
         sizeMode: 'CUSTOM',
         panelSizeId: '22222222-2222-2222-2222-222222222222',
@@ -80,18 +93,14 @@ describe('Stage 1 qualification payload', () => {
         colorCode: 'RAL-9005',
         colorName: 'Чёрный',
         requiredAreaM2: 20,
-        installationRequired: 'yes',
-        urgent: false,
-        willingToWait: true,
-        needDescription: 'Фасад здания',
       },
-      installationSelectionToBoolean('yes'),
+      '11111111-1111-1111-1111-111111111111',
     );
 
-    expect(payload.application).toBe('EXTERIOR_WITH_UV');
-    expect(payload.customWidthMm).toBe(1230);
-    expect(payload.customHeightMm).toBe(2460);
-    expect(payload).not.toHaveProperty('panelSizeId');
-    expect(payload).not.toHaveProperty('stockOnly');
+    expect(qualification).not.toHaveProperty('stockOnly');
+    expect(item.application).toBe('EXTERIOR_WITH_UV');
+    expect(item.customWidthMm).toBe(1230);
+    expect(item.customHeightMm).toBe(2460);
+    expect(item.panelSizeId).toBeNull();
   });
 });

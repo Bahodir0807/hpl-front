@@ -104,6 +104,7 @@ export type CalculationItem = {
   customWidthMm?: number | string | null;
   customHeightMm?: number | string | null;
   colorId?: string | null;
+  colorCode?: string | null;
   colorName?: string | null;
   requiredAreaM2?: number | string;
   sheetsCount?: number | string | null;
@@ -227,6 +228,8 @@ export type LeadQualification = {
   colorName?: string | null;
   requiredAreaM2?: number | string | null;
   installationRequired?: boolean | null;
+  ventFacadeExists?: boolean | null;
+  ventFacadeKitRequired?: boolean | null;
   stockOnly?: boolean | null;
   urgent?: boolean | null;
   willingToWait?: boolean | null;
@@ -239,6 +242,23 @@ export type LeadQualification = {
     heightMm?: number;
     areaM2?: number | string | null;
   } | null;
+  items?: LeadQualificationItem[];
+};
+
+export type LeadQualificationItem = {
+  id: string;
+  sortOrder?: number;
+  application?: StoredHplApplication | string | null;
+  panelTypeId?: string | null;
+  thicknessMm?: number | string | null;
+  panelSizeId?: string | null;
+  customWidthMm?: number | string | null;
+  customHeightMm?: number | string | null;
+  colorCode?: string | null;
+  colorName?: string | null;
+  requiredAreaM2?: number | string | null;
+  panelType?: LeadQualification['panelType'];
+  panelSize?: LeadQualification['panelSize'];
 };
 
 export type LeadCommercialQualification = {
@@ -491,6 +511,7 @@ export type LeadWorkspace = {
   quotes?: Quote[];
   qualification?: LeadQualification | null;
   requirementPrefill?: Partial<LeadQualification> | null;
+  requirementPrefills?: Array<Partial<LeadQualification>>;
   commercialQualification?: LeadCommercialQualification | null;
   commercialPrefill?: {
     supplierId: string;

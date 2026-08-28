@@ -8,6 +8,7 @@ import type {
   HplApplication,
   LeadCommercialQualification,
   LeadQualification,
+  LeadQualificationItem,
 } from '../types/hpl';
 
 export type LeadStatus =
@@ -37,6 +38,9 @@ export type LeadClient = {
 export type LeadProjectObject = {
   id: string;
   name: string;
+  address?: string | null;
+  stage?: string | null;
+  expectedDate?: string | null;
 };
 
 export type LeadContact = {
@@ -132,6 +136,8 @@ export type QualifyLeadPayload = {
   clientId: string;
   contactId?: string;
   projectObjectId: string;
+  objectStage?: string | null;
+  objectExpectedDate?: string | null;
   needDescription: string;
   decisionMakerContact: string;
   qualification?: UpsertLeadQualificationPayload;
@@ -148,9 +154,14 @@ export type UpsertLeadQualificationPayload = {
   colorName?: string | null;
   requiredAreaM2?: number | string | null;
   installationRequired?: boolean | null;
+  ventFacadeExists?: boolean | null;
+  ventFacadeKitRequired?: boolean | null;
   urgent?: boolean | null;
   willingToWait?: boolean | null;
   customerRequirements?: string | null;
+  items?: Array<
+    Partial<Omit<LeadQualificationItem, 'id'>> & { id?: string }
+  >;
 };
 
 export type ConfirmLeadCommercialQualificationPayload = {

@@ -15,6 +15,7 @@ type HplThicknessFieldProps = {
   onChange: (value: string) => void;
   error?: string;
   name?: string;
+  label?: string;
   compact?: boolean;
   disabled?: boolean;
 };
@@ -25,6 +26,7 @@ export function HplThicknessField({
   onChange,
   error,
   name = 'thicknessMm',
+  label = 'Толщина, мм',
   compact = false,
   disabled = false,
 }: HplThicknessFieldProps) {
@@ -38,7 +40,7 @@ export function HplThicknessField({
     <label>
       {compact ? null : (
         <span className="mb-1 block text-sm font-medium text-slate-700">
-          Толщина, мм
+          {label}
         </span>
       )}
       {furniture ? (
@@ -50,7 +52,7 @@ export function HplThicknessField({
           max={FURNITURE_THICKNESS_MAX_MM}
           step={FURNITURE_THICKNESS_STEP}
           disabled={disabled}
-          aria-label="Толщина, мм"
+          aria-label={label}
           aria-describedby={error ? errorId : undefined}
           value={displayValue}
           onChange={(event) => onChange(event.target.value)}
@@ -60,7 +62,7 @@ export function HplThicknessField({
         <select
           name={name}
           disabled={disabled}
-          aria-label="Толщина, мм"
+          aria-label={label}
           aria-describedby={error ? errorId : undefined}
           value={selectedDiscrete != null ? String(selectedDiscrete) : ''}
           onChange={(event) => onChange(event.target.value)}

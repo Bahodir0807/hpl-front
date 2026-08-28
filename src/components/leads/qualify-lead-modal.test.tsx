@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AxiosError } from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -52,7 +52,9 @@ vi.mock('@/hooks/use-clients', () => ({
         {
           id: '22222222-2222-4222-8222-222222222222',
           name: 'Школа №1',
-          stage: 'ACTIVE',
+          address: 'Ташкент',
+          stage: 'Скоро фасад',
+          expectedDate: '2026-11-15T00:00:00.000Z',
         },
       ],
     },
@@ -126,6 +128,9 @@ function lead(overrides: Partial<Lead> = {}): Lead {
     projectObject: {
       id: '22222222-2222-4222-8222-222222222222',
       name: 'Школа №1',
+      address: 'Ташкент',
+      stage: 'Скоро фасад',
+      expectedDate: '2026-11-15T00:00:00.000Z',
     },
     qualification: {
       id: 'qual-1',
@@ -140,10 +145,26 @@ function lead(overrides: Partial<Lead> = {}): Lead {
       installationRequired: true,
       urgent: false,
       willingToWait: true,
+      ventFacadeExists: null,
+      ventFacadeKitRequired: null,
       panelType: { id: 'type-1', code: 'interior', displayNameRu: 'Интерьерный' },
     },
     ...overrides,
   };
+}
+
+function newQualificationLead(): Lead {
+  return lead({
+    qualification: undefined,
+  });
+}
+
+async function fillRequiredManagerFields() {
+  await userEvent.click(
+    within(screen.getByRole('group', { name: 'Монтаж' })).getByRole('radio', {
+      name: 'Да',
+    }),
+  );
 }
 
 describe('QualifyLeadModal MANAGER Stage 1', () => {
@@ -208,11 +229,127 @@ describe('QualifyLeadModal MANAGER Stage 1', () => {
     expect(screen.getByDisplayValue('Главный архитектор')).toBeInTheDocument();
   });
 
-  it('keeps explicit installation Да/Нет', () => {
+  it('keeps explicit installation Да/Нет at qualification level', () => {
     render(<QualifyLeadModal lead={lead()} isOpen onClose={vi.fn()} />);
 
-    expect(screen.getByRole('radio', { name: 'Да' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Нет' })).not.toBeChecked();
+    const installation = screen.getByRole('group', { name: 'Монтаж' });
+    expect(within(installation).getByRole('radio', { name: 'Да' })).toBeChecked();
+    expect(within(installation).getByRole('radio', { name: 'Нет' })).not.toBeChecked();
+  });
+
+  it('opens a new qualification with 0 HPL items and no technical fields', () => {
+    render(<QualifyLeadModal lead={newQualificationLead()} isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText('HPL-позиции пока не добавлены.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Применение / тип HPL')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Толщина/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Площадь позиции/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '+ Добавить HPL-позицию' }),
+    ).toBeInTheDocument();
+  });
+
+  it('adds, duplicates and deletes HPL items including the last one', async () => {
+    render(<QualifyLeadModal lead={newQualificationLead()} isOpen onClose={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить HPL-позицию' }));
+    expect(screen.getByText('HPL-позиция 1')).toBeInTheDocument();
+    expect(screen.queryByText('HPL-позиция 2')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить HPL-позицию' }));
+    expect(screen.getByText('HPL-позиция 2')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Дублировать' })[0]);
+    expect(screen.getByText('HPL-позиция 3')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Удалить' })[2]);
+    expect(screen.queryByText('HPL-позиция 3')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Удалить' })[1]);
+    await userEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+    expect(screen.getByText('HPL-позиции пока не добавлены.')).toBeInTheDocument();
+    expect(screen.queryByText('HPL-позиция 1')).not.toBeInTheDocument();
+  });
+
+  it('submits an explicit empty items array after the last HPL item is deleted', async () => {
+    const onClose = vi.fn();
+    render(
+      <QualifyLeadModal
+        lead={lead({
+          qualification: {
+            ...lead().qualification!,
+            items: [
+              {
+                id: 'item-1',
+                application: 'INTERIOR',
+                panelTypeId: '44444444-4444-4444-8444-444444444444',
+                requiredAreaM2: 24,
+              },
+            ],
+          },
+        })}
+        isOpen
+        onClose={onClose}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Квалифицировать' }));
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    const payload = mutateAsync.mock.calls[0]?.[0] as {
+      qualification: { items: unknown[] };
+    };
+    expect(payload.qualification.items).toEqual([]);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('saves a free-text color without inventing an exact RAL', async () => {
+    render(<QualifyLeadModal lead={newQualificationLead()} isOpen onClose={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить HPL-позицию' }));
+    await userEvent.selectOptions(
+      screen.getByLabelText('Применение / тип HPL'),
+      'INTERIOR',
+    );
+    await userEvent.type(
+      screen.getByLabelText('Желаемый цвет / описание позиции 1'),
+      'тёмно-серый',
+    );
+    await userEvent.type(screen.getByLabelText('Площадь позиции 1'), '12,5');
+    await fillRequiredManagerFields();
+    await userEvent.click(screen.getByRole('button', { name: 'Квалифицировать' }));
+
+    const payload = mutateAsync.mock.calls[0]?.[0] as {
+      qualification: {
+        items: Array<Record<string, unknown>>;
+      };
+    };
+    expect(payload.qualification.items).toHaveLength(1);
+    expect(payload.qualification.items[0]).toMatchObject({
+      application: 'INTERIOR',
+      colorName: 'тёмно-серый',
+      colorCode: null,
+      thicknessMm: null,
+      panelSizeId: null,
+      requiredAreaM2: 12.5,
+    });
+    expect(JSON.stringify(payload)).not.toContain('RAL-');
+  });
+
+  it('makes Срочно and Готов ждать mutually exclusive', async () => {
+    render(<QualifyLeadModal lead={newQualificationLead()} isOpen onClose={vi.fn()} />);
+
+    const urgent = screen.getByRole('checkbox', { name: 'Срочно' });
+    const wait = screen.getByRole('checkbox', { name: 'Готов ждать' });
+
+    await userEvent.click(urgent);
+    expect(urgent).toBeChecked();
+    expect(wait).not.toBeChecked();
+
+    await userEvent.click(wait);
+    expect(wait).toBeChecked();
+    expect(urgent).not.toBeChecked();
   });
 
   it('submits the dedicated Stage 1 endpoint payload without forbidden commercial fields', async () => {
@@ -254,8 +391,8 @@ describe('QualifyLeadModal MANAGER Stage 1', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Новый контакт' }));
-    await userEvent.type(screen.getByLabelText('Имя контакта'), 'Мария');
+    await userEvent.click(screen.getByText('Новый контакт'));
+    await userEvent.type(screen.getByLabelText(/Имя контакта/), 'Мария');
     await userEvent.click(screen.getByRole('button', { name: 'Квалифицировать' }));
 
     expect(apiPost).toHaveBeenCalledWith(
@@ -278,9 +415,9 @@ describe('QualifyLeadModal MANAGER Stage 1', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Новый объект' }));
+    await userEvent.click(screen.getByText('Новый объект'));
     await userEvent.type(
-      screen.getByLabelText('Название нового объекта'),
+      screen.getByLabelText(/Название нового объекта/),
       'Новая школа',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Квалифицировать' }));
@@ -303,7 +440,14 @@ describe('QualifyLeadModal MANAGER Stage 1', () => {
         lead={lead({
           qualification: {
             ...lead().qualification!,
-            requiredAreaM2: 0,
+            items: [
+              {
+                id: 'item-1',
+                application: 'INTERIOR',
+                panelTypeId: '44444444-4444-4444-8444-444444444444',
+                requiredAreaM2: 0,
+              },
+            ],
           },
         })}
         isOpen
@@ -311,12 +455,14 @@ describe('QualifyLeadModal MANAGER Stage 1', () => {
       />,
     );
 
-    const area = screen.getByLabelText(/Площадь, м2/);
-    expect(area).toHaveValue(null);
+    const area = screen.getByLabelText('Площадь позиции 1');
+    await userEvent.clear(area);
     await userEvent.type(area, '0');
     await userEvent.click(screen.getByRole('button', { name: 'Квалифицировать' }));
 
-    expect(screen.getByText('Укажите площадь больше 0.')).toBeInTheDocument();
+    expect(
+      screen.getByText(/площадь должна быть положительным числом/),
+    ).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 

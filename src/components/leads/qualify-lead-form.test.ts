@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { installationSelectionToBoolean } from '@/components/leads/installation-required-field';
 import {
   MANAGER_STAGE1_FORBIDDEN_FIELDS,
-  buildQualificationPayload,
+  buildQualificationItemPayload,
   buildQualifyLeadPayload,
   defaultContactMode,
   defaultObjectMode,
+  normalizeQualificationAreaM2,
   qualifyLeadSchema,
 } from './qualify-lead-form';
 
@@ -22,6 +23,9 @@ function validForm(overrides: Record<string, unknown> = {}) {
     objectMode: 'EXISTING' as const,
     projectObjectId: UUID_OBJECT,
     newObjectName: '',
+    newObjectAddress: '',
+    objectStage: '',
+    objectExpectedDate: '',
     contactMode: 'EXISTING' as const,
     contactId: UUID_CONTACT,
     contactFirstName: '',
@@ -30,17 +34,9 @@ function validForm(overrides: Record<string, unknown> = {}) {
     contactEmail: '',
     needDescription: 'HPL панели для фасада школы',
     decisionMakerContact: 'Главный архитектор',
-    application: 'INTERIOR' as const,
-    panelTypeId: UUID_TYPE,
-    thicknessMm: 8,
-    sizeMode: 'STANDARD' as const,
-    panelSizeId: UUID_SIZE,
-    customWidthMm: '',
-    customHeightMm: '',
-    colorCode: 'RAL-9005',
-    colorName: 'Чёрный',
-    requiredAreaM2: 24,
     installationRequired: 'yes' as const,
+    ventFacadeExists: 'unknown' as const,
+    ventFacadeKitRequired: 'unknown' as const,
     urgent: false,
     willingToWait: true,
     ...overrides,
@@ -56,10 +52,10 @@ describe('MANAGER Stage 1 qualification payload', () => {
       contactId: parsed.contactId,
       projectObjectId: parsed.projectObjectId!,
       values: parsed,
-      panelTypeId: UUID_TYPE,
       installationRequired: installationSelectionToBoolean(
         parsed.installationRequired,
       ),
+      items: [],
     });
 
     expect(payload.contactId).toBe(UUID_CONTACT);
@@ -69,6 +65,8 @@ describe('MANAGER Stage 1 qualification payload', () => {
         'clientId',
         'contactId',
         'projectObjectId',
+        'objectStage',
+        'objectExpectedDate',
         'needDescription',
         'decisionMakerContact',
         'qualification',
@@ -76,19 +74,16 @@ describe('MANAGER Stage 1 qualification payload', () => {
     );
     expect(Object.keys(payload.qualification ?? {}).sort()).toEqual(
       [
-        'application',
-        'panelTypeId',
-        'thicknessMm',
-        'panelSizeId',
-        'colorCode',
-        'colorName',
-        'requiredAreaM2',
         'installationRequired',
+        'ventFacadeExists',
+        'ventFacadeKitRequired',
         'urgent',
         'willingToWait',
         'customerRequirements',
+        'items',
       ].sort(),
     );
+    expect(payload.qualification?.items).toEqual([]);
     for (const field of MANAGER_STAGE1_FORBIDDEN_FIELDS) {
       expect(payload).not.toHaveProperty(field);
       expect(payload.qualification).not.toHaveProperty(field);
@@ -106,8 +101,8 @@ describe('MANAGER Stage 1 qualification payload', () => {
       clientId: parsed.clientId,
       projectObjectId: parsed.projectObjectId!,
       values: parsed,
-      panelTypeId: UUID_TYPE,
       installationRequired: true,
+      items: [],
     });
 
     expect(payload).not.toHaveProperty('contactId');
@@ -126,8 +121,8 @@ describe('MANAGER Stage 1 qualification payload', () => {
       clientId: parsed.clientId,
       projectObjectId: parsed.projectObjectId!,
       values: parsed,
-      panelTypeId: UUID_TYPE,
       installationRequired: true,
+      items: [],
     });
 
     expect(payload.projectObjectId).toBe(UUID_OBJECT);
@@ -135,16 +130,89 @@ describe('MANAGER Stage 1 qualification payload', () => {
     expect(payload).not.toHaveProperty('newObjectName');
   });
 
-  it('rejects 0 area and accepts a positive value', () => {
-    expect(qualifyLeadSchema.safeParse(validForm({ requiredAreaM2: 0 })).success).toBe(
-      false,
+  it('persists object stage and deadline on the existing ProjectObject contract', () => {
+    const parsed = qualifyLeadSchema.parse(
+      validForm({
+        objectStage: 'Скоро фасад',
+        objectExpectedDate: '2026-11-15',
+      }),
     );
-    expect(qualifyLeadSchema.safeParse(validForm({ requiredAreaM2: '' })).success).toBe(
-      false,
-    );
+    const payload = buildQualifyLeadPayload({
+      leadId: UUID_LEAD,
+      clientId: parsed.clientId,
+      projectObjectId: parsed.projectObjectId!,
+      values: parsed,
+      installationRequired: true,
+      items: [],
+    });
+
+    expect(payload.objectStage).toBe('Скоро фасад');
+    expect(payload.objectExpectedDate).toMatch(/^2026-11-1[45]T/);
+  });
+
+  it.each([
+    ['yes', 'no', true, false],
+    ['no', 'yes', false, true],
+    ['unknown', 'unknown', null, null],
+  ] as const)(
+    'maps vent facade %s/%s to %s/%s on the qualify HTTP contract',
+    (ventExists, kitRequired, expectedExists, expectedKit) => {
+      const parsed = qualifyLeadSchema.parse(
+        validForm({
+          ventFacadeExists: ventExists,
+          ventFacadeKitRequired: kitRequired,
+        }),
+      );
+      const payload = buildQualifyLeadPayload({
+        leadId: UUID_LEAD,
+        clientId: parsed.clientId,
+        projectObjectId: parsed.projectObjectId!,
+        values: parsed,
+        installationRequired: true,
+        items: [],
+      });
+
+      expect(payload.qualification).toMatchObject({
+        installationRequired: true,
+        ventFacadeExists: expectedExists,
+        ventFacadeKitRequired: expectedKit,
+      });
+    },
+  );
+
+  it('rejects contradictory urgency and keeps both-false valid', () => {
     expect(
-      qualifyLeadSchema.safeParse(validForm({ requiredAreaM2: 12.5 })).success,
+      qualifyLeadSchema.safeParse(validForm({ urgent: true, willingToWait: true }))
+        .success,
+    ).toBe(false);
+    expect(
+      qualifyLeadSchema.safeParse(validForm({ urgent: true, willingToWait: false }))
+        .success,
     ).toBe(true);
+    expect(
+      qualifyLeadSchema.safeParse(
+        validForm({ urgent: false, willingToWait: false }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it('forces willingToWait=false when urgent is selected', () => {
+    const parsed = qualifyLeadSchema.parse(
+      validForm({ urgent: true, willingToWait: false }),
+    );
+    const payload = buildQualifyLeadPayload({
+      leadId: UUID_LEAD,
+      clientId: parsed.clientId,
+      projectObjectId: parsed.projectObjectId!,
+      values: parsed,
+      installationRequired: true,
+      items: [],
+    });
+
+    expect(payload.qualification).toMatchObject({
+      urgent: true,
+      willingToWait: false,
+    });
   });
 
   it('keeps LPR as customer-side decision maker data', () => {
@@ -154,8 +222,8 @@ describe('MANAGER Stage 1 qualification payload', () => {
       clientId: parsed.clientId,
       projectObjectId: parsed.projectObjectId!,
       values: parsed,
-      panelTypeId: UUID_TYPE,
       installationRequired: true,
+      items: [],
     });
 
     expect(payload.decisionMakerContact).toBe('Главный архитектор');
@@ -168,32 +236,99 @@ describe('MANAGER Stage 1 qualification payload', () => {
     expect(defaultContactMode(UUID_CONTACT)).toBe('EXISTING');
   });
 
-  it('omits panelSizeId for custom size and omits custom size for standard', () => {
-    const custom = buildQualificationPayload(
+  it('saves an HPL item without exact RAL, thickness or size', () => {
+    const item = buildQualificationItemPayload(
       {
-        ...qualifyLeadSchema.parse(
-          validForm({
-            sizeMode: 'CUSTOM',
-            panelSizeId: UUID_SIZE,
-            customWidthMm: 1230,
-            customHeightMm: 2460,
-          }),
-        ),
-        panelTypeId: UUID_TYPE,
+        application: 'INTERIOR',
+        thicknessMm: '',
+        sizeMode: 'STANDARD',
+        panelSizeId: '',
+        colorCode: '',
+        colorName: 'тёмно-серый',
+        requiredAreaM2: '24,5',
       },
-      true,
+      UUID_TYPE,
     );
-    expect(custom).not.toHaveProperty('panelSizeId');
+
+    expect(item).toEqual({
+      application: 'INTERIOR',
+      panelTypeId: UUID_TYPE,
+      thicknessMm: null,
+      panelSizeId: null,
+      customWidthMm: null,
+      customHeightMm: null,
+      colorCode: null,
+      colorName: 'тёмно-серый',
+      requiredAreaM2: 24.5,
+    });
+  });
+
+  it('keeps an exact RAL when the customer knows it', () => {
+    const item = buildQualificationItemPayload(
+      {
+        application: 'INTERIOR',
+        thicknessMm: 8,
+        sizeMode: 'STANDARD',
+        panelSizeId: UUID_SIZE,
+        colorCode: 'RAL-7016',
+        colorName: 'антрацит',
+        requiredAreaM2: 12,
+      },
+      UUID_TYPE,
+    );
+
+    expect(item).toMatchObject({
+      thicknessMm: 8,
+      panelSizeId: UUID_SIZE,
+      colorCode: 'RAL-7016',
+      colorName: 'антрацит',
+    });
+  });
+
+  it('omits panelSizeId for custom size and omits custom size for standard', () => {
+    const custom = buildQualificationItemPayload(
+      {
+        application: 'INTERIOR',
+        sizeMode: 'CUSTOM',
+        panelSizeId: UUID_SIZE,
+        customWidthMm: 1230,
+        customHeightMm: 2460,
+        requiredAreaM2: 12,
+      },
+      UUID_TYPE,
+    );
+    expect(custom.panelSizeId).toBeNull();
     expect(custom.customWidthMm).toBe(1230);
 
-    const standard = buildQualificationPayload(
+    const standard = buildQualificationItemPayload(
       {
-        ...qualifyLeadSchema.parse(validForm()),
-        panelTypeId: UUID_TYPE,
+        application: 'INTERIOR',
+        sizeMode: 'STANDARD',
+        panelSizeId: UUID_SIZE,
+        customWidthMm: 1230,
+        customHeightMm: 2460,
+        requiredAreaM2: 12,
       },
-      true,
+      UUID_TYPE,
     );
     expect(standard.panelSizeId).toBe(UUID_SIZE);
-    expect(standard).not.toHaveProperty('customWidthMm');
+    expect(standard.customWidthMm).toBeNull();
+  });
+});
+
+describe('normalizeQualificationAreaM2', () => {
+  it('accepts positive decimals and a Russian comma', () => {
+    expect(normalizeQualificationAreaM2('12.5')).toBe(12.5);
+    expect(normalizeQualificationAreaM2('24,5')).toBe(24.5);
+    expect(normalizeQualificationAreaM2(8)).toBe(8);
+  });
+
+  it('rejects empty, zero, negative and non-numeric values', () => {
+    expect(normalizeQualificationAreaM2('')).toBeNull();
+    expect(normalizeQualificationAreaM2(undefined)).toBeNull();
+    expect(normalizeQualificationAreaM2('0')).toBeNull();
+    expect(normalizeQualificationAreaM2('-1')).toBeNull();
+    expect(normalizeQualificationAreaM2('abc')).toBeNull();
+    expect(normalizeQualificationAreaM2('12.12345')).toBeNull();
   });
 });
