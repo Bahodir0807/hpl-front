@@ -76,11 +76,16 @@ export const dealStageLabels: Record<DealStage, string> = {
 
 export const orderStatusLabels: Record<OrderStatus, string> = {
   DRAFT: 'Черновик',
+  CONFIRMED: 'Подтверждён',
   WAITING_PAYMENT: 'Ожидает оплаты',
+  PARTIALLY_PAID: 'Оплачен частично',
+  PAID: 'Оплачен',
   WAITING_STOCK: 'Ожидает товар',
-  READY_TO_SHIP: 'Готов к отгрузке',
+  PENDING_SUPPLIER: 'Ожидает поставщика',
+  READY_FOR_SHIPMENT: 'Готов к отгрузке',
   PARTIALLY_SHIPPED: 'Частично отгружен',
   SHIPPED: 'Отгружен',
+  COMPLETED: 'Завершён',
   CANCELLED: 'Отменён',
 };
 

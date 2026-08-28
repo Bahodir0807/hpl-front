@@ -160,7 +160,7 @@ describe('supplier order hooks', () => {
     );
     expect(apiClient.patch).not.toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: 'READY_TO_SHIP' }),
+      expect.objectContaining({ status: 'READY_FOR_SHIPMENT' }),
     );
   });
 

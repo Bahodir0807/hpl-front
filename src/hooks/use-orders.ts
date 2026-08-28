@@ -9,11 +9,16 @@ import { Product } from "./use-inventory";
 
 export type OrderStatus =
   | "DRAFT"
+  | "CONFIRMED"
   | "WAITING_PAYMENT"
+  | "PARTIALLY_PAID"
+  | "PAID"
   | "WAITING_STOCK"
-  | "READY_TO_SHIP"
+  | "PENDING_SUPPLIER"
+  | "READY_FOR_SHIPMENT"
   | "PARTIALLY_SHIPPED"
   | "SHIPPED"
+  | "COMPLETED"
   | "CANCELLED";
 export type PaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
 export type PaymentRecordStatus = "PENDING" | "CONFIRMED" | "REJECTED";

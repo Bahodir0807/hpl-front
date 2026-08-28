@@ -35,11 +35,17 @@ type PaymentStatusFilter = "ALL" | PaymentStatus;
 
 const orderStatuses: OrderStatusFilter[] = [
   "ALL",
+  "DRAFT",
+  "CONFIRMED",
   "WAITING_PAYMENT",
+  "PARTIALLY_PAID",
+  "PAID",
   "WAITING_STOCK",
-  "READY_TO_SHIP",
+  "PENDING_SUPPLIER",
+  "READY_FOR_SHIPMENT",
   "PARTIALLY_SHIPPED",
   "SHIPPED",
+  "COMPLETED",
   "CANCELLED",
 ];
 
