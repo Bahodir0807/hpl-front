@@ -9,6 +9,7 @@ import { useAuth } from '../../context/auth-context';
 import { Contact, useCreateClient } from '../../hooks/use-clients';
 import {
   DuplicateMatch,
+  type DuplicateLookup,
   useCheckDuplicates,
   useCreateLead,
 } from '../../hooks/use-leads';
@@ -54,10 +55,6 @@ function formatReasons(reasons: string[]): string {
   return reasons.join(', ');
 }
 
-function pickDuplicateQuery(values: Partial<CreateLeadFormValues>): string {
-  return values.inn || values.phone || values.email || '';
-}
-
 function splitPersonName(
   fullName: string,
 ): { firstName: string; lastName?: string } {
@@ -92,7 +89,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
   const createClient = useCreateClient();
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [duplicateQuery, setDuplicateQuery] = useState('');
+  const [duplicateInput, setDuplicateInput] = useState<DuplicateLookup>({});
   const [selectedDuplicate, setSelectedDuplicate] =
     useState<DuplicateMatch | null>(null);
   const ownerOptions = useMemo(
@@ -125,21 +122,25 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
   });
 
   const watchedValues = useWatch({ control });
-  const duplicateSearchValue = useMemo(
-    () => pickDuplicateQuery(watchedValues),
-    [watchedValues],
+  const duplicateSearchInput = useMemo<DuplicateLookup>(
+    () => ({
+      phone: watchedValues.phone,
+      inn: watchedValues.inn,
+      email: watchedValues.email,
+    }),
+    [watchedValues.email, watchedValues.inn, watchedValues.phone],
   );
-  const duplicatesQuery = useCheckDuplicates(duplicateQuery);
+  const duplicatesQuery = useCheckDuplicates(duplicateInput);
   const duplicates = duplicatesQuery.data ?? [];
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      setDuplicateQuery(duplicateSearchValue.trim());
+      setDuplicateInput(duplicateSearchInput);
       setSelectedDuplicate(null);
     }, 450);
 
     return () => window.clearTimeout(timerId);
-  }, [duplicateSearchValue]);
+  }, [duplicateSearchInput]);
 
   const onSubmit = async (values: CreateLeadFormValues): Promise<void> => {
     setFormError(null);

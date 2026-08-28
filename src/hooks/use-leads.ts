@@ -208,25 +208,43 @@ export function useLead(id: string) {
   });
 }
 
-export function useCheckDuplicates(query: string) {
-  const normalizedQuery = query.trim();
+export type DuplicateLookup = {
+  phone?: string;
+  inn?: string;
+  email?: string;
+  name?: string;
+};
+
+export function normalizeDuplicateLookup(
+  input: DuplicateLookup,
+): DuplicateLookup {
+  return {
+    phone: input.phone?.trim() || undefined,
+    inn: input.inn?.trim() || undefined,
+    email: input.email?.trim().toLowerCase() || undefined,
+    name: input.name?.trim() || undefined,
+  };
+}
+
+export function useCheckDuplicates(input: DuplicateLookup) {
+  const normalizedInput = normalizeDuplicateLookup(input);
 
   return useQuery({
-    queryKey: ['client-duplicates', normalizedQuery],
+    queryKey: ['client-duplicates', normalizedInput],
     queryFn: async (): Promise<DuplicateMatch[]> => {
       const response = await apiClient.post<DuplicateMatch[]>(
         '/clients/check-duplicates',
-        {
-          phone: normalizedQuery,
-          email: normalizedQuery.includes('@') ? normalizedQuery : undefined,
-          inn: normalizedQuery,
-          name: normalizedQuery,
-        },
+        normalizedInput,
       );
 
       return response.data;
     },
-    enabled: normalizedQuery.length >= 3,
+    enabled: Boolean(
+      normalizedInput.phone ||
+        normalizedInput.inn ||
+        normalizedInput.email ||
+        normalizedInput.name,
+    ),
   });
 }
 
