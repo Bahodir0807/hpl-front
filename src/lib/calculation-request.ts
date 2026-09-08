@@ -17,9 +17,17 @@ import {
   CALCULATIONS_READ_PERMISSION,
   QUOTES_APPROVE_PERMISSION,
   canCreateCalculationRequest,
+  canShowCreateCalculationRequestAction,
+  canShowSubmitCalculationRequestToHead,
+  canSubmitCalculationRequest,
 } from "@/lib/calculation-presentation";
 
-export { canCreateCalculationRequest };
+export {
+  canCreateCalculationRequest,
+  canShowCreateCalculationRequestAction,
+  canShowSubmitCalculationRequestToHead,
+  canSubmitCalculationRequest,
+};
 
 export const SUBMIT_TO_HEAD_LABEL = "Отправить руководителю";
 export const CREATE_CALCULATION_REQUEST_LABEL = "Создать запрос расчёта";
@@ -58,10 +66,12 @@ export type CalculationRequestItemForm = {
   /** GET/persisted backend quantity. Display-only; never serialized. */
   sheetsCount: string;
   requiredAreaM2: string;
-  /** Display-only snapshot from GET/catalog. Never serialized. */
+  /** Customer color snapshot from Qualification. Serialized separately from Decor. */
   colorName: string;
   colorId: string;
   colorCode: string;
+  /** HEAD actual supplier decor. Free text, not a PanelColor catalog id. */
+  decor: string;
   texture: string;
   note: string;
   customTypeDescription: string;
@@ -80,17 +90,18 @@ export type CalculationRequestFormValues = {
 };
 
 export type CalculationRequestItemPayload = {
-  panelTypeId: string;
+  panelTypeId?: string;
   supplierId?: string;
-  qualityClassId: string;
-  thicknessMm: string;
+  qualityClassId?: string;
+  thicknessMm?: string;
   panelSizeId?: string;
   colorId?: string;
   colorCode?: string;
   colorName?: string;
   coating?: string;
   texture?: string;
-  requiredAreaM2: string;
+  decor?: string;
+  requiredAreaM2?: string;
   customWidthMm?: number;
   customHeightMm?: number;
   note?: string;
@@ -134,6 +145,7 @@ export const CALCULATION_REQUEST_GROUP_WRITE_KEYS = ["title", "items"] as const;
 
 export const CALCULATION_REQUEST_ITEM_WRITE_KEYS = [
   "panelTypeId",
+  "supplierId",
   "qualityClassId",
   "thicknessMm",
   "panelSizeId",
@@ -142,6 +154,7 @@ export const CALCULATION_REQUEST_ITEM_WRITE_KEYS = [
   "colorName",
   "coating",
   "texture",
+  "decor",
   "requiredAreaM2",
   "customWidthMm",
   "customHeightMm",
@@ -456,6 +469,7 @@ export function createEmptyRequestItem(): CalculationRequestItemForm {
     colorName: "",
     colorId: "",
     colorCode: "",
+    decor: "",
     texture: "",
     note: "",
     customTypeDescription: "",
@@ -481,9 +495,9 @@ export function createEmptyRequestForm(): CalculationRequestFormValues {
 
 export function duplicateRequestItem(
   item: CalculationRequestItemForm,
-  preserveSupplier = false,
+  preserveSupplier = true,
 ): CalculationRequestItemForm {
-  const duplicated: CalculationRequestItemForm = {
+  return {
     key: nextClientKey("item"),
     qualityClassId: item.qualityClassId,
     supplierId: preserveSupplier ? item.supplierId : "",
@@ -499,14 +513,11 @@ export function duplicateRequestItem(
     colorName: item.colorName,
     colorId: item.colorId,
     colorCode: item.colorCode,
+    decor: item.decor,
     texture: item.texture,
     note: item.note,
     customTypeDescription: item.customTypeDescription,
   };
-  if (!preserveSupplier) {
-    delete (duplicated as Partial<CalculationRequestItemForm>).supplierId;
-  }
-  return duplicated;
 }
 
 export function requestItemColorDisplay(
@@ -556,9 +567,10 @@ export function requestItemFromApi(
     thicknessMm: thickness != null ? String(thickness) : "",
     sheetsCount: sheets != null ? String(sheets) : "",
     requiredAreaM2: area != null ? String(area) : "",
-    colorName: requestItemColorDisplay(item),
+    colorName: item.colorName?.trim() ?? "",
     colorId: item.colorId?.trim() || item.color?.id?.trim() || "",
     colorCode: item.colorCode?.trim() || item.color?.colorCode?.trim() || "",
+    decor: item.decor?.trim() ?? "",
     texture: item.texture?.trim() ?? "",
     note: item.note?.trim() ?? "",
     customTypeDescription: item.customTypeDescription?.trim() ?? "",
@@ -619,6 +631,10 @@ export function requestFormFromQualification(
         requiredAreaM2: area == null ? "" : String(area),
         colorCode: item.colorCode?.trim() ?? "",
         colorName: item.colorName?.trim() ?? "",
+        coating:
+          "coating" in item ? (item.coating?.trim() ?? "") : "",
+        texture:
+          "texture" in item ? (item.texture?.trim() ?? "") : "",
       };
     });
 
@@ -652,24 +668,32 @@ export function validateRequestItem(
     code: string;
     displayNameRu?: string | null;
   } | null,
+  options: { requireCompleteTechnicalFields?: boolean } = {},
 ): CalculationRequestItemErrors {
   const errors: CalculationRequestItemErrors = {};
   const application =
     toCanonicalHplApplication(panelType?.code) ??
     panelTypeCodeFromApplication(panelType?.code);
+  const requireComplete = options.requireCompleteTechnicalFields !== false;
 
-  if (!item.qualityClassId.trim()) {
+  if (requireComplete && !item.qualityClassId.trim()) {
     errors.qualityClassId = "Укажите класс";
   }
-  if (!item.panelTypeId.trim()) {
+  if (requireComplete && !item.supplierId.trim()) {
+    errors.supplierId = "Укажите поставщика";
+  }
+  if (requireComplete && !item.panelTypeId.trim()) {
     errors.panelTypeId = "Укажите тип HPL";
   }
 
-  if (!isValidThicknessForApplication(application, item.thicknessMm)) {
+  if (
+    requireComplete &&
+    !isValidThicknessForApplication(application, item.thicknessMm)
+  ) {
     errors.thicknessMm = "Укажите толщину";
   }
 
-  if (!item.panelSizeId.trim()) {
+  if (requireComplete && !item.panelSizeId.trim()) {
     errors.panelSizeId = "Укажите размер";
   }
 
@@ -686,7 +710,7 @@ export function validateRequestItem(
   }
 
   const area = toDecimalNumber(item.requiredAreaM2);
-  if (area == null || area <= 0) {
+  if (requireComplete && (area == null || area <= 0)) {
     errors.requiredAreaM2 = "Укажите объём м²";
   }
 
@@ -704,6 +728,7 @@ export function validateRequestForm(
     code: string;
     displayNameRu?: string | null;
   }>,
+  options: { requireCompleteTechnicalFields?: boolean } = {},
 ): {
   valid: boolean;
   itemErrors: Record<string, CalculationRequestItemErrors>;
@@ -721,7 +746,7 @@ export function validateRequestForm(
 
     for (const item of group.items) {
       const panelType = panelTypes.find((type) => type.id === item.panelTypeId);
-      const errors = validateRequestItem(item, panelType);
+      const errors = validateRequestItem(item, panelType, options);
       if (Object.keys(errors).length > 0) {
         itemErrors[item.key] = errors;
       }
@@ -741,23 +766,30 @@ function optionalText(value: string): string | undefined {
 
 function serializeRequestItem(
   item: CalculationRequestItemForm,
-  includeItemSuppliers = false,
+  includeItemSuppliers = true,
 ): CalculationRequestItemPayload {
-  const area =
-    serializeDecimalInput(item.requiredAreaM2, 4) ?? item.requiredAreaM2.trim();
-  const thickness =
-    serializeDecimalInput(item.thicknessMm, 2) ?? item.thicknessMm.trim();
+  const area = serializeDecimalInput(item.requiredAreaM2, 4);
+  const thickness = serializeDecimalInput(item.thicknessMm, 2);
   const customSize = parseCustomSizePair(
     item.customWidthMm,
     item.customHeightMm,
   );
 
-  const payload: CalculationRequestItemPayload = {
-    panelTypeId: item.panelTypeId.trim(),
-    qualityClassId: item.qualityClassId.trim(),
-    thicknessMm: thickness,
-    requiredAreaM2: area,
-  };
+  const payload: CalculationRequestItemPayload = {};
+  const panelTypeId = item.panelTypeId.trim();
+  if (panelTypeId) {
+    payload.panelTypeId = panelTypeId;
+  }
+  const qualityClassId = item.qualityClassId.trim();
+  if (qualityClassId) {
+    payload.qualityClassId = qualityClassId;
+  }
+  if (thickness) {
+    payload.thicknessMm = thickness;
+  }
+  if (area) {
+    payload.requiredAreaM2 = area;
+  }
 
   if (item.panelSizeId.trim()) {
     payload.panelSizeId = item.panelSizeId.trim();
@@ -765,18 +797,13 @@ function serializeRequestItem(
   if (includeItemSuppliers && item.supplierId.trim()) {
     payload.supplierId = item.supplierId.trim();
   }
-  if (item.colorId.trim()) {
-    payload.colorId = item.colorId.trim();
+  const colorCode = optionalText(item.colorCode);
+  if (colorCode) {
+    payload.colorCode = colorCode;
   }
-  if (!item.colorId.trim()) {
-    const colorCode = optionalText(item.colorCode);
-    if (colorCode) {
-      payload.colorCode = colorCode;
-    }
-    const colorName = optionalText(item.colorName);
-    if (colorName) {
-      payload.colorName = colorName;
-    }
+  const colorName = optionalText(item.colorName);
+  if (colorName) {
+    payload.colorName = colorName;
   }
   const coating = optionalText(item.coating);
   if (coating) {
@@ -785,6 +812,10 @@ function serializeRequestItem(
   const texture = optionalText(item.texture);
   if (texture) {
     payload.texture = texture;
+  }
+  const decor = optionalText(item.decor);
+  if (decor) {
+    payload.decor = decor;
   }
   if (customSize.pair) {
     payload.customWidthMm = customSize.pair.customWidthMm;
@@ -804,7 +835,7 @@ function serializeRequestItem(
 
 function serializeCalculationGroups(
   form: CalculationRequestFormValues,
-  includeItemSuppliers = false,
+  includeItemSuppliers = true,
 ): CalculationRequestGroupPayload[] {
   return form.calculations.map((group, index) => ({
     title: group.title.trim() || `Расчёт №${index + 1}`,
@@ -824,7 +855,7 @@ export function serializeCalculationRequest(
   const notes = form.notes.trim();
   const calculations = serializeCalculationGroups(
     form,
-    context.includeItemSuppliers,
+    context.includeItemSuppliers !== false,
   );
 
   if (context.leadId) {

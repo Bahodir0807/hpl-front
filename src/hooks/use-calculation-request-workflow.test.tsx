@@ -103,7 +103,7 @@ describe('calculation request API', () => {
     );
   });
 
-  it('updates a manager request without supplierId', async () => {
+  it('updates a manager request with per-item supplierId', async () => {
     vi.mocked(apiClient.patch).mockResolvedValue({
       data: { id: 'req-1', status: 'draft', calculations: [] },
     });
@@ -122,6 +122,7 @@ describe('calculation request API', () => {
               qualityClassId: 'q-1',
               thicknessMm: '8',
               requiredAreaM2: '20',
+              supplierId: 'sup-1',
             },
           ],
         },
@@ -133,7 +134,7 @@ describe('calculation request API', () => {
       '/calculations/requests/req-1',
       body,
     );
-    expect(JSON.stringify(body)).not.toContain('supplierId');
+    expect(body.calculations[0].items[0].supplierId).toBe('sup-1');
   });
 
   it('converts a request through the new endpoint, not legacy convert', async () => {
@@ -146,10 +147,10 @@ describe('calculation request API', () => {
       { wrapper: createWrapper() },
     );
 
-    await result.current.mutateAsync({ id: 'req-1', supplierId: 'sup-1' });
+    await result.current.mutateAsync({ id: 'req-1' });
     expect(apiClient.post).toHaveBeenCalledWith(
       '/calculations/requests/req-1/convert-to-quote',
-      { supplierId: 'sup-1' },
+      {},
     );
     expect(vi.mocked(apiClient.post).mock.calls[0][0]).not.toContain(
       '/calculations/req-1/convert-to-quote',

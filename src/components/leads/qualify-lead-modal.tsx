@@ -77,6 +77,8 @@ type QualificationItemDraft = {
   customHeightMm: string;
   colorCode: string;
   colorName: string;
+  coating: string;
+  texture: string;
   requiredAreaM2: string;
 };
 
@@ -96,6 +98,8 @@ function createBlankItemDraft(): QualificationItemDraft {
     customHeightMm: '',
     colorCode: '',
     colorName: '',
+    coating: '',
+    texture: '',
     requiredAreaM2: '',
   };
 }
@@ -120,6 +124,8 @@ function qualificationItemDraftFromApi(
     customHeightMm: height?.toString() ?? '',
     colorCode: item.colorCode ?? '',
     colorName: item.colorName ?? '',
+    coating: item.coating ?? '',
+    texture: item.texture ?? '',
     requiredAreaM2: toDecimalNumber(item.requiredAreaM2)?.toString() ?? '',
   };
 }
@@ -350,6 +356,34 @@ function HplItemCard({
             placeholder="Например, RAL-9005"
             value={item.colorCode}
             onChange={(event) => update('colorCode', event.target.value)}
+          />
+        </label>
+
+        <label>
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            Покрытие
+          </span>
+          <input
+            aria-label={`Покрытие позиции ${itemNumber}`}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            disabled={disabled}
+            placeholder="Например, матовое"
+            value={item.coating}
+            onChange={(event) => update('coating', event.target.value)}
+          />
+        </label>
+
+        <label>
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            Текстура
+          </span>
+          <input
+            aria-label={`Текстура позиции ${itemNumber}`}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            disabled={disabled}
+            placeholder="Например, под дерево"
+            value={item.texture}
+            onChange={(event) => update('texture', event.target.value)}
           />
         </label>
 

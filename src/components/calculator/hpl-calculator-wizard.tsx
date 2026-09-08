@@ -312,10 +312,8 @@ export function HplCalculatorWizard({
   const [purchasePriceError, setPurchasePriceError] = useState<string | null>(
     null,
   );
-  const [productionDaysFrom, setProductionDaysFrom] = useState('');
-  const [productionDaysTo, setProductionDaysTo] = useState('');
-  const [deliveryDaysFrom, setDeliveryDaysFrom] = useState('');
-  const [deliveryDaysTo, setDeliveryDaysTo] = useState('');
+  const [productionTerms, setProductionTerms] = useState('');
+  const [deliveryTerms, setDeliveryTerms] = useState('');
   const [validUntil, setValidUntil] = useState(defaultQuoteValidUntilInput);
   const [commercialTermsError, setCommercialTermsError] = useState<string | null>(
     null,
@@ -597,10 +595,8 @@ export function HplCalculatorWizard({
 
   const onCreateQuote = async (): Promise<void> => {
     const termsError = validateQuoteCommercialTerms({
-      productionDaysFrom,
-      productionDaysTo,
-      deliveryDaysFrom,
-      deliveryDaysTo,
+      productionTerms,
+      deliveryTerms,
       validUntil,
     });
     if (termsError) {
@@ -630,10 +626,8 @@ export function HplCalculatorWizard({
       await convertToQuote.mutateAsync({
         calculationId: calculation.id,
         ...buildQuoteCommercialTermsPayload({
-          productionDaysFrom,
-          productionDaysTo,
-          deliveryDaysFrom,
-          deliveryDaysTo,
+          productionTerms,
+          deliveryTerms,
           validUntil,
         }),
       });
@@ -1229,32 +1223,40 @@ export function HplCalculatorWizard({
                     label="Коэффициент"
                     value={Number(sellingCoefficient).toFixed(1)}
                   />
-                  <DayRangeFields
-                    label={PRODUCTION_PERIOD_LABEL}
-                    from={productionDaysFrom}
-                    to={productionDaysTo}
-                    onFromChange={(value) => {
-                      setProductionDaysFrom(value);
-                      setCommercialTermsError(null);
-                    }}
-                    onToChange={(value) => {
-                      setProductionDaysTo(value);
-                      setCommercialTermsError(null);
-                    }}
-                  />
-                  <DayRangeFields
-                    label={DELIVERY_PERIOD_LABEL}
-                    from={deliveryDaysFrom}
-                    to={deliveryDaysTo}
-                    onFromChange={(value) => {
-                      setDeliveryDaysFrom(value);
-                      setCommercialTermsError(null);
-                    }}
-                    onToChange={(value) => {
-                      setDeliveryDaysTo(value);
-                      setCommercialTermsError(null);
-                    }}
-                  />
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">
+                      {PRODUCTION_PERIOD_LABEL}
+                    </span>
+                    <textarea
+                      value={productionTerms}
+                      maxLength={500}
+                      rows={2}
+                      aria-label={PRODUCTION_PERIOD_LABEL}
+                      placeholder="15–20 рабочих дней"
+                      onChange={(event) => {
+                        setProductionTerms(event.target.value);
+                        setCommercialTermsError(null);
+                      }}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">
+                      {DELIVERY_PERIOD_LABEL}
+                    </span>
+                    <textarea
+                      value={deliveryTerms}
+                      maxLength={500}
+                      rows={2}
+                      aria-label={DELIVERY_PERIOD_LABEL}
+                      placeholder="Ориентировочно 4 недели после утверждения декора"
+                      onChange={(event) => {
+                        setDeliveryTerms(event.target.value);
+                        setCommercialTermsError(null);
+                      }}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                    />
+                  </label>
                   <label className="block max-w-xs">
                     <span className="mb-1 block text-sm font-medium text-slate-700">
                       {VALID_UNTIL_LABEL}
@@ -1367,50 +1369,6 @@ export function HplCalculatorWizard({
             </Button>
           </div>
         ) : null}
-      </div>
-    </div>
-  );
-}
-
-function DayRangeFields({
-  label,
-  from,
-  to,
-  onFromChange,
-  onToChange,
-}: {
-  label: string;
-  from: string;
-  to: string;
-  onFromChange: (value: string) => void;
-  onToChange: (value: string) => void;
-}) {
-  return (
-    <div className="max-w-md">
-      <span className="mb-1 block text-sm font-medium text-slate-700">
-        {label}
-      </span>
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          min="1"
-          step="1"
-          value={from}
-          aria-label={`${label} от`}
-          onChange={(event) => onFromChange(event.target.value)}
-          className="w-20 rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-        />
-        <span className="text-slate-500">—</span>
-        <input
-          type="number"
-          min="1"
-          step="1"
-          value={to}
-          aria-label={`${label} до`}
-          onChange={(event) => onToChange(event.target.value)}
-          className="w-20 rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-        />
-        <span className="text-sm text-slate-600">дней</span>
       </div>
     </div>
   );

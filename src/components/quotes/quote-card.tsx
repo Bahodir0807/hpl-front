@@ -541,22 +541,10 @@ function QuoteDraftTermsForm({
   ) => Promise<unknown> | unknown;
 }) {
   const [productionTerms, setProductionTerms] = useState(
-    quote.productionTerms ?? '',
+    quote.productionTerms?.trim() || '',
   );
   const [deliveryTerms, setDeliveryTerms] = useState(
-    quote.deliveryTerms ?? '',
-  );
-  const [productionDaysFrom, setProductionDaysFrom] = useState(
-    quote.productionDaysFrom != null ? String(quote.productionDaysFrom) : '',
-  );
-  const [productionDaysTo, setProductionDaysTo] = useState(
-    quote.productionDaysTo != null ? String(quote.productionDaysTo) : '',
-  );
-  const [deliveryDaysFrom, setDeliveryDaysFrom] = useState(
-    quote.deliveryDaysFrom != null ? String(quote.deliveryDaysFrom) : '',
-  );
-  const [deliveryDaysTo, setDeliveryDaysTo] = useState(
-    quote.deliveryDaysTo != null ? String(quote.deliveryDaysTo) : '',
+    quote.deliveryTerms?.trim() || '',
   );
   const [validUntil, setValidUntil] = useState(
     toDateInputValue(quote.validUntil),
@@ -573,10 +561,6 @@ function QuoteDraftTermsForm({
     const termsError = validateQuoteCommercialTerms({
       productionTerms,
       deliveryTerms,
-      productionDaysFrom,
-      productionDaysTo,
-      deliveryDaysFrom,
-      deliveryDaysTo,
       validUntil,
       commercialNote,
       internalCommercialNote,
@@ -592,10 +576,6 @@ function QuoteDraftTermsForm({
         {
           productionTerms,
           deliveryTerms,
-          productionDaysFrom,
-          productionDaysTo,
-          deliveryDaysFrom,
-          deliveryDaysTo,
           validUntil,
           commercialNote,
           internalCommercialNote,
@@ -622,6 +602,7 @@ function QuoteDraftTermsForm({
             value={productionTerms}
             maxLength={500}
             rows={2}
+            aria-label={PRODUCTION_PERIOD_LABEL}
             placeholder="15–20 рабочих дней"
             onChange={(event) => {
               setProductionTerms(event.target.value);
@@ -638,6 +619,7 @@ function QuoteDraftTermsForm({
             value={deliveryTerms}
             maxLength={500}
             rows={2}
+            aria-label={DELIVERY_PERIOD_LABEL}
             placeholder="Ориентировочно 4 недели после утверждения декора"
             onChange={(event) => {
               setDeliveryTerms(event.target.value);
@@ -647,36 +629,6 @@ function QuoteDraftTermsForm({
           />
         </label>
       </div>
-      {!productionTerms.trim() || !deliveryTerms.trim() ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-        <DayRangeInputs
-          label={PRODUCTION_PERIOD_LABEL}
-          from={productionDaysFrom}
-          to={productionDaysTo}
-          onFromChange={(value) => {
-            setProductionDaysFrom(value);
-            setError(null);
-          }}
-          onToChange={(value) => {
-            setProductionDaysTo(value);
-            setError(null);
-          }}
-        />
-        <DayRangeInputs
-          label={DELIVERY_PERIOD_LABEL}
-          from={deliveryDaysFrom}
-          to={deliveryDaysTo}
-          onFromChange={(value) => {
-            setDeliveryDaysFrom(value);
-            setError(null);
-          }}
-          onToChange={(value) => {
-            setDeliveryDaysTo(value);
-            setError(null);
-          }}
-        />
-      </div>
-      ) : null}
       <label className="block max-w-xs">
         <span className="mb-1 block text-sm font-medium text-slate-700">
           {VALID_UNTIL_LABEL}
@@ -745,49 +697,5 @@ function QuoteDraftTermsForm({
         {pending ? 'Сохранение...' : 'Сохранить условия КП'}
       </Button>
     </form>
-  );
-}
-
-function DayRangeInputs({
-  label,
-  from,
-  to,
-  onFromChange,
-  onToChange,
-}: {
-  label: string;
-  from: string;
-  to: string;
-  onFromChange: (value: string) => void;
-  onToChange: (value: string) => void;
-}) {
-  return (
-    <div>
-      <span className="mb-1 block text-sm font-medium text-slate-700">
-        {label}
-      </span>
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          min="1"
-          step="1"
-          value={from}
-          aria-label={`${label} от`}
-          onChange={(event) => onFromChange(event.target.value)}
-          className="w-20 rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-        />
-        <span className="text-slate-500">—</span>
-        <input
-          type="number"
-          min="1"
-          step="1"
-          value={to}
-          aria-label={`${label} до`}
-          onChange={(event) => onToChange(event.target.value)}
-          className="w-20 rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-        />
-        <span className="text-sm text-slate-600">дней</span>
-      </div>
-    </div>
   );
 }

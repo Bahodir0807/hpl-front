@@ -122,6 +122,8 @@ export type QualificationItemPayloadInput = {
   customHeightMm?: string | number | null;
   colorCode?: string | null;
   colorName?: string | null;
+  coating?: string | null;
+  texture?: string | null;
   requiredAreaM2: string | number;
 };
 
@@ -227,6 +229,8 @@ export function buildQualificationItemPayload(
     customHeightMm: size.customHeightMm ?? null,
     colorCode: optionalText(values.colorCode) ?? null,
     colorName: optionalText(values.colorName) ?? null,
+    coating: optionalText(values.coating) ?? null,
+    texture: optionalText(values.texture) ?? null,
     requiredAreaM2: area,
   };
 }

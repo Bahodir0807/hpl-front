@@ -106,22 +106,18 @@ describe('quote commercial terms', () => {
     expect(validateDayRange('20', '10')).toBe(DAY_RANGE_ORDER_MESSAGE);
   });
 
-  it('requires production and delivery before a Quote is customer-ready', () => {
+  it('requires production and delivery text terms before a Quote is customer-ready', () => {
     expect(
       validateQuoteCommercialTerms({
-        productionDaysFrom: '',
-        productionDaysTo: '',
-        deliveryDaysFrom: '14',
-        deliveryDaysTo: '25',
+        productionTerms: '',
+        deliveryTerms: 'Ориентировочно 4 недели после утверждения декора',
         validUntil: '2026-08-20',
       }),
     ).toBe(PRODUCTION_REQUIRED_MESSAGE);
     expect(
       validateQuoteCommercialTerms({
-        productionDaysFrom: '10',
-        productionDaysTo: '20',
-        deliveryDaysFrom: '',
-        deliveryDaysTo: '',
+        productionTerms: '15–20 рабочих дней',
+        deliveryTerms: '',
         validUntil: '2026-08-20',
       }),
     ).toBe(DELIVERY_REQUIRED_MESSAGE);
@@ -141,20 +137,56 @@ describe('quote commercial terms', () => {
         deliveryDaysTo: null,
       }),
     ).toEqual([DELIVERY_REQUIRED_MESSAGE]);
+    expect(
+      hasCompleteQuoteClientTerms({
+        productionTerms: '15–20 рабочих дней',
+        deliveryTerms: 'Ориентировочно 4 недели после утверждения декора',
+      }),
+    ).toBe(true);
     expect(validateDayRange('', '20')).toBe(DAY_RANGE_REQUIRED_MESSAGE);
   });
 
   it('requires validity before conversion and does not require a document date', () => {
     expect(
       validateQuoteCommercialTerms({
-        productionDaysFrom: '10',
-        productionDaysTo: '20',
-        deliveryDaysFrom: '14',
-        deliveryDaysTo: '25',
+        productionTerms: '15–20 рабочих дней',
+        deliveryTerms: 'Ориентировочно 4 недели после утверждения декора',
         validUntil: '',
         commercialNote: '',
       }),
     ).toBe(VALID_UNTIL_REQUIRED_MESSAGE);
+    expect(
+      validateQuoteCommercialTerms({
+        productionTerms: '15–20 рабочих дней',
+        deliveryTerms: 'Ориентировочно 4 недели после утверждения декора',
+        validUntil: '2026-08-20',
+        commercialNote: '',
+      }),
+    ).toBeNull();
+  });
+
+  it('builds a terms payload from text values without numeric duplicates', () => {
+    const payload = buildQuoteCommercialTermsPayload({
+      productionTerms: '15–20 рабочих дней',
+      deliveryTerms: 'Ориентировочно 4 недели после утверждения декора',
+      validUntil: '2026-08-20',
+      commercialNote: 'Цена указана с учётом 1 контейнера CIP Tashkent.',
+    });
+
+    expect(payload.productionTerms).toBe('15–20 рабочих дней');
+    expect(payload.deliveryTerms).toBe(
+      'Ориентировочно 4 недели после утверждения декора',
+    );
+    expect(payload).not.toHaveProperty('productionDaysFrom');
+    expect(payload).not.toHaveProperty('productionDaysTo');
+    expect(payload).not.toHaveProperty('deliveryDaysFrom');
+    expect(payload).not.toHaveProperty('deliveryDaysTo');
+    expect(payload.validUntil).toBe(new Date(2026, 7, 20).toISOString());
+    expect(payload).not.toHaveProperty('documentDate');
+    expect(payload).not.toHaveProperty('commercialNote');
+  });
+
+  it('does not accept numeric day ranges as the write path', () => {
     expect(
       validateQuoteCommercialTerms({
         productionDaysFrom: '10',
@@ -162,37 +194,29 @@ describe('quote commercial terms', () => {
         deliveryDaysFrom: '14',
         deliveryDaysTo: '25',
         validUntil: '2026-08-20',
-        commercialNote: '',
       }),
-    ).toBeNull();
-  });
+    ).toBe(PRODUCTION_REQUIRED_MESSAGE);
 
-  it('builds a convert payload without documentDate and without HEAD note', () => {
     const payload = buildQuoteCommercialTermsPayload({
       productionDaysFrom: '10',
       productionDaysTo: '20',
       deliveryDaysFrom: '14',
       deliveryDaysTo: '25',
       validUntil: '2026-08-20',
-      commercialNote: 'Цена указана с учётом 1 контейнера CIP Tashkent.',
     });
-
-    expect(payload.productionDaysFrom).toBe(10);
-    expect(payload.productionDaysTo).toBe(20);
-    expect(payload.deliveryDaysFrom).toBe(14);
-    expect(payload.deliveryDaysTo).toBe(25);
-    expect(payload.validUntil).toBe(new Date(2026, 7, 20).toISOString());
-    expect(payload).not.toHaveProperty('documentDate');
-    expect(payload).not.toHaveProperty('commercialNote');
+    expect(payload).not.toHaveProperty('productionDaysFrom');
+    expect(payload).not.toHaveProperty('productionDaysTo');
+    expect(payload).not.toHaveProperty('deliveryDaysFrom');
+    expect(payload).not.toHaveProperty('deliveryDaysTo');
+    expect(payload.productionTerms).toBeUndefined();
+    expect(payload.deliveryTerms).toBeUndefined();
   });
 
   it('includes Примечание only when MANAGER explicitly opts in', () => {
     const payload = buildQuoteCommercialTermsPayload(
       {
-        productionDaysFrom: '10',
-        productionDaysTo: '20',
-        deliveryDaysFrom: '14',
-        deliveryDaysTo: '25',
+        productionTerms: '15–20 рабочих дней',
+        deliveryTerms: 'Ориентировочно 4 недели после утверждения декора',
         validUntil: '2026-08-20',
         commercialNote: 'CIP Tashkent',
       },
@@ -201,10 +225,8 @@ describe('quote commercial terms', () => {
     expect(payload.commercialNote).toBe('CIP Tashkent');
     const cleared = buildQuoteCommercialTermsPayload(
       {
-        productionDaysFrom: '10',
-        productionDaysTo: '20',
-        deliveryDaysFrom: '14',
-        deliveryDaysTo: '25',
+        productionTerms: '15–20 рабочих дней',
+        deliveryTerms: 'Ориентировочно 4 недели после утверждения декора',
         validUntil: '2026-08-20',
         commercialNote: '   ',
       },

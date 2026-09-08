@@ -149,10 +149,8 @@ function setField(label: string, value: string): void {
 }
 
 function fillCommercialTerms(): void {
-  setField('Срок производства от', '10');
-  setField('Срок производства до', '20');
-  setField('Срок доставки от', '14');
-  setField('Срок доставки до', '25');
+  setField('Срок производства', '15–20 рабочих дней');
+  setField('Срок доставки', 'Ориентировочно 4 недели после утверждения декора');
   setField('КП действительно до', '2026-08-20');
 }
 
@@ -186,8 +184,8 @@ describe('HplCalculatorWizard Step 8 quote commercial terms', () => {
 
     expect(screen.getByText('Коммерческие условия КП')).toBeInTheDocument();
     expect(screen.getByLabelText('Закупочная цена, CNY/м²')).toBeInTheDocument();
-    expect(screen.getByLabelText('Срок производства от')).toBeInTheDocument();
-    expect(screen.getByLabelText('Срок доставки от')).toBeInTheDocument();
+    expect(screen.getByLabelText('Срок производства')).toBeInTheDocument();
+    expect(screen.getByLabelText('Срок доставки')).toBeInTheDocument();
     expect(screen.getByLabelText('КП действительно до')).toBeInTheDocument();
     expect(screen.getByText('Дата КП')).toBeInTheDocument();
     expect(screen.getByText(formatDate(new Date()))).toBeInTheDocument();
@@ -223,10 +221,12 @@ describe('HplCalculatorWizard Step 8 quote commercial terms', () => {
     await openStep8();
     fillCommercialTerms();
 
-    expect(screen.getByLabelText('Срок производства от')).toHaveValue(10);
-    expect(screen.getByLabelText('Срок производства до')).toHaveValue(20);
-    expect(screen.getByLabelText('Срок доставки от')).toHaveValue(14);
-    expect(screen.getByLabelText('Срок доставки до')).toHaveValue(25);
+    expect(screen.getByLabelText('Срок производства')).toHaveValue(
+      '15–20 рабочих дней',
+    );
+    expect(screen.getByLabelText('Срок доставки')).toHaveValue(
+      'Ориентировочно 4 недели после утверждения декора',
+    );
     expect(screen.getByLabelText('КП действительно до')).toHaveValue('2026-08-20');
     expect(screen.queryByLabelText('Дата КП')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Примечание')).not.toBeInTheDocument();
@@ -259,8 +259,12 @@ describe('HplCalculatorWizard Step 8 quote commercial terms', () => {
       );
     });
     expect(screen.getByLabelText('Закупочная цена, CNY/м²')).toHaveValue(80);
-    expect(screen.getByLabelText('Срок производства от')).toHaveValue(10);
-    expect(screen.getByLabelText('Срок доставки до')).toHaveValue(25);
+    expect(screen.getByLabelText('Срок производства')).toHaveValue(
+      '15–20 рабочих дней',
+    );
+    expect(screen.getByLabelText('Срок доставки')).toHaveValue(
+      'Ориентировочно 4 недели после утверждения декора',
+    );
     expect(screen.getByLabelText('КП действительно до')).toHaveValue('2026-08-20');
     expect(screen.queryByLabelText('Дата КП')).not.toBeInTheDocument();
     expect(screen.getByText(formatDate(new Date()))).toBeInTheDocument();
@@ -318,10 +322,8 @@ describe('HplCalculatorWizard Step 8 quote commercial terms', () => {
       expect(convertMutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           calculationId: 'calc-1',
-          productionDaysFrom: 10,
-          productionDaysTo: 20,
-          deliveryDaysFrom: 14,
-          deliveryDaysTo: 25,
+          productionTerms: '15–20 рабочих дней',
+          deliveryTerms: 'Ориентировочно 4 недели после утверждения декора',
           validUntil: new Date(2026, 7, 20).toISOString(),
         }),
       );

@@ -25,6 +25,7 @@ import {
   useCalculationsByLead,
   useFinalizeCalculation,
 } from '@/hooks/use-calculations';
+import { useCalculationRequests } from '@/hooks/use-calculation-requests';
 import {
   useCreateLeadCall,
   useCreateLeadNote,
@@ -427,6 +428,8 @@ function QualificationContext({
                   value={formatThicknessMm(item.thicknessMm)}
                 />
                 <Field label="Цвет" value={formatColorLabel(item)} />
+                <Field label="Покрытие" value={item.coating} />
+                <Field label="Текстура" value={item.texture} />
                 <Field
                   label="Площадь"
                   value={formatAreaM2(item.requiredAreaM2)}
@@ -560,6 +563,7 @@ function ManagerCustomerNotePanel({
     : MANAGER_CUSTOMER_NOTE_HEAD_LABEL;
   const canHandoff =
     canWrite && lead.status === 'QUALIFIED' && !handedOffAt && !handoff.isPending;
+  const visibleNote = lead.managerCommercialNote?.trim() || '';
 
   return (
     <div
@@ -626,7 +630,7 @@ function ManagerCustomerNotePanel({
         </>
       ) : (
         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-900">
-          {lead.managerCommercialNote?.trim() || '—'}
+          {visibleNote || '—'}
         </p>
       )}
     </div>
@@ -770,6 +774,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const leadQuery = useLead(leadId);
   const workspaceQuery = useLeadWorkspace(leadId);
   const calculationsQuery = useCalculationsByLead(leadId);
+  const requestsQuery = useCalculationRequests({ leadId });
   const quotesQuery = useQuotes(leadId);
   const canReadUsers = user?.permissions.includes('users:read') ?? false;
   const { users, usersById } = useUsersList(canReadUsers);
@@ -815,6 +820,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
     () => quotesQuery.data ?? workspace?.quotes ?? [],
     [quotesQuery.data, workspace?.quotes],
   );
+  const hasCalculationRequest = (requestsQuery.data ?? []).length > 0;
   const qualification = workspace?.qualification ?? null;
   const commercialQualification = workspace?.commercialQualification ?? null;
   const permissions = user?.permissions ?? [];
@@ -1049,10 +1055,19 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                   />
                 </div>
               </div>
+              {!hasCalculationRequest ? (
               <ManagerCustomerNotePanel
-                lead={lead}
+                key={`${lead.id}:${lead.managerCommercialNote ?? workspace?.lead.managerCommercialNote ?? ''}`}
+                lead={{
+                  ...lead,
+                  managerCommercialNote:
+                    lead.managerCommercialNote ??
+                    workspace?.lead.managerCommercialNote ??
+                    null,
+                }}
                 canWrite={canWriteManagerNote}
               />
+              ) : null}
               {commercialQualification ? (
                 <div className="mt-6 border-t border-slate-200 pt-4">
                   <h4 className="text-sm font-semibold text-slate-900">

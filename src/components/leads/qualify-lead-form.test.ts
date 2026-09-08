@@ -259,6 +259,8 @@ describe('MANAGER Stage 1 qualification payload', () => {
       customHeightMm: null,
       colorCode: null,
       colorName: 'тёмно-серый',
+      coating: null,
+      texture: null,
       requiredAreaM2: 24.5,
     });
   });
@@ -283,6 +285,38 @@ describe('MANAGER Stage 1 qualification payload', () => {
       colorCode: 'RAL-7016',
       colorName: 'антрацит',
     });
+  });
+
+  it('persists optional customer coating and texture independently of color', () => {
+    const withFinish = buildQualificationItemPayload(
+      {
+        application: 'INTERIOR',
+        sizeMode: 'STANDARD',
+        colorName: 'Серый',
+        coating: 'матовое',
+        texture: 'под камень',
+        requiredAreaM2: 12,
+      },
+      UUID_TYPE,
+    );
+    expect(withFinish.coating).toBe('матовое');
+    expect(withFinish.texture).toBe('под камень');
+    expect(withFinish.colorName).toBe('Серый');
+
+    const blankFinish = buildQualificationItemPayload(
+      {
+        application: 'INTERIOR',
+        sizeMode: 'STANDARD',
+        colorName: 'Черный',
+        coating: '  ',
+        texture: '',
+        requiredAreaM2: 4,
+      },
+      UUID_TYPE,
+    );
+    expect(blankFinish.coating).toBeNull();
+    expect(blankFinish.texture).toBeNull();
+    expect(blankFinish.colorName).toBe('Черный');
   });
 
   it('omits panelSizeId for custom size and omits custom size for standard', () => {

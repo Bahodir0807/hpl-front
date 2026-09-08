@@ -36,6 +36,10 @@ import {
   duplicateRequestItem,
   requestItemSheetsCountDisplay,
 } from '@/lib/calculation-request';
+import { formatSupplierName } from '@/lib/labels';
+import {
+  MANAGER_CUSTOMER_NOTE_LABEL,
+} from '@/lib/manager-commercial-note';
 
 const inputClass =
   'w-full min-w-[7rem] rounded border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50';
@@ -61,6 +65,8 @@ type CalculationRequestFormProps = {
   onSaveDraft?: () => void;
   onSubmitToHead?: () => void;
   canEditSupplier?: boolean;
+  notesReadOnly?: boolean;
+  notesLabel?: string;
   saveLabel?: string;
 };
 
@@ -94,13 +100,11 @@ function HplRequestRow({
   const panelType = panelTypeById(catalogs.panelTypes, item.panelTypeId);
   const application = applicationFromPanelTypeCode(panelType?.code);
   const classes = catalogs.qualityClasses;
-  const colors = catalogs.panelColors;
   const showCustomType = isOtherPanelType(panelType);
   const showCustomSize = item.sizeMode === 'CUSTOM';
   const selectedSize = catalogs.panelSizes.find(
     (size) => size.id === item.panelSizeId,
   );
-  const selectedColorInCatalog = colors.some((color) => color.id === item.colorId);
 
   const setField = <K extends keyof CalculationRequestItemForm>(
     field: K,
@@ -138,24 +142,29 @@ function HplRequestRow({
   return (
     <>
       <tr className={errors ? 'bg-red-50/60' : undefined}>
-        {canEditSupplier ? (
-          <td className="px-2 py-2">
-            <select
-              aria-label={`Поставщик, строка ${index + 1}`}
-              className={inputClass}
-              disabled={readOnly}
-              value={item.supplierId}
-              onChange={(event) => setField('supplierId', event.target.value)}
-            >
-              <option value="">Выберите</option>
-              {(catalogs.suppliers ?? []).map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </td>
-        ) : null}
+        <td className="px-2 py-2">
+          <select
+            aria-label={`Поставщик, строка ${index + 1}`}
+            aria-invalid={Boolean(errorText('supplierId'))}
+            aria-describedby={errorId('supplierId')}
+            className={inputClass}
+            disabled={readOnly || !canEditSupplier}
+            value={item.supplierId}
+            onChange={(event) => setField('supplierId', event.target.value)}
+          >
+            <option value="">Выберите</option>
+            {(catalogs.suppliers ?? []).map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {formatSupplierName(supplier.code, supplier.name)}
+              </option>
+            ))}
+          </select>
+          {errorText('supplierId') ? (
+            <p id={errorId('supplierId')} className="mt-1 text-xs text-red-600">
+              {errorText('supplierId')}
+            </p>
+          ) : null}
+        </td>
         <td className="px-2 py-2">
           <SearchCombobox
             ariaLabel={`Линейка, строка ${index + 1}`}
@@ -313,37 +322,15 @@ function HplRequestRow({
           </span>
         </td>
         <td className="px-2 py-2">
-          <select
+          <input
             aria-label={`Декор, строка ${index + 1}`}
             className={inputClass}
             disabled={readOnly}
-            value={item.colorId}
-            onChange={(event) => {
-              const nextColorId = event.target.value;
-              const selected = colors.find((color) => color.id === nextColorId);
-              onChange({
-                ...item,
-                colorId: nextColorId,
-                colorName: selected?.name?.trim() ?? '',
-              });
-            }}
-          >
-            <option value="">Выберите</option>
-            {colors.map((color) => (
-              <option key={color.id} value={color.id}>
-                {formatColorLabel({
-                  colorCode: color.code,
-                  colorName: color.name,
-                })}
-              </option>
-            ))}
-            {item.colorId && !selectedColorInCatalog ? (
-              <option value={item.colorId}>
-                {item.colorName.trim() || item.colorId}
-              </option>
-            ) : null}
-          </select>
-          {!item.colorId && (item.colorName.trim() || item.colorCode.trim()) ? (
+            placeholder="Например, RAL 7016"
+            value={item.decor}
+            onChange={(event) => setField('decor', event.target.value)}
+          />
+          {item.colorName.trim() || item.colorCode.trim() ? (
             <p className="mt-1 text-[11px] leading-4 text-slate-600">
               Пожелание клиента:{' '}
               {formatColorLabel({
@@ -477,9 +464,7 @@ function CalculationGroup({
         <table className="min-w-[1280px] w-full border-collapse text-sm">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-600">
-              {canEditSupplier ? (
-                <th className="px-2 py-2">Поставщик</th>
-              ) : null}
+              <th className="px-2 py-2">Поставщик</th>
               <th className="px-2 py-2">Линейка</th>
               <th className="px-2 py-2">Тип HPL</th>
               <th className="px-2 py-2">Покрытие</th>
@@ -559,10 +544,13 @@ export function CalculationRequestForm({
   submitPending = false,
   onSaveDraft,
   onSubmitToHead,
-  canEditSupplier = false,
+  canEditSupplier = true,
+  notesReadOnly = false,
+  notesLabel = MANAGER_CUSTOMER_NOTE_LABEL,
   saveLabel = 'Сохранить черновик',
 }: CalculationRequestFormProps) {
   const busy = pending || submitPending;
+  const notesDisabled = readOnly || notesReadOnly || busy;
 
   return (
     <div className="space-y-4">
@@ -622,12 +610,12 @@ export function CalculationRequestForm({
 
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-slate-700">
-          Примечание / пожелания клиента
+          {notesLabel}
         </span>
         <textarea
-          aria-label="Примечание / пожелания клиента"
+          aria-label={notesLabel}
           className="min-h-24 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50"
-          disabled={readOnly || busy}
+          disabled={notesDisabled}
           value={value.notes}
           onChange={(event) => onChange({ ...value, notes: event.target.value })}
         />

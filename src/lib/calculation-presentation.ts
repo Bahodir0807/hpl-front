@@ -1,9 +1,11 @@
 export const CALCULATIONS_CREATE_PERMISSION = 'calculations:create';
 export const CALCULATIONS_READ_PERMISSION = 'calculations:read';
 export const CALCULATIONS_READ_ALL_PERMISSION = 'calculations:read_all';
+export const CALCULATIONS_UPDATE_PERMISSION = 'calculations:update';
 export const QUOTES_CREATE_PERMISSION = 'quotes:create';
 export const QUOTES_READ_ALL_PERMISSION = 'quotes:read_all';
 export const QUOTES_APPROVE_PERMISSION = 'quotes:approve';
+export const QUOTES_CLIENT_ACCEPT_PERMISSION = 'quotes:client_accept';
 export const LEADS_COMMERCIAL_QUALIFY_PERMISSION = 'leads:commercial_qualify';
 
 export const COMMERCIAL_CALCULATION_WAITING_COPY =
@@ -106,6 +108,35 @@ export function canCreateCalculationRequest(
   permissions: readonly string[] | null | undefined,
 ): boolean {
   return hasPermission(permissions, CALCULATIONS_CREATE_PERMISSION);
+}
+
+/** Qualify auto-creates one DRAFT. Manual create would duplicate it. */
+export function canShowCreateCalculationRequestAction(
+  permissions?: readonly string[] | null,
+): boolean {
+  void permissions;
+  return false;
+}
+
+/**
+ * MANAGER capability to submit a DRAFT calculation request.
+ * Positive grants: calculations:create + calculations:update + quotes:client_accept.
+ * HEAD has create/update but not quotes:client_accept, so canSubmit is false.
+ */
+export function canSubmitCalculationRequest(
+  permissions: readonly string[] | null | undefined,
+): boolean {
+  return (
+    hasPermission(permissions, CALCULATIONS_CREATE_PERMISSION) &&
+    hasPermission(permissions, CALCULATIONS_UPDATE_PERMISSION) &&
+    hasPermission(permissions, QUOTES_CLIENT_ACCEPT_PERMISSION)
+  );
+}
+
+export function canShowSubmitCalculationRequestToHead(
+  permissions?: readonly string[] | null,
+): boolean {
+  return canSubmitCalculationRequest(permissions);
 }
 
 export function shouldWaitForCommercialCalculation({

@@ -96,10 +96,10 @@ export type CalculationRequestStatus =
 
 export type CalculationItem = {
   id?: string;
-  panelTypeId: string;
+  panelTypeId?: string | null;
   supplierId?: string | null;
   qualityClassId?: string | null;
-  thicknessMm: number | string;
+  thicknessMm?: number | string | null;
   panelSizeId?: string | null;
   customWidthMm?: number | string | null;
   customHeightMm?: number | string | null;
@@ -256,6 +256,8 @@ export type LeadQualificationItem = {
   customHeightMm?: number | string | null;
   colorCode?: string | null;
   colorName?: string | null;
+  coating?: string | null;
+  texture?: string | null;
   requiredAreaM2?: number | string | null;
   panelType?: LeadQualification['panelType'];
   panelSize?: LeadQualification['panelSize'];

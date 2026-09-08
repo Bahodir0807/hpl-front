@@ -38,6 +38,7 @@ function filledItem(
   return {
     ...createEmptyRequestItem(),
     qualityClassId: "q-medium",
+    supplierId: "sup-1",
     panelTypeId: "type-interior",
     thicknessMm: "8",
     panelSizeId: "size-1",
@@ -72,7 +73,7 @@ describe("calculation request form helpers", () => {
     const duplicated = form.calculations[1].items[0];
     expect(duplicated.id).toBeUndefined();
     expect(duplicated.key).not.toBe(form.calculations[0].items[0].key);
-    expect(duplicated).not.toHaveProperty("supplierId");
+    expect(duplicated.supplierId).toBe(form.calculations[0].items[0].supplierId);
   });
 
   it("maps every qualification item into one calculation request row", () => {
@@ -87,6 +88,8 @@ describe("calculation request form helpers", () => {
           panelSizeId: "size-1",
           thicknessMm: "8",
           colorCode: "W100",
+          coating: "Матовый",
+          texture: "Под камень",
           requiredAreaM2: "12.5",
         },
         {
@@ -121,6 +124,8 @@ describe("calculation request form helpers", () => {
           panelSizeId: "size-1",
           thicknessMm: "8",
           colorCode: "W100",
+          coating: "Матовый",
+          texture: "Под камень",
           requiredAreaM2: "12.5",
         }),
         expect.objectContaining({
@@ -215,7 +220,7 @@ describe("calculation request form helpers", () => {
 
     expect(duplicated.id).toBeUndefined();
     expect(duplicated.sheetsCount).toBe("");
-    expect(duplicated).not.toHaveProperty("supplierId");
+    expect(duplicated.supplierId).toBe("legacy-supplier");
     expect(duplicated.qualityClassId).toBe(source.qualityClassId);
     expect(duplicated.panelTypeId).toBe(source.panelTypeId);
     expect(duplicated.coating).toBe("PE");
@@ -231,17 +236,18 @@ describe("calculation request form helpers", () => {
     ).toBe("180 шт.");
   });
 
-  it("maps Decor UI selection to colorId and never sends decor or colorName", () => {
+  it("serializes Decor as free text and keeps customer colorName separate", () => {
     const form = createEmptyRequestForm();
     form.calculations[0].items[0] = filledItem({
       colorId: "color-wenge",
-      colorName: "Wenge",
+      colorName: "Серый",
+      decor: "Concrete Grey 7016",
     });
 
     const payload = serializeCalculationRequest(form, { leadId: "lead-1" });
-    expect(payload.calculations[0].items[0].colorId).toBe("color-wenge");
-    expect(payload.calculations[0].items[0]).not.toHaveProperty("decor");
-    expect(payload.calculations[0].items[0]).not.toHaveProperty("colorName");
+    expect(payload.calculations[0].items[0]).not.toHaveProperty("colorId");
+    expect(payload.calculations[0].items[0].decor).toBe("Concrete Grey 7016");
+    expect(payload.calculations[0].items[0].colorName).toBe("Серый");
   });
 
   it("never serializes sheetsCount on manager POST or PATCH payloads", () => {
@@ -285,10 +291,7 @@ describe("calculation request form helpers", () => {
         },
         "create",
       ),
-    ).toEqual([
-      "calculations[0].items[0].supplierId",
-      "calculations[0].items[0].sheetsCount",
-    ]);
+    ).toEqual(["calculations[0].items[0].sheetsCount"]);
   });
 
   it("does not block submit on a leftover sheetsCount form value", () => {
@@ -363,6 +366,26 @@ describe("calculation request form helpers", () => {
     ).toBe("Укажите размер");
   });
 
+  it("lets HEAD save incomplete rows when completeness is not required", () => {
+    const form = createEmptyRequestForm();
+    form.calculations[0].items[0] = createEmptyRequestItem();
+    form.calculations[0].items[0].colorName = "Черный";
+    form.calculations[0].items[0].texture = "Гладкий";
+    form.calculations[0].items[0].decor = "Black Woodgrain X2";
+
+    expect(
+      validateRequestForm(form, PANEL_TYPES, {
+        requireCompleteTechnicalFields: false,
+      }).valid,
+    ).toBe(true);
+    const payload = serializeCalculationRequest(form);
+    expect(payload.calculations[0].items[0]).toEqual({
+      colorName: "Черный",
+      texture: "Гладкий",
+      decor: "Black Woodgrain X2",
+    });
+  });
+
   it("serializes a manager CalculationRequest without purchasePricePerM2Cny or unknown DTO fields", () => {
     const form = createEmptyRequestForm();
     form.notes = "Нужен CIP Tashkent";
@@ -414,10 +437,11 @@ describe("calculation request form helpers", () => {
           items: [
             {
               panelTypeId: "type-interior",
+              supplierId: "sup-1",
               qualityClassId: "q-medium",
               thicknessMm: "8",
               panelSizeId: "size-1",
-              colorId: "color-wenge",
+              colorName: "Wenge",
               coating: "PE",
               texture: "Wood",
               requiredAreaM2: "30",
@@ -432,6 +456,7 @@ describe("calculation request form helpers", () => {
           items: [
             {
               panelTypeId: "type-other",
+              supplierId: "sup-1",
               qualityClassId: "q-premium",
               thicknessMm: "6",
               panelSizeId: "size-2",
@@ -440,10 +465,11 @@ describe("calculation request form helpers", () => {
             },
             {
               panelTypeId: "type-interior",
+              supplierId: "sup-1",
               qualityClassId: "q-premium",
               thicknessMm: "8",
               panelSizeId: "size-1",
-              colorId: "color-black",
+              colorName: "Чёрный",
               coating: "UV",
               requiredAreaM2: "18",
             },
@@ -457,10 +483,10 @@ describe("calculation request form helpers", () => {
     expect(payload.calculations[0]).not.toHaveProperty("id");
     expect(payload.calculations[0]).not.toHaveProperty("sortOrder");
     expect(payload.calculations[0].items[0]).not.toHaveProperty("id");
+    expect(payload.calculations[0].items[0]).not.toHaveProperty("colorId");
     expect(payload.calculations[0].items[0]).not.toHaveProperty("decor");
-    expect(payload.calculations[0].items[0]).not.toHaveProperty("colorName");
     expect(payload.calculations[0].items[0]).not.toHaveProperty("sheetsCount");
-    expect(JSON.stringify(payload)).not.toContain("supplierId");
+    expect(payload.calculations[0].items[0].supplierId).toBe("sup-1");
     expect(payload.calculations[0].items[0]).not.toHaveProperty(
       "purchasePricePerM2Cny",
     );
@@ -553,7 +579,7 @@ describe("calculation request form helpers", () => {
     ).toBe(true);
   });
 
-  it("restores GET technical fields including decor display from colorId/colorName", () => {
+  it("restores GET technical fields including Decor text and customer color", () => {
     const request: CalculationRequest = {
       id: "req-1",
       status: "processing",
@@ -575,9 +601,10 @@ describe("calculation request form helpers", () => {
               customHeightMm: 3050,
               coating: "PE",
               texture: "Wood",
+              decor: "Concrete Grey 7016",
               customTypeDescription: "Спец. лаборатория",
               colorId: "color-wenge",
-              colorName: "Wenge",
+              colorName: "Серый",
               color: { id: "color-wenge", colorName: "Wenge" },
               requiredAreaM2: "30",
             },
@@ -599,7 +626,8 @@ describe("calculation request form helpers", () => {
     expect(hydrated.customWidthMm).toBe("1230");
     expect(hydrated.customHeightMm).toBe("3050");
     expect(hydrated.colorId).toBe("color-wenge");
-    expect(hydrated.colorName).toBe("Wenge");
+    expect(hydrated.colorName).toBe("Серый");
+    expect(hydrated.decor).toBe("Concrete Grey 7016");
     expect(hydrated.coating).toBe("PE");
     expect(hydrated.texture).toBe("Wood");
     expect(hydrated.customTypeDescription).toBe("Спец. лаборатория");
@@ -607,7 +635,7 @@ describe("calculation request form helpers", () => {
 
     const patched = serializeCalculationRequest(requestFormFromApi(request));
     expect(patched.calculations[0].items[0]).not.toHaveProperty("sheetsCount");
-    expect(patched.calculations[0].items[0]).not.toHaveProperty("supplierId");
+    expect(patched.calculations[0].items[0].supplierId).toBe("sup-1");
   });
 
   it("hydrates sheetsCount 0 and decor display from nested color snapshot", () => {
@@ -626,6 +654,8 @@ describe("calculation request form helpers", () => {
               supplierId: "sup-1",
               thicknessMm: "8",
               sheetsCount: 0,
+              colorName: "Серый",
+              decor: "White Oak",
               colorId: "color-oak",
               color: { colorCode: "W100", colorName: "White Oak" },
             },
@@ -639,7 +669,8 @@ describe("calculation request form helpers", () => {
     const hydrated = requestFormFromApi(request).calculations[0].items[0];
     expect(hydrated.sheetsCount).toBe("0");
     expect(hydrated.colorId).toBe("color-oak");
-    expect(hydrated.colorName).toBe("W100 · White Oak");
+    expect(hydrated.colorName).toBe("Серый");
+    expect(hydrated.decor).toBe("White Oak");
   });
 
   it("previews sheetsCount from catalog widthMm/heightMm, rounding up", () => {
@@ -693,6 +724,72 @@ describe("calculation request form helpers", () => {
   it("uses the request convert path rather than legacy convert", () => {
     expect(REQUEST_CONVERT_TO_QUOTE_PATH).toBe(
       "/calculations/requests/:id/convert-to-quote",
+    );
+  });
+
+  it("persists manager notes on create and patch payloads", () => {
+    const form = createEmptyRequestForm();
+    form.notes =
+      "Клиент хочет жёлтый декор, окончательный цвет согласовать перед заказом.";
+    form.calculations[0].items[0] = filledItem();
+
+    const created = serializeCalculationRequest(form, { leadId: "lead-1" });
+    expect(created.notes).toBe(
+      "Клиент хочет жёлтый декор, окончательный цвет согласовать перед заказом.",
+    );
+
+    const patched = serializeCalculationRequest(form);
+    expect(patched.notes).toBe(
+      "Клиент хочет жёлтый декор, окончательный цвет согласовать перед заказом.",
+    );
+
+    const restored = requestFormFromApi({
+      id: "req-1",
+      status: "submitted",
+      notes: created.notes,
+      createdAt: "2026-08-20T10:00:00.000Z",
+      updatedAt: "2026-08-20T10:00:00.000Z",
+      calculations: [
+        {
+          id: "calc-1",
+          items: [
+            {
+              panelTypeId: "type-interior",
+              supplierId: "sup-1",
+              qualityClassId: "q-medium",
+              thicknessMm: "8",
+              panelSizeId: "size-1",
+              requiredAreaM2: "30",
+            },
+          ],
+          createdAt: "2026-08-20T10:00:00.000Z",
+          updatedAt: "2026-08-20T10:00:00.000Z",
+        },
+      ],
+    });
+    expect(restored.notes).toBe(created.notes);
+  });
+
+  it("serializes different suppliers on different HPL items", () => {
+    const form = createEmptyRequestForm();
+    form.calculations[0].items = [
+      filledItem({ supplierId: "sup-polybet" }),
+      filledItem({ supplierId: "sup-tianran" }),
+    ];
+
+    const payload = serializeCalculationRequest(form, { leadId: "lead-1" });
+    expect(payload.calculations[0].items[0].supplierId).toBe("sup-polybet");
+    expect(payload.calculations[0].items[1].supplierId).toBe("sup-tianran");
+    expect(validateRequestForm(form, PANEL_TYPES).valid).toBe(true);
+  });
+
+  it("requires a per-item supplier before the request is complete", () => {
+    const form = createEmptyRequestForm();
+    form.calculations[0].items[0] = filledItem({ supplierId: "" });
+    const result = validateRequestForm(form, PANEL_TYPES);
+    expect(result.valid).toBe(false);
+    expect(result.itemErrors[form.calculations[0].items[0].key]?.supplierId).toBe(
+      "Укажите поставщика",
     );
   });
 });

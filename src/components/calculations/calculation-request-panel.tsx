@@ -23,10 +23,11 @@ import {
   ADD_CALCULATION_LABEL,
   CONVERT_REQUEST_TO_QUOTE_LABEL,
   CREATE_CALCULATION_REQUEST_LABEL,
-  SUBMIT_TO_HEAD_LABEL,
   canConvertCalculationRequestToQuote,
   canConvertRequestToQuote,
   canCreateCalculationRequest,
+  canShowCreateCalculationRequestAction,
+  canShowSubmitCalculationRequestToHead,
   calculationRequestStatusLabel,
   createEmptyRequestForm,
   isDraftCalculationRequest,
@@ -48,8 +49,11 @@ import {
 } from "@/lib/hpl-errors";
 import { formatDateTime } from "@/lib/format";
 import { formatPersonName } from "@/lib/display-names";
-import { formatSupplierName } from "@/lib/labels";
-import type { CalculationRequest, Supplier } from "@/types/hpl";
+import {
+  MANAGER_CUSTOMER_NOTE_HEAD_LABEL,
+  MANAGER_CUSTOMER_NOTE_LABEL,
+} from "@/lib/manager-commercial-note";
+import type { CalculationRequest } from "@/types/hpl";
 
 type CalculationRequestPanelProps = {
   leadId?: string | null;
@@ -59,65 +63,35 @@ type CalculationRequestPanelProps = {
 
 function HeadConvertControls({
   requestId,
-  suppliers,
-  supplierId,
   error,
   pending,
-  onSupplierChange,
   onConvert,
-  supplierRequired = true,
 }: {
   requestId: string;
-  suppliers: Supplier[];
-  supplierId: string;
   error?: string;
   pending: boolean;
-  onSupplierChange: (supplierId: string) => void;
   onConvert: () => void;
-  supplierRequired?: boolean;
 }) {
-  const errorId = error ? `convert-supplier-${requestId}-error` : undefined;
+  const errorId = error ? `convert-quote-${requestId}-error` : undefined;
 
   return (
     <div className="flex flex-wrap items-end justify-end gap-2 text-left">
-      <label className="min-w-48">
-        <span className="mb-1 block text-xs font-medium text-slate-700">
-          Поставщик
-        </span>
-        <select
-          aria-label={`Поставщик для расчёта ${requestId}`}
-          aria-invalid={Boolean(error)}
-          aria-describedby={errorId}
-          className={`w-full rounded border bg-white px-2 py-1.5 text-sm outline-none ${
-            error
-              ? "border-red-500 focus:border-red-600"
-              : "border-slate-300 focus:border-slate-500"
-          }`}
+      <div>
+        <Button
+          type="button"
+          size="sm"
           disabled={pending}
-          value={supplierId}
-          onChange={(event) => onSupplierChange(event.target.value)}
+          aria-describedby={errorId}
+          onClick={onConvert}
         >
-          <option value="">Выберите</option>
-          {suppliers.map((supplier) => (
-            <option key={supplier.id} value={supplier.id}>
-              {formatSupplierName(supplier.code, supplier.name)}
-            </option>
-          ))}
-        </select>
+          {pending ? "Создание КП..." : CONVERT_REQUEST_TO_QUOTE_LABEL}
+        </Button>
         {error ? (
           <span id={errorId} className="mt-1 block text-xs text-red-600">
             {error}
           </span>
         ) : null}
-      </label>
-      <Button
-        type="button"
-        size="sm"
-        disabled={pending || (supplierRequired && !supplierId)}
-        onClick={onConvert}
-      >
-        {pending ? "Создание КП..." : CONVERT_REQUEST_TO_QUOTE_LABEL}
-      </Button>
+      </div>
     </div>
   );
 }
@@ -129,12 +103,14 @@ export function CalculationRequestPanel({
   const { user } = useAuth();
   const permissions = user?.permissions ?? [];
   const canCreate = canCreateCalculationRequest(permissions);
+  const canShowCreate = canShowCreateCalculationRequestAction(permissions);
+  const canSubmitToHead = canShowSubmitCalculationRequestToHead(permissions);
   const canConvert = canConvertCalculationRequestToQuote(permissions);
   const requestsQuery = useCalculationRequests({
     ...(leadId ? { leadId } : {}),
     ...(clientId && !leadId ? { clientId } : {}),
   });
-  const suppliersQuery = useSuppliers(canConvert);
+  const suppliersQuery = useSuppliers(canCreate || canConvert);
   const typesQuery = usePanelTypes();
   const sizesQuery = usePanelSizes();
   const colorsQuery = usePanelColors();
@@ -150,9 +126,6 @@ export function CalculationRequestPanel({
   );
   const [itemErrors, setItemErrors] = useState<
     Record<string, CalculationRequestItemErrors>
-  >({});
-  const [convertSupplierIds, setConvertSupplierIds] = useState<
-    Record<string, string>
   >({});
   const [convertErrors, setConvertErrors] = useState<Record<string, string>>(
     {},
@@ -194,7 +167,8 @@ export function CalculationRequestPanel({
       panelSizes: sizesQuery.data ?? [],
       qualityClasses,
       panelColors: colorsQuery.data ?? [],
-      suppliers: suppliersQuery.data ?? [],
+      suppliers:
+        suppliersQuery.data ?? workspaceQuery.data?.catalog.suppliers ?? [],
     }),
     [
       colorsQuery.data,
@@ -202,6 +176,7 @@ export function CalculationRequestPanel({
       sizesQuery.data,
       suppliersQuery.data,
       typesQuery.data,
+      workspaceQuery.data?.catalog.suppliers,
     ],
   );
   const catalogError =
@@ -235,9 +210,7 @@ export function CalculationRequestPanel({
     }
     const payload = serializeCalculationRequest(
       current,
-      isNew && leadId
-        ? { leadId }
-        : { includeItemSuppliers: headReviewEditable },
+      isNew && leadId ? { leadId } : {},
     );
     if (!isNew) {
       const updated = await updateRequest.mutateAsync({
@@ -253,14 +226,21 @@ export function CalculationRequestPanel({
     return created;
   };
 
-  const validate = (current: CalculationRequestFormValues): boolean => {
-    const result = validateRequestForm(current, catalogs.panelTypes);
+  const validate = (
+    current: CalculationRequestFormValues,
+    options?: { requireCompleteTechnicalFields?: boolean },
+  ): boolean => {
+    const result = validateRequestForm(current, catalogs.panelTypes, options);
     setItemErrors(result.itemErrors);
     return result.valid;
   };
 
   const onSaveDraft = async (): Promise<void> => {
-    if (!validate(form)) {
+    if (
+      !validate(form, {
+        requireCompleteTechnicalFields: false,
+      })
+    ) {
       return;
     }
     await persist(form);
@@ -286,24 +266,10 @@ export function CalculationRequestPanel({
     setEditingId(submitted.id);
   };
 
-  const setConvertSupplier = (id: string, supplierId: string): void => {
-    setConvertSupplierIds((current) => ({ ...current, [id]: supplierId }));
-    setConvertErrors((current) => ({ ...current, [id]: "" }));
-  };
-
   const onConvert = async (id: string): Promise<void> => {
-    const supplierId = convertSupplierIds[id]?.trim() ?? "";
-    if (!supplierId) {
-      setConvertErrors((current) => ({
-        ...current,
-        [id]: QUOTE_SUPPLIER_REQUIRED_MESSAGE,
-      }));
-      return;
-    }
-
     setConvertErrors((current) => ({ ...current, [id]: "" }));
     try {
-      await convertRequest.mutateAsync({ id, supplierId });
+      await convertRequest.mutateAsync({ id });
     } catch (error) {
       setConvertErrors((current) => ({
         ...current,
@@ -325,14 +291,14 @@ export function CalculationRequestPanel({
           <h3 className="text-base font-semibold text-slate-950">
             Запросы расчёта
           </h3>
-          {canCreate && !leadId ? (
+          {canShowCreate && !leadId ? (
             <p className="mt-1 text-sm text-slate-600">
               Новый запрос создаётся из карточки лида — здесь можно открыть уже
               существующие.
             </p>
           ) : null}
         </div>
-        {canCreate && leadId ? (
+        {canShowCreate && leadId ? (
           <Button type="button" size="sm" onClick={openNew}>
             {CREATE_CALCULATION_REQUEST_LABEL}
           </Button>
@@ -407,20 +373,9 @@ export function CalculationRequestPanel({
                       {canConvert && canConvertRequestToQuote(request) ? (
                         <HeadConvertControls
                           requestId={request.id}
-                          suppliers={suppliersQuery.data ?? []}
-                          supplierId={convertSupplierIds[request.id] ?? ""}
-                          error={
-                            convertErrors[request.id] ||
-                            (suppliersQuery.isError
-                              ? "Не удалось загрузить поставщиков."
-                              : undefined)
-                          }
+                          error={convertErrors[request.id]}
                           pending={convertRequest.isPending}
-                          onSupplierChange={(supplierId) =>
-                            setConvertSupplier(request.id, supplierId)
-                          }
                           onConvert={() => void onConvert(request.id)}
-                          supplierRequired
                         />
                       ) : null}
                     </div>
@@ -460,9 +415,21 @@ export function CalculationRequestPanel({
             catalogs={catalogs}
             catalogError={catalogError}
             readOnly={readOnly}
-            canEditSupplier={headReviewEditable}
+            canEditSupplier={!readOnly || headReviewEditable}
+            notesReadOnly={
+              editingRequest
+                ? !isDraftCalculationRequest(editingRequest.status)
+                : false
+            }
+            notesLabel={
+              headReviewEditable || readOnly
+                ? MANAGER_CUSTOMER_NOTE_HEAD_LABEL
+                : MANAGER_CUSTOMER_NOTE_LABEL
+            }
             saveLabel={headReviewEditable ? "Сохранить изменения" : undefined}
-            canSubmitToHead={canCreate && !readOnly && !headReviewEditable}
+            canSubmitToHead={
+              canSubmitToHead && !readOnly && !headReviewEditable
+            }
             pending={createRequest.isPending || updateRequest.isPending}
             submitPending={submitRequest.isPending}
             onSaveDraft={
@@ -471,45 +438,26 @@ export function CalculationRequestPanel({
                 : undefined
             }
             onSubmitToHead={
-              canCreate && !readOnly && !headReviewEditable
+              canSubmitToHead && !readOnly && !headReviewEditable
                 ? () => void onSubmitToHead()
                 : undefined
             }
           />
-          {readOnly && canConvert ? (
-            <div className="space-y-3">
-              <p className="text-sm text-slate-600">
-                Примечание запроса доступно только для просмотра. Коммерческие
-                условия задаются в КП после создания черновика.
-              </p>
-              {editingId !== "new" &&
-              editingRequest &&
-              canConvertRequestToQuote(editingRequest) ? (
-                <HeadConvertControls
-                  requestId={editingId}
-                  suppliers={suppliersQuery.data ?? []}
-                  supplierId={convertSupplierIds[editingId] ?? ""}
-                  error={
-                    convertErrors[editingId] ||
-                    (suppliersQuery.isError
-                      ? "Не удалось загрузить поставщиков."
-                      : undefined)
-                  }
-                  pending={convertRequest.isPending}
-                  onSupplierChange={(supplierId) =>
-                    setConvertSupplier(editingId, supplierId)
-                  }
-                  onConvert={() => void onConvert(editingId)}
-                  supplierRequired
-                />
-              ) : null}
-            </div>
+          {canConvert &&
+          editingId !== "new" &&
+          editingRequest &&
+          canConvertRequestToQuote(editingRequest) ? (
+            <HeadConvertControls
+              requestId={editingId}
+              error={convertErrors[editingId]}
+              pending={convertRequest.isPending}
+              onConvert={() => void onConvert(editingId)}
+            />
           ) : null}
         </div>
       ) : null}
 
       <span className="sr-only">{ADD_CALCULATION_LABEL}</span>
-      <span className="sr-only">{SUBMIT_TO_HEAD_LABEL}</span>
     </div>
   );
 }

@@ -142,6 +142,15 @@ describe("CalculationRequestForm", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("lets a manager assign a supplier to each HPL row", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const supplier = screen.getByLabelText("Поставщик, строка 1");
+    expect(supplier).toBeEnabled();
+    await user.selectOptions(supplier, "sup-2");
+    expect(supplier).toHaveValue("sup-2");
+  });
+
   it("lets HEAD assign suppliers independently to each HPL row", async () => {
     const user = userEvent.setup();
     const form = createEmptyRequestForm();
@@ -185,6 +194,43 @@ describe("CalculationRequestForm", () => {
         ],
       }),
     );
+  });
+
+  it("lets a manager edit the customer note that HEAD later sees read-only", () => {
+    const form = createEmptyRequestForm();
+    form.notes =
+      "Клиент хочет жёлтый декор, окончательный цвет согласовать перед заказом.";
+    const onChange = vi.fn();
+
+    const { rerender } = render(
+      <CalculationRequestForm
+        value={form}
+        onChange={onChange}
+        catalogs={catalogs}
+      />,
+    );
+    expect(
+      screen.getByLabelText("Примечание / пожелания клиента"),
+    ).toHaveValue(
+      "Клиент хочет жёлтый декор, окончательный цвет согласовать перед заказом.",
+    );
+
+    rerender(
+      <CalculationRequestForm
+        value={form}
+        onChange={onChange}
+        catalogs={catalogs}
+        notesReadOnly
+        notesLabel="Примечание менеджера / пожелания клиента"
+      />,
+    );
+    const headNote = screen.getByLabelText(
+      "Примечание менеджера / пожелания клиента",
+    );
+    expect(headNote).toHaveValue(
+      "Клиент хочет жёлтый декор, окончательный цвет согласовать перед заказом.",
+    );
+    expect(headNote).toBeDisabled();
   });
 
   it("loads the global economy/medium/premium catalog without supplier", async () => {
@@ -276,7 +322,7 @@ describe("CalculationRequestForm", () => {
     expect(onSubmit).toHaveBeenCalled();
   });
 
-  it("keeps the standard size select visible and maps Decor to a PanelColor id", async () => {
+  it("lets HEAD type arbitrary Decor text without a PanelColor catalog", async () => {
     const user = userEvent.setup();
     function DecorHarness() {
       const [value, setValue] = useState(createEmptyRequestForm());
@@ -290,33 +336,61 @@ describe("CalculationRequestForm", () => {
           <output aria-label="Выбранный colorId">
             {value.calculations[0].items[0].colorId}
           </output>
+          <output aria-label="Текущий decor">
+            {value.calculations[0].items[0].decor}
+          </output>
+          <output aria-label="Текущий colorName">
+            {value.calculations[0].items[0].colorName}
+          </output>
         </div>
       );
     }
 
     render(<DecorHarness />);
     expect(screen.getByLabelText("Размер, строка 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Декор, строка 1").tagName).toBe("INPUT");
     expect(
-      screen.queryByLabelText("Ширина мм, строка 1"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByLabelText("Высота мм, строка 1"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "Нестандартный" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "Нестандартный размер" }),
+      screen.queryByRole("combobox", { name: "Декор, строка 1" }),
     ).not.toBeInTheDocument();
 
-    await user.selectOptions(
+    await user.type(
       screen.getByLabelText("Декор, строка 1"),
-      "color-wenge",
+      "Concrete Grey 7016",
     );
-    expect(screen.getByLabelText("Выбранный colorId")).toHaveTextContent(
-      "color-wenge",
+    expect(screen.getByLabelText("Текущий decor")).toHaveTextContent(
+      "Concrete Grey 7016",
     );
-    expect(screen.getByLabelText("Декор, строка 1")).toHaveValue("color-wenge");
+    expect(screen.getByLabelText("Выбранный colorId")).toHaveTextContent("");
+    expect(screen.getByLabelText("Текущий colorName")).toHaveTextContent("");
+  });
+
+  it("keeps the customer color hint when HEAD types Decor", async () => {
+    const user = userEvent.setup();
+    function HintHarness() {
+      const [value, setValue] = useState(() => {
+        const form = createEmptyRequestForm();
+        form.calculations[0].items[0].colorName = "Серый";
+        return form;
+      });
+      return (
+        <CalculationRequestForm
+          value={value}
+          onChange={setValue}
+          catalogs={catalogs}
+        />
+      );
+    }
+
+    render(<HintHarness />);
+    expect(screen.getByText(/Пожелание клиента:/)).toHaveTextContent("Серый");
+    await user.type(
+      screen.getByLabelText("Декор, строка 1"),
+      "Concrete Grey 7016",
+    );
+    expect(screen.getByText(/Пожелание клиента:/)).toHaveTextContent("Серый");
+    expect(screen.getByLabelText("Декор, строка 1")).toHaveValue(
+      "Concrete Grey 7016",
+    );
   });
 
   it("keeps add/duplicate/delete as non-submit buttons", () => {

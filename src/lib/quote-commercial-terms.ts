@@ -117,10 +117,10 @@ export function validateDayRange(from: string, to: string): string | null {
 export type QuoteCommercialTermsForm = {
   productionTerms?: string;
   deliveryTerms?: string;
-  productionDaysFrom: string;
-  productionDaysTo: string;
-  deliveryDaysFrom: string;
-  deliveryDaysTo: string;
+  productionDaysFrom?: string;
+  productionDaysTo?: string;
+  deliveryDaysFrom?: string;
+  deliveryDaysTo?: string;
   validUntil: string;
   commercialNote?: string;
   internalCommercialNote?: string;
@@ -180,22 +180,11 @@ export function hasCompleteQuoteClientTerms(quote: {
 export function validateQuoteCommercialTerms(
   form: QuoteCommercialTermsForm,
 ): string | null {
-  const production = form.productionTerms?.trim()
-    ? null
-    : validateDayRange(form.productionDaysFrom, form.productionDaysTo);
-  if (production) {
-    return production === DAY_RANGE_ORDER_MESSAGE
-      ? production
-      : PRODUCTION_REQUIRED_MESSAGE;
+  if (!form.productionTerms?.trim()) {
+    return PRODUCTION_REQUIRED_MESSAGE;
   }
-
-  const delivery = form.deliveryTerms?.trim()
-    ? null
-    : validateDayRange(form.deliveryDaysFrom, form.deliveryDaysTo);
-  if (delivery) {
-    return delivery === DAY_RANGE_ORDER_MESSAGE
-      ? delivery
-      : DELIVERY_REQUIRED_MESSAGE;
+  if (!form.deliveryTerms?.trim()) {
+    return DELIVERY_REQUIRED_MESSAGE;
   }
 
   if (!form.validUntil.trim()) {
@@ -209,10 +198,6 @@ export function buildQuoteCommercialTermsPayload(
   form: QuoteCommercialTermsForm,
   options?: { includeNote?: boolean },
 ): {
-  productionDaysFrom?: number;
-  productionDaysTo?: number;
-  deliveryDaysFrom?: number;
-  deliveryDaysTo?: number;
   validUntil?: string;
   commercialNote?: string;
   internalCommercialNote?: string;
@@ -221,16 +206,14 @@ export function buildQuoteCommercialTermsPayload(
 } {
   const includeNote = options?.includeNote === true;
   const note = form.commercialNote?.trim();
+  const productionText = form.productionTerms?.trim();
+  const deliveryText = form.deliveryTerms?.trim();
 
   return {
-    productionDaysFrom: parsePositiveInt(form.productionDaysFrom) ?? undefined,
-    productionDaysTo: parsePositiveInt(form.productionDaysTo) ?? undefined,
-    deliveryDaysFrom: parsePositiveInt(form.deliveryDaysFrom) ?? undefined,
-    deliveryDaysTo: parsePositiveInt(form.deliveryDaysTo) ?? undefined,
     validUntil: dateInputToIso(form.validUntil),
     ...(includeNote ? { commercialNote: note || '' } : {}),
-    productionTerms: form.productionTerms?.trim() || undefined,
-    deliveryTerms: form.deliveryTerms?.trim() || undefined,
+    ...(productionText ? { productionTerms: productionText } : {}),
+    ...(deliveryText ? { deliveryTerms: deliveryText } : {}),
     ...(includeNote
       ? { internalCommercialNote: form.internalCommercialNote?.trim() || '' }
       : {}),

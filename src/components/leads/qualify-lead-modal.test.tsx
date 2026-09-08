@@ -337,6 +337,42 @@ describe('QualifyLeadModal MANAGER Stage 1', () => {
     expect(JSON.stringify(payload)).not.toContain('RAL-');
   });
 
+  it('sends optional coating and texture as customer intent', async () => {
+    render(<QualifyLeadModal lead={newQualificationLead()} isOpen onClose={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить HPL-позицию' }));
+    await userEvent.selectOptions(
+      screen.getByLabelText('Применение / тип HPL'),
+      'INTERIOR',
+    );
+    await userEvent.type(
+      screen.getByLabelText('Желаемый цвет / описание позиции 1'),
+      'Серый',
+    );
+    await userEvent.type(
+      screen.getByLabelText('Покрытие позиции 1'),
+      'Матовый',
+    );
+    await userEvent.type(
+      screen.getByLabelText('Текстура позиции 1'),
+      'Под камень',
+    );
+    await userEvent.type(screen.getByLabelText('Площадь позиции 1'), '12');
+    await fillRequiredManagerFields();
+    await userEvent.click(screen.getByRole('button', { name: 'Квалифицировать' }));
+
+    const payload = mutateAsync.mock.calls[0]?.[0] as {
+      qualification: {
+        items: Array<Record<string, unknown>>;
+      };
+    };
+    expect(payload.qualification.items[0]).toMatchObject({
+      colorName: 'Серый',
+      coating: 'Матовый',
+      texture: 'Под камень',
+    });
+  });
+
   it('makes Срочно and Готов ждать mutually exclusive', async () => {
     render(<QualifyLeadModal lead={newQualificationLead()} isOpen onClose={vi.fn()} />);
 

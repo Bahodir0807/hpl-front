@@ -116,7 +116,7 @@ describe('HplCalculatorWizard commercial authority', () => {
       screen.queryByText('Коммерческие условия КП'),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByLabelText('Срок производства от'),
+      screen.queryByLabelText('Срок производства'),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Дата КП')).not.toBeInTheDocument();
   });

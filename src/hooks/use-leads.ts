@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
+import type { NormalizedLeadWorkspace } from './use-lead-workspace';
 import type {
   HplApplication,
   LeadCommercialQualification,
@@ -453,8 +454,31 @@ export function useUpdateLeadManagerCommercialNote() {
 
       return response.data;
     },
-    onSuccess: (_result, payload) => {
+    onSuccess: (result, payload) => {
       showSuccess('Примечание сохранено');
+      queryClient.setQueryData<Lead>(['lead', payload.id], (current) =>
+        current
+          ? {
+              ...current,
+              managerCommercialNote: result.commercialNote,
+              managerCommercialNoteUpdatedAt:
+                result.managerCommercialNoteUpdatedAt,
+            }
+          : current,
+      );
+      queryClient.setQueryData<NormalizedLeadWorkspace>(
+        ['lead-workspace', payload.id],
+        (current) =>
+          current
+            ? {
+                ...current,
+                lead: {
+                  ...current.lead,
+                  managerCommercialNote: result.commercialNote,
+                },
+              }
+            : current,
+      );
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
       void queryClient.invalidateQueries({

@@ -82,6 +82,16 @@ vi.mock("@/hooks/use-calculations", () => ({
   useFinalizeCalculation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
+const useCalculationRequestsMock = vi.fn(() => ({
+  data: [] as Array<{ id: string; notes?: string | null }>,
+  isLoading: false,
+  isError: false,
+}));
+
+vi.mock("@/hooks/use-calculation-requests", () => ({
+  useCalculationRequests: () => useCalculationRequestsMock(),
+}));
+
 vi.mock("@/hooks/use-quotes", () => ({
   useQuotes: (...args: unknown[]) => useQuotesMock(...args),
   useConvertCalculationToQuote: () => ({
@@ -110,8 +120,7 @@ vi.mock("@/hooks/use-quotes", () => ({
 vi.mock("@/components/calculations/calculation-request-panel", () => ({
   CalculationRequestPanel: () => (
     <div>
-      <button type="button">Создать запрос расчёта</button>
-      <button type="button">Отправить руководителю</button>
+      <p>Запросы расчёта</p>
     </div>
   ),
 }));
@@ -438,7 +447,7 @@ describe("LeadWorkspace commercial calculation authority", () => {
     vi.clearAllMocks();
   });
 
-  it("hides commercial calculation actions from MANAGER and shows request submit", async () => {
+  it("hides commercial calculation actions from MANAGER and does not require a manual request", async () => {
     setupWorkspace({
       permissions: MANAGER_PERMISSIONS,
       roles: ["MANAGER"],
@@ -459,11 +468,11 @@ describe("LeadWorkspace commercial calculation authority", () => {
       screen.queryByRole("button", { name: "Новый расчёт" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Создать запрос расчёта" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Создать запрос расчёта" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Отправить руководителю" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Отправить руководителю" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Рассчитать" }),
     ).not.toBeInTheDocument();
@@ -1014,6 +1023,11 @@ describe("LeadWorkspace Stage 2 commercial separation", () => {
 describe("LeadWorkspace Manager customer note handoff", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useCalculationRequestsMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    });
     saveNoteMutateAsync.mockResolvedValue({
       leadId: "lead-1",
       commercialNote: "CIP Tashkent",
@@ -1089,6 +1103,40 @@ describe("LeadWorkspace Manager customer note handoff", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("hides the Info manager note after a calculation request exists", () => {
+    useCalculationRequestsMock.mockReturnValue({
+      data: [
+        {
+          id: "req-1",
+          notes:
+            "Клиент хочет жёлтый декор, окончательный цвет согласовать перед заказом.",
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    setupWorkspace({
+      permissions: HEAD_PERMISSIONS,
+      roles: ["HEAD"],
+      currentUserId: "head-1",
+      leadData: lead({
+        managerCommercialNote: null,
+        managerCommercialInputReadyAt: "2026-08-20T12:00:00.000Z",
+      }),
+    });
+
+    render(<LeadWorkspace leadId="lead-1" />);
+
+    expect(
+      screen.queryByText("Примечание менеджера / пожелания клиента"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Клиент хочет жёлтый декор, окончательный цвет согласовать перед заказом.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("saves the note without handing off to HEAD", async () => {
     setupWorkspace({
       permissions: MANAGER_PERMISSIONS,
@@ -1131,6 +1179,46 @@ describe("LeadWorkspace Manager customer note handoff", () => {
     expect(
       screen.queryByRole("button", { name: "Отправить руководителю" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows the saved manager note after lead refetch without overwriting Need", () => {
+    setupWorkspace({
+      permissions: MANAGER_PERMISSIONS,
+      roles: ["MANAGER"],
+      currentUserId: "manager-1",
+      leadData: lead({
+        needDescription: "Фасад бизнес-центра",
+        managerCommercialNote: null,
+        qualification: furnitureQualification({
+          customerRequirements: "Фасад бизнес-центра",
+        }),
+      }),
+    });
+    const view = render(<LeadWorkspace leadId="lead-1" />);
+    expect(
+      screen.getByLabelText("Примечание / пожелания клиента"),
+    ).toHaveValue("");
+    expect(screen.getByText("Фасад бизнес-центра")).toBeInTheDocument();
+
+    setupWorkspace({
+      permissions: MANAGER_PERMISSIONS,
+      roles: ["MANAGER"],
+      currentUserId: "manager-1",
+      leadData: lead({
+        needDescription: "Фасад бизнес-центра",
+        managerCommercialNote:
+          "Клиент хочет получить предложение до пятницы",
+        qualification: furnitureQualification({
+          customerRequirements: "Фасад бизнес-центра",
+        }),
+      }),
+    });
+    view.rerender(<LeadWorkspace leadId="lead-1" />);
+
+    expect(
+      screen.getByLabelText("Примечание / пожелания клиента"),
+    ).toHaveValue("Клиент хочет получить предложение до пятницы");
+    expect(screen.getByText("Фасад бизнес-центра")).toBeInTheDocument();
   });
 });
 
@@ -1303,8 +1391,11 @@ describe("LeadWorkspace calculation action placement", () => {
     await userEvent.click(screen.getByRole("button", { name: "Расчёты" }));
 
     expect(
-      screen.getByRole("button", { name: "Создать запрос расчёта" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Создать запрос расчёта" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Отправить руководителю" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Новый расчёт" })).toBeInTheDocument();
     expect(screen.getByText("Сохранённые расчёты")).toBeInTheDocument();
   });
@@ -1320,8 +1411,8 @@ describe("LeadWorkspace calculation action placement", () => {
     await userEvent.click(screen.getByRole("button", { name: "Расчёты" }));
 
     expect(
-      screen.getByRole("button", { name: "Создать запрос расчёта" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Создать запрос расчёта" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Новый расчёт" }),
     ).not.toBeInTheDocument();

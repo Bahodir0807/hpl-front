@@ -29,6 +29,8 @@ export type ConvertCalculationToQuotePayload = {
   validUntil?: string;
   clientComment?: string;
   commercialNote?: string;
+  productionTerms?: string;
+  deliveryTerms?: string;
   productionDaysFrom?: number;
   productionDaysTo?: number;
   deliveryDaysFrom?: number;
@@ -101,6 +103,12 @@ export function useConvertCalculationToQuote(calculationId?: string) {
             : {}),
           ...(payload?.commercialNote
             ? { commercialNote: payload.commercialNote }
+            : {}),
+          ...(payload?.productionTerms
+            ? { productionTerms: payload.productionTerms }
+            : {}),
+          ...(payload?.deliveryTerms
+            ? { deliveryTerms: payload.deliveryTerms }
             : {}),
           ...(payload?.productionDaysFrom !== undefined
             ? { productionDaysFrom: payload.productionDaysFrom }

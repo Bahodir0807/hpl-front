@@ -5,6 +5,8 @@ import {
   canCreateCalculationRequest,
   canEnterManualPurchasePrice,
   canRunCommercialCalculation,
+  canShowCreateCalculationRequestAction,
+  canShowSubmitCalculationRequestToHead,
   canViewCommercialCalculation,
   shouldWaitForCommercialCalculation,
   validateManualPurchasePriceCny,
@@ -55,6 +57,15 @@ describe('commercial calculation authority', () => {
     expect(canConvertCalculationToQuote(MANAGER_PERMISSIONS)).toBe(false);
     expect(canViewCommercialCalculation(MANAGER_PERMISSIONS)).toBe(true);
     expect(canCreateCalculationRequest(MANAGER_PERMISSIONS)).toBe(true);
+    expect(canShowCreateCalculationRequestAction(MANAGER_PERMISSIONS)).toBe(
+      false,
+    );
+    expect(canShowSubmitCalculationRequestToHead(MANAGER_PERMISSIONS)).toBe(
+      true,
+    );
+    expect(canShowSubmitCalculationRequestToHead(HEAD_PERMISSIONS)).toBe(
+      false,
+    );
   });
 
   it('lets HEAD run calculation and convert it to a Quote', () => {

@@ -126,13 +126,73 @@ describe("QuoteCard", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Срок производства от")).toBeInTheDocument();
+    expect(screen.getByLabelText("Срок производства")).toBeInTheDocument();
     expect(screen.getByLabelText("КП действительно до")).toBeInTheDocument();
     expect(screen.getByLabelText("Примечание")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Срок производства от")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Срок доставки от")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Дата КП")).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText("Закупочная цена, CNY/м²"),
     ).not.toBeInTheDocument();
+  });
+
+  it("saves text commercial terms without numeric day ranges", async () => {
+    const onSave = vi.fn();
+    render(
+      <QuoteCard
+        quote={{
+          ...draftQuote,
+          productionTerms: "",
+          deliveryTerms: "",
+          productionDaysFrom: null,
+          productionDaysTo: null,
+          deliveryDaysFrom: null,
+          deliveryDaysTo: null,
+        }}
+        currentUserId="head-1"
+        permissions={["quotes:update", "quotes:read_all", "quotes:approve"]}
+        {...handlers}
+        onSaveCommercialTerms={onSave}
+      />,
+    );
+
+    await userEvent.type(
+      screen.getByLabelText("Срок производства"),
+      "15–20 рабочих дней",
+    );
+    await userEvent.type(
+      screen.getByLabelText("Срок доставки"),
+      "Ориентировочно 4 недели после утверждения декора",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить условия КП" }),
+    );
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productionTerms: "15–20 рабочих дней",
+        deliveryTerms: "Ориентировочно 4 недели после утверждения декора",
+      }),
+    );
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty("productionDaysFrom");
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty("deliveryDaysFrom");
+  });
+
+  it("shows legacy numeric ranges only as a read-only fallback", () => {
+    render(
+      <QuoteCard
+        quote={quote}
+        currentUserId="head-1"
+        permissions={["quotes:read_all", "quotes:approve"]}
+        {...handlers}
+      />,
+    );
+
+    expect(screen.getByText("10–20 дней")).toBeInTheDocument();
+    expect(screen.getByText("14–25 дней")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Срок производства")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Срок производства от")).not.toBeInTheDocument();
   });
 
   it("prints the stored Manager note snapshot on the generated Quote", () => {
@@ -165,7 +225,7 @@ describe("QuoteCard", () => {
     );
 
     expect(
-      screen.queryByLabelText("Срок производства от"),
+      screen.queryByLabelText("Срок производства"),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Примечание")).not.toBeInTheDocument();
     expect(screen.getByText("CIP Tashkent")).toBeInTheDocument();
@@ -201,7 +261,7 @@ describe("QuoteCard", () => {
     expect(
       screen.getByRole("button", { name: "Скачать КП DOCX" }),
     ).toBeEnabled();
-    expect(screen.getByLabelText("Срок производства от")).toBeInTheDocument();
+    expect(screen.getByLabelText("Срок производства")).toBeInTheDocument();
   });
 
   it("shows delivery validation while HEAD can preview documents", () => {
@@ -228,7 +288,7 @@ describe("QuoteCard", () => {
     expect(
       screen.getByRole("button", { name: "Скачать КП DOCX" }),
     ).toBeEnabled();
-    expect(screen.getByLabelText("Срок доставки от")).toBeInTheDocument();
+    expect(screen.getByLabelText("Срок доставки")).toBeInTheDocument();
     expect(screen.getByLabelText("Примечание")).toBeInTheDocument();
   });
 
@@ -299,7 +359,7 @@ describe("QuoteCard", () => {
 
     expect(screen.getAllByText("КП финализировано").length).toBeGreaterThan(0);
     expect(
-      screen.queryByLabelText("Срок производства от"),
+      screen.queryByLabelText("Срок производства"),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Сформировать КП" }),

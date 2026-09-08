@@ -24,7 +24,7 @@ export const QUOTE_TERMS_LOCKED = 'QUOTE_TERMS_LOCKED';
 export const QUOTE_ALREADY_EXISTS = 'QUOTE_ALREADY_EXISTS';
 export const QUOTE_SUPPLIER_REQUIRED = 'QUOTE_SUPPLIER_REQUIRED';
 export const QUOTE_SUPPLIER_REQUIRED_MESSAGE =
-  'Выберите поставщика для расчёта';
+  'У каждой позиции должен быть выбран поставщик';
 
 const CODED_HPL_ERRORS: Record<string, string> = {
   PRICING_NOT_CONFIGURED: PRICING_NOT_CONFIGURED_MESSAGE,
