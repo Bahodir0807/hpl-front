@@ -1,59 +1,66 @@
 import { AxiosError } from 'axios';
+import { ru } from '@/i18n/ru';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
 
 export const CLIENT_ACCEPTANCE_REQUIRED_MESSAGE =
-  'Сначала зафиксируйте согласие клиента на коммерческое предложение.';
+  ru.errors.clientAcceptanceRequired;
 
 export const SHIPMENT_PAYMENT_REQUIRED_MESSAGE =
-  'Отгрузка недоступна: заказ ещё не оплачен полностью.';
+  ru.errors.shipmentPaymentRequired;
 
 export const CLIENT_DELIVERY_NOT_SHIPPED_MESSAGE =
-  'Подтвердить доставку клиенту можно только после отгрузки.';
+  ru.errors.clientDeliveryNotShipped;
 
-export const SUPPLIER_ORDER_FORBIDDEN_MESSAGE =
-  'Недостаточно прав для этого действия.';
+export const SUPPLIER_ORDER_FORBIDDEN_MESSAGE = ru.errors.supplierOrderForbidden;
 
-export const SUPPLIER_ORDER_STALE_STATE_MESSAGE =
-  'Состояние заказа поставщику изменилось. Обновите данные и повторите действие.';
+export const SUPPLIER_ORDER_STALE_STATE_MESSAGE = ru.errors.supplierOrderStale;
 
 export const SUPPLIER_ORDER_QUOTE_REQUIRED_MESSAGE =
-  'Заказ поставщику можно создать только по сделке с коммерческим предложением.';
+  ru.errors.supplierOrderQuoteRequired;
 
 export const WAREHOUSE_STOCK_SUPPLIER_ORDER_MESSAGE =
-  'Для складской сделки заказ поставщику недоступен.';
+  ru.errors.warehouseStockSupplierOrder;
 
 export const FULFILLMENT_SOURCE_REQUIRED_MESSAGE =
-  'Сначала выберите источник исполнения сделки.';
+  ru.errors.fulfillmentSourceRequired;
 
-const EXACT_MESSAGE_MAP: Record<string, string> = {
-  'Supplier order requires an internally approved Quote with recorded client acceptance':
-    CLIENT_ACCEPTANCE_REQUIRED_MESSAGE,
-  'Supplier order requires an HPL Deal with an originating Quote':
-    SUPPLIER_ORDER_QUOTE_REQUIRED_MESSAGE,
-  'Delivery blocked because required payment is not confirmed':
-    SHIPMENT_PAYMENT_REQUIRED_MESSAGE,
-  'Client delivery can be confirmed only after the supplier order is shipped':
-    CLIENT_DELIVERY_NOT_SHIPPED_MESSAGE,
-  'Cannot confirm client delivery for a cancelled supplier order':
-    'Нельзя подтвердить доставку по отменённому заказу поставщику.',
-  'Supplier shipment is allowed only for HEAD or DIRECTOR':
-    SUPPLIER_ORDER_FORBIDDEN_MESSAGE,
-  'Client delivery may be confirmed only by MANAGER, HEAD, or DIRECTOR':
-    SUPPLIER_ORDER_FORBIDDEN_MESSAGE,
-  'Warehouse-stock Deal cannot create supplier orders':
-    WAREHOUSE_STOCK_SUPPLIER_ORDER_MESSAGE,
-  'Deal fulfillment source must be selected before supplier ordering':
-    FULFILLMENT_SOURCE_REQUIRED_MESSAGE,
-  'Supplier order status changed concurrently':
-    SUPPLIER_ORDER_STALE_STATE_MESSAGE,
-  'Supplier order readiness was not confirmed':
-    SUPPLIER_ORDER_STALE_STATE_MESSAGE,
-  'Client delivery was not confirmed': SUPPLIER_ORDER_STALE_STATE_MESSAGE,
-};
+function exactMessageMap(messages: Messages): Record<string, string> {
+  return {
+    'Supplier order requires an internally approved Quote with recorded client acceptance':
+      messages.errors.clientAcceptanceRequired,
+    'Supplier order requires an HPL Deal with an originating Quote':
+      messages.errors.supplierOrderQuoteRequired,
+    'Delivery blocked because required payment is not confirmed':
+      messages.errors.shipmentPaymentRequired,
+    'Client delivery can be confirmed only after the supplier order is shipped':
+      messages.errors.clientDeliveryNotShipped,
+    'Cannot confirm client delivery for a cancelled supplier order':
+      messages.errors.cancelledDeliveryConfirm,
+    'Supplier shipment is allowed only for HEAD or DIRECTOR':
+      messages.errors.supplierOrderForbidden,
+    'Client delivery may be confirmed only by MANAGER, HEAD, or DIRECTOR':
+      messages.errors.supplierOrderForbidden,
+    'Warehouse-stock Deal cannot create supplier orders':
+      messages.errors.warehouseStockSupplierOrder,
+    'Deal fulfillment source must be selected before supplier ordering':
+      messages.errors.fulfillmentSourceRequired,
+    'Supplier order status changed concurrently':
+      messages.errors.supplierOrderStale,
+    'Supplier order readiness was not confirmed':
+      messages.errors.supplierOrderStale,
+    'Client delivery was not confirmed': messages.errors.supplierOrderStale,
+  };
+}
 
-const CODE_MESSAGE_MAP: Record<string, string> = {
-  FULFILLMENT_SOURCE_CONFLICT: WAREHOUSE_STOCK_SUPPLIER_ORDER_MESSAGE,
-  FULFILLMENT_SOURCE_REQUIRED: FULFILLMENT_SOURCE_REQUIRED_MESSAGE,
-};
+function codeMessageMap(messages: Messages): Record<string, string> {
+  return {
+    FULFILLMENT_SOURCE_CONFLICT: messages.errors.warehouseStockSupplierOrder,
+    FULFILLMENT_SOURCE_REQUIRED: messages.errors.fulfillmentSourceRequired,
+  };
+}
+
+const CODE_MESSAGE_MAP = codeMessageMap(ru);
 
 function pushToken(tokens: string[], value: unknown): void {
   if (typeof value === 'string' && value.trim()) {
@@ -119,64 +126,72 @@ function looksLikePaymentGate(text: string): boolean {
   );
 }
 
-export function localizeSupplierOrderError(error: unknown): string | null {
+export function localizeSupplierOrderError(
+  error: unknown,
+  messages: Messages = getActiveMessages(),
+): string | null {
+  const exact = exactMessageMap(messages);
+  const codes = codeMessageMap(messages);
   const { tokens } = collectTokens(error);
 
   for (const token of tokens) {
-    if (EXACT_MESSAGE_MAP[token]) {
-      return EXACT_MESSAGE_MAP[token];
+    if (exact[token]) {
+      return exact[token];
     }
-    if (CODE_MESSAGE_MAP[token]) {
-      return CODE_MESSAGE_MAP[token];
+    if (codes[token]) {
+      return codes[token];
     }
   }
 
   const joined = tokens.join(' ');
   if (looksLikeMissingClientAcceptance(joined)) {
-    return CLIENT_ACCEPTANCE_REQUIRED_MESSAGE;
+    return messages.errors.clientAcceptanceRequired;
   }
   if (looksLikePaymentGate(joined)) {
-    return SHIPMENT_PAYMENT_REQUIRED_MESSAGE;
+    return messages.errors.shipmentPaymentRequired;
   }
 
   if (joined.toLowerCase().includes('cannot confirm readiness')) {
-    return 'Подтвердить готовность в текущем статусе нельзя.';
+    return messages.errors.cannotConfirmReadiness;
   }
   if (joined.toLowerCase().includes('cannot change planned dates')) {
-    return 'Плановые даты в текущем статусе изменить нельзя.';
+    return messages.errors.cannotChangePlannedDates;
   }
   if (joined.toLowerCase().includes('cannot change supplier order from')) {
-    return SUPPLIER_ORDER_STALE_STATE_MESSAGE;
+    return messages.errors.supplierOrderStale;
   }
   if (joined.toLowerCase().includes('expectedreadyat must not precede')) {
-    return 'Дата готовности не может быть раньше даты заказа.';
+    return messages.errors.readyBeforeOrder;
   }
   if (joined.toLowerCase().includes('expectedshipmentat must not precede')) {
-    return 'Дата отгрузки не может быть раньше даты готовности.';
+    return messages.errors.shipmentBeforeReady;
   }
   if (joined.toLowerCase().includes('expectedarrivalat must not precede')) {
-    return 'Дата прибытия не может быть раньше даты отгрузки.';
+    return messages.errors.arrivalBeforeShipment;
   }
 
   return null;
 }
 
-export function getSupplierOrderErrorMessage(error: unknown): string {
-  const localized = localizeSupplierOrderError(error);
+export function getSupplierOrderErrorMessage(
+  error: unknown,
+  messages: Messages = getActiveMessages(),
+): string {
+  const localized = localizeSupplierOrderError(error, messages);
   if (localized) {
     return localized;
   }
 
   if (error instanceof AxiosError) {
     if (error.response?.status === 403) {
-      return SUPPLIER_ORDER_FORBIDDEN_MESSAGE;
+      return messages.errors.supplierOrderForbidden;
     }
     if (error.response?.status === 409) {
-      return SUPPLIER_ORDER_STALE_STATE_MESSAGE;
+      return messages.errors.supplierOrderStale;
     }
   }
 
   const { tokens } = collectTokens(error);
   const first = tokens.find((token) => token && !CODE_MESSAGE_MAP[token]);
-  return first || 'Не удалось выполнить действие с заказом поставщику.';
+  return first || messages.errors.supplierOrderFailed;
 }

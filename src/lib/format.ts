@@ -1,7 +1,13 @@
+import { INTL_LOCALES, type Locale } from '@/i18n/config';
+import { getActiveLocale } from '@/i18n/active-messages';
+
 /**
  * Число без валюты: количество, м², проценты → "1 234,56"
  */
-export function formatNumber(value: string | number | null | undefined): string {
+export function formatNumber(
+  value: string | number | null | undefined,
+  locale: Locale = getActiveLocale(),
+): string {
   if (value === undefined || value === null || value === '') {
     return '—';
   }
@@ -11,13 +17,16 @@ export function formatNumber(value: string | number | null | undefined): string 
     return '—';
   }
 
-  return new Intl.NumberFormat('ru-RU', {
+  return new Intl.NumberFormat(INTL_LOCALES[locale], {
     maximumFractionDigits: 2,
   }).format(num);
 }
 
-/** Дата: ДД.ММ.ГГГГ */
-export function formatDate(value: string | Date | null | undefined): string {
+/** Дата: locale-aware presentation of a stored date. */
+export function formatDate(
+  value: string | Date | null | undefined,
+  locale: Locale = getActiveLocale(),
+): string {
   if (!value) {
     return '—';
   }
@@ -27,7 +36,7 @@ export function formatDate(value: string | Date | null | undefined): string {
     return '—';
   }
 
-  return new Intl.DateTimeFormat('ru-RU', {
+  return new Intl.DateTimeFormat(INTL_LOCALES[locale], {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -68,8 +77,11 @@ export function dateInputToIso(value: string): string | undefined {
   return new Date(year, month - 1, day).toISOString();
 }
 
-/** Дата + время: ДД.ММ.ГГГГ, ЧЧ:ММ (24 часа) */
-export function formatDateTime(value: string | Date | null | undefined): string {
+/** Дата + время: locale-aware presentation of a stored DateTime. */
+export function formatDateTime(
+  value: string | Date | null | undefined,
+  locale: Locale = getActiveLocale(),
+): string {
   if (!value) {
     return '—';
   }
@@ -79,7 +91,7 @@ export function formatDateTime(value: string | Date | null | undefined): string 
     return '—';
   }
 
-  return new Intl.DateTimeFormat('ru-RU', {
+  return new Intl.DateTimeFormat(INTL_LOCALES[locale], {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

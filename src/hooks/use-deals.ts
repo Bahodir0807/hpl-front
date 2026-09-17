@@ -5,6 +5,7 @@ import { isAxiosError } from "axios";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/errors";
 import { showError, showSuccess } from "../lib/toast";
+import { useI18n } from "@/i18n/provider";
 
 export type DealStage =
   | "QUALIFICATION"
@@ -293,6 +294,7 @@ export function useDeal(id: string | null) {
 
 export function useChangeDealStage() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: ChangeDealStagePayload): Promise<Deal> => {
@@ -302,7 +304,7 @@ export function useChangeDealStage() {
       return response.data;
     },
     onSuccess: (deal) => {
-      showSuccess("Этап сделки обновлён");
+      showSuccess(t("deals.toastStageUpdated"));
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
       void queryClient.invalidateQueries({ queryKey: ["deals", deal.id] });
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -320,6 +322,7 @@ export function useChangeDealStage() {
 
 export function useAddDealOffer() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: AddDealOfferPayload): Promise<DealOffer> => {
@@ -334,7 +337,7 @@ export function useAddDealOffer() {
       return response.data;
     },
     onSuccess: (_offer, payload) => {
-      showSuccess("Версия документа КП создана");
+      showSuccess(t("deals.toastDocumentVersion"));
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
       void queryClient.invalidateQueries({
         queryKey: ["deals", payload.dealId],
@@ -348,6 +351,7 @@ export function useAddDealOffer() {
 
 export function useLoseDeal() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: LoseDealPayload): Promise<Deal> => {
@@ -358,7 +362,7 @@ export function useLoseDeal() {
       return response.data;
     },
     onSuccess: (deal) => {
-      showSuccess("Сделка закрыта как проигранная");
+      showSuccess(t("deals.toastLost"));
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
       void queryClient.invalidateQueries({ queryKey: ["deals", deal.id] });
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });

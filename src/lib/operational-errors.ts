@@ -1,12 +1,13 @@
 import { AxiosError } from 'axios';
+import { ru } from '@/i18n/ru';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
 
-export const FORBIDDEN_ACTION_MESSAGE =
-  'Недостаточно прав для этого действия.';
+export const FORBIDDEN_ACTION_MESSAGE = ru.errors.forbidden;
 
-export const INVALID_DEAL_TRANSITION_MESSAGE =
-  'Этот переход этапа сделки недоступен.';
+export const INVALID_DEAL_TRANSITION_MESSAGE = ru.errors.invalidDealTransition;
 
-export const QUOTE_PDF_FAILED_MESSAGE = 'Не удалось скачать КП.';
+export const QUOTE_PDF_FAILED_MESSAGE = ru.errors.quotePdfFailed;
 
 function collectMessages(error: unknown): string[] {
   const tokens: string[] = [];
@@ -34,7 +35,10 @@ function collectMessages(error: unknown): string[] {
   return tokens;
 }
 
-export function localizeOperationalError(error: unknown): string | null {
+export function localizeOperationalError(
+  error: unknown,
+  messages: Messages = getActiveMessages(),
+): string | null {
   const joined = collectMessages(error).join(' ').toLowerCase();
 
   if (
@@ -42,18 +46,18 @@ export function localizeOperationalError(error: unknown): string | null {
     joined.includes('invalid stage transition') ||
     joined.includes('invalid deal stage')
   ) {
-    return INVALID_DEAL_TRANSITION_MESSAGE;
+    return messages.errors.invalidDealTransition;
   }
 
   if (error instanceof AxiosError && error.response?.status === 403) {
-    return FORBIDDEN_ACTION_MESSAGE;
+    return messages.errors.forbidden;
   }
 
   if (
     joined.includes('failed to download') ||
     (joined.includes('quote') && joined.includes('pdf') && joined.includes('fail'))
   ) {
-    return QUOTE_PDF_FAILED_MESSAGE;
+    return messages.errors.quotePdfFailed;
   }
 
   return null;

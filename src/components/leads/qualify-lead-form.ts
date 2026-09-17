@@ -11,100 +11,113 @@ import {
   type SizeMode,
 } from '@/lib/hpl-domain';
 import { dateInputToIso } from '@/lib/format';
-import { optionalPhoneSchema } from '@/lib/validations/phone';
+import { createOptionalPhoneSchema } from '@/lib/validations/phone';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
 
-const optionalUuid = z
-  .string()
-  .trim()
-  .optional()
-  .refine((value) => !value || z.string().uuid().safeParse(value).success, {
-    message: 'Выберите значение из списка',
-  });
+function optionalUuidSchema(messages: Messages) {
+  return z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || z.string().uuid().safeParse(value).success, {
+      message: messages.leads.selectFromList,
+    });
+}
 
-const optionalEmail = z
-  .string()
-  .trim()
-  .optional()
-  .refine((value) => !value || z.string().email().safeParse(value).success, {
-    message: 'Некорректный email',
-  });
+function optionalEmailSchema(messages: Messages) {
+  return z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || z.string().email().safeParse(value).success, {
+      message: messages.leads.invalidEmail,
+    });
+}
 
 export const TRI_STATE_SELECTIONS = ['yes', 'no', 'unknown'] as const;
 export type TriStateSelection = (typeof TRI_STATE_SELECTIONS)[number];
 
-export const qualifyLeadSchema = z
-  .object({
-    clientId: z.string().trim().uuid('Выберите клиента'),
-    objectMode: z.enum(['EXISTING', 'NEW'], {
-      message: 'Выберите существующий или новый объект',
-    }),
-    projectObjectId: optionalUuid,
-    newObjectName: z.string().trim().optional(),
-    newObjectAddress: z.string().trim().optional(),
-    objectStage: z.string().trim().max(255).optional(),
-    objectExpectedDate: z.string().trim().optional(),
-    contactMode: z.enum(['EXISTING', 'NEW'], {
-      message: 'Выберите существующий или новый контакт',
-    }),
-    contactId: optionalUuid,
-    contactFirstName: z.string().trim().optional(),
-    contactLastName: z.string().trim().optional(),
-    contactPhone: optionalPhoneSchema,
-    contactEmail: optionalEmail,
-    needDescription: z.string().trim().min(5, 'Опишите потребность'),
-    decisionMakerContact: z
-      .string()
-      .trim()
-      .min(1, 'Укажите ЛПР / лицо, принимающее решение'),
-    installationRequired: z.enum(['yes', 'no'], {
-      message: 'Укажите монтаж',
-    }),
-    ventFacadeExists: z.enum(TRI_STATE_SELECTIONS),
-    ventFacadeKitRequired: z.enum(TRI_STATE_SELECTIONS),
-    urgent: z.boolean(),
-    willingToWait: z.boolean(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.objectMode === 'EXISTING') {
-      if (!z.string().uuid().safeParse(value.projectObjectId).success) {
+export function createQualifyLeadSchema(messages: Messages = getActiveMessages()) {
+  const optionalUuid = optionalUuidSchema(messages);
+  const optionalEmail = optionalEmailSchema(messages);
+
+  return z
+    .object({
+      clientId: z.string().trim().uuid(messages.leads.selectClient),
+      objectMode: z.enum(['EXISTING', 'NEW'], {
+        message: messages.leads.selectExistingOrNewObject,
+      }),
+      projectObjectId: optionalUuid,
+      newObjectName: z.string().trim().optional(),
+      newObjectAddress: z.string().trim().optional(),
+      objectStage: z.string().trim().max(255).optional(),
+      objectExpectedDate: z.string().trim().optional(),
+      contactMode: z.enum(['EXISTING', 'NEW'], {
+        message: messages.leads.selectExistingOrNewContact,
+      }),
+      contactId: optionalUuid,
+      contactFirstName: z.string().trim().optional(),
+      contactLastName: z.string().trim().optional(),
+      contactPhone: createOptionalPhoneSchema(messages),
+      contactEmail: optionalEmail,
+      needDescription: z.string().trim().min(5, messages.leads.describeNeed),
+      decisionMakerContact: z
+        .string()
+        .trim()
+        .min(1, messages.leads.decisionMakerRequired),
+      installationRequired: z.enum(['yes', 'no'], {
+        message: messages.leads.installationRequiredMsg,
+      }),
+      ventFacadeExists: z.enum(TRI_STATE_SELECTIONS),
+      ventFacadeKitRequired: z.enum(TRI_STATE_SELECTIONS),
+      urgent: z.boolean(),
+      willingToWait: z.boolean(),
+    })
+    .superRefine((value, ctx) => {
+      if (value.objectMode === 'EXISTING') {
+        if (!z.string().uuid().safeParse(value.projectObjectId).success) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['projectObjectId'],
+            message: messages.leads.selectObject,
+          });
+        }
+      } else if (!value.newObjectName?.trim()) {
         ctx.addIssue({
           code: 'custom',
-          path: ['projectObjectId'],
-          message: 'Выберите объект',
+          path: ['newObjectName'],
+          message: messages.leads.newObjectNameRequired,
         });
       }
-    } else if (!value.newObjectName?.trim()) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['newObjectName'],
-        message: 'Укажите название нового объекта',
-      });
-    }
 
-    if (value.contactMode === 'EXISTING') {
-      if (!z.string().uuid().safeParse(value.contactId).success) {
+      if (value.contactMode === 'EXISTING') {
+        if (!z.string().uuid().safeParse(value.contactId).success) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['contactId'],
+            message: messages.leads.selectContact,
+          });
+        }
+      } else if (!value.contactFirstName?.trim()) {
         ctx.addIssue({
           code: 'custom',
-          path: ['contactId'],
-          message: 'Выберите контакт',
+          path: ['contactFirstName'],
+          message: messages.leads.contactFirstNameRequired,
         });
       }
-    } else if (!value.contactFirstName?.trim()) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['contactFirstName'],
-        message: 'Укажите имя контакта',
-      });
-    }
 
-    if (value.urgent && value.willingToWait) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['willingToWait'],
-        message: 'Нельзя одновременно выбрать «Срочно» и «Готов ждать»',
-      });
-    }
-  });
+      if (value.urgent && value.willingToWait) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['willingToWait'],
+          message: messages.leads.urgentAndWaitConflict,
+        });
+      }
+    });
+}
+
+export const qualifyLeadSchema = createQualifyLeadSchema();
 
 export type QualifyLeadFormInput = z.input<typeof qualifyLeadSchema>;
 export type QualifyLeadFormValues = z.output<typeof qualifyLeadSchema>;
@@ -211,10 +224,11 @@ export function buildQualificationPayload(
 export function buildQualificationItemPayload(
   values: QualificationItemPayloadInput,
   panelTypeId: string,
+  messages: Messages = getActiveMessages(),
 ): QualificationItemPayload {
   const area = normalizeQualificationAreaM2(values.requiredAreaM2);
   if (area === null) {
-    throw new Error('Укажите корректную площадь больше 0');
+    throw new Error(messages.leads.invalidArea);
   }
 
   const thicknessMm = toDecimalNumber(values.thicknessMm);
@@ -288,13 +302,15 @@ export function defaultSizeModeFromQualification(qualification?: {
 }
 
 export function defaultObjectMode(
-  _projectObjectId?: string | null,
+  projectObjectId?: string | null,
 ): 'EXISTING' | 'NEW' {
+  void projectObjectId;
   return 'EXISTING';
 }
 
 export function defaultContactMode(
-  _contactId?: string | null,
+  contactId?: string | null,
 ): 'EXISTING' | 'NEW' {
+  void contactId;
   return 'EXISTING';
 }

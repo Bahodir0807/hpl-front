@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useAuth } from "../../context/auth-context";
@@ -15,7 +15,9 @@ import {
   hasApproverRole,
   localizeStageRequirementMessage,
 } from "../../lib/display-names";
-import { dealStageLabels, enumLabel } from "../../lib/labels";
+import { enumLabel } from "../../lib/labels";
+import { useI18n } from "@/i18n/provider";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 type StageExceptionModalProps = {
   dealId: string | null;
@@ -24,14 +26,9 @@ type StageExceptionModalProps = {
   onClose: () => void;
 };
 
-const stageExceptionSchema = z.object({
-  reason: z
-    .string()
-    .trim()
-    .min(5, "Укажите причину пропуска этапа"),
-});
-
-type StageExceptionFormValues = z.infer<typeof stageExceptionSchema>;
+type StageExceptionFormValues = {
+  reason: string;
+};
 
 export function StageExceptionModal({
   dealId,
@@ -39,6 +36,8 @@ export function StageExceptionModal({
   serverMessage,
   onClose,
 }: StageExceptionModalProps) {
+  const { t } = useI18n();
+  const { dealStageLabels } = useLabelMaps();
   const { user } = useAuth();
   const dealQuery = useDeal(dealId);
   const changeStage = useChangeDealStage();
@@ -47,6 +46,13 @@ export function StageExceptionModal({
     dealQuery.data?._permissions?.canBypassStageValidation === true;
   const localizedMessage = localizeStageRequirementMessage(serverMessage);
   const isOpen = Boolean(dealId && newStage);
+  const stageExceptionSchema = useMemo(
+    () =>
+      z.object({
+        reason: z.string().trim().min(5, t("validation.skipStageReason")),
+      }),
+    [t],
+  );
   const {
     register,
     handleSubmit,
@@ -98,11 +104,12 @@ export function StageExceptionModal({
       <div className="w-full max-w-lg rounded border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4">
           <h2 className="text-base font-semibold text-slate-950">
-            Требуется согласование руководителя
+            {t("deals.stageException.title")}
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Переход на этап «{enumLabel(dealStageLabels, newStage)}» отклонён
-            бизнес-правилами сделки.
+            {t("deals.stageException.rejected", {
+              stage: enumLabel(dealStageLabels, newStage),
+            })}
           </p>
           {canApprove && localizedMessage ? (
             <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -112,13 +119,14 @@ export function StageExceptionModal({
         </div>
 
         {dealQuery.isLoading ? (
-          <div className="text-sm text-slate-600">Загрузка данных сделки...</div>
+          <div className="text-sm text-slate-600">
+            {t("deals.stageException.loading")}
+          </div>
         ) : null}
 
         {!dealQuery.isLoading && !canApprove ? (
           <div className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
-            Для пропуска требований этапа требуется согласование РОПа или
-            Администратора. Обратитесь к руководителю отдела продаж.
+            {t("deals.stageException.needApprover")}
           </div>
         ) : null}
 
@@ -131,12 +139,12 @@ export function StageExceptionModal({
           >
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Причина исключения
+                {t("deals.stageException.reason")}
               </span>
               <textarea
                 rows={4}
                 {...register("reason")}
-                placeholder="Опишите, почему этап можно перевести досрочно"
+                placeholder={t("deals.stageException.reasonPlaceholder")}
                 className="w-full resize-none rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
               />
               {errors.reason ? (
@@ -148,7 +156,7 @@ export function StageExceptionModal({
 
             {changeStage.isError ? (
               <p className="text-sm text-red-600">
-                Не удалось согласовать переход этапа.
+                {t("deals.stageException.failed")}
               </p>
             ) : null}
 
@@ -158,14 +166,14 @@ export function StageExceptionModal({
                 onClick={onClose}
                 className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Отмена
+                {t("common.cancel")}
               </button>
               <button
                 type="submit"
                 disabled={!isValid || changeStage.isPending || isSubmitting}
                 className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
               >
-                Согласовать и перевести
+                {t("deals.stageException.approveAndMove")}
               </button>
             </div>
           </form>
@@ -178,7 +186,7 @@ export function StageExceptionModal({
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Закрыть
+              {t("common.close")}
             </button>
           </div>
         ) : null}

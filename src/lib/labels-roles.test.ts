@@ -15,7 +15,6 @@ describe('user role labels and assignment policy', () => {
       'MANAGER',
       'ACCOUNTANT',
       'STOREKEEPER',
-      'INSTALLER',
     ]);
     expect(roleLabels.ADMIN).toBe('Администратор');
     expect(roleLabels.DIRECTOR).toBe('Директор');
@@ -23,7 +22,6 @@ describe('user role labels and assignment policy', () => {
     expect(roleLabels.MANAGER).toBe('Менеджер');
     expect(roleLabels.ACCOUNTANT).toBe('Бухгалтер');
     expect(roleLabels.STOREKEEPER).toBe('Кладовщик');
-    expect(roleLabels.INSTALLER).toBe('Монтажник');
     expect(roleLabels).not.toHaveProperty('OBSERVER');
     expect(roleLabels).not.toHaveProperty('FINANCIER');
   });
@@ -33,7 +31,6 @@ describe('user role labels and assignment policy', () => {
       'ADMIN',
       'MANAGER',
       'STOREKEEPER',
-      'INSTALLER',
     ]);
     expect(ADMIN_PROTECTED_ASSIGNMENT_ROLES).toEqual([
       'DIRECTOR',

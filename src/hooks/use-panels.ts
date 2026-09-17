@@ -5,6 +5,7 @@ import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { toDecimalNumber } from '../lib/hpl-domain';
 import { showError, showSuccess } from '../lib/toast';
+import { useI18n } from '@/i18n/provider';
 import { normalizePanelTypeCode } from '../lib/hpl-domain';
 import {
   HplListResponse,
@@ -140,6 +141,7 @@ export function usePanelColors(supplierId?: string) {
 
 export function useCreatePanelColor() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreatePanelColorPayload): Promise<PanelColor> => {
@@ -151,7 +153,7 @@ export function useCreatePanelColor() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess('Цвет создан');
+      showSuccess(t('panels.toastColorCreated'));
       void queryClient.invalidateQueries({ queryKey: ['panel-colors'] });
     },
     onError: (error) => {
@@ -162,6 +164,7 @@ export function useCreatePanelColor() {
 
 export function useUpdatePanelColor() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: UpdatePanelColorPayload): Promise<PanelColor> => {
@@ -174,7 +177,7 @@ export function useUpdatePanelColor() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess('Цвет обновлён');
+      showSuccess(t('panels.toastColorUpdated'));
       void queryClient.invalidateQueries({ queryKey: ['panel-colors'] });
     },
     onError: (error) => {

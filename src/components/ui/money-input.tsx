@@ -1,6 +1,7 @@
 'use client';
 
 import { MoneyCurrency, moneyCurrencyInputLabels } from '@/lib/currency';
+import { useI18n } from '@/i18n/provider';
 
 type MoneyInputProps = {
   value: string | number;
@@ -18,11 +19,13 @@ export function MoneyInput({
   currency,
   onValueChange,
   onCurrencyChange,
-  placeholder = 'Сумма',
+  placeholder,
   disabled = false,
   inputClassName = 'w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500',
   selectClassName = 'rounded border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 outline-none focus:border-slate-500',
 }: MoneyInputProps) {
+  const { t } = useI18n();
+  const resolvedPlaceholder = placeholder ?? t('currency.amountPlaceholder');
   const step = currency === 'USD' ? '0.01' : '1';
 
   return (
@@ -33,7 +36,7 @@ export function MoneyInput({
         step={step}
         value={value}
         disabled={disabled}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         onChange={(event) => onValueChange(event.target.value)}
         className={inputClassName}
       />
@@ -44,12 +47,12 @@ export function MoneyInput({
           onCurrencyChange(event.target.value as MoneyCurrency)
         }
         className={`${selectClassName} w-[88px] shrink-0`}
-        aria-label="Валюта суммы"
+        aria-label={t('currency.amountAria')}
       >
         {(Object.keys(moneyCurrencyInputLabels) as MoneyCurrency[]).map(
           (option) => (
             <option key={option} value={option}>
-              {moneyCurrencyInputLabels[option]}
+              {option === 'UZS' ? t('currency.uzsSuffix') : option}
             </option>
           ),
         )}

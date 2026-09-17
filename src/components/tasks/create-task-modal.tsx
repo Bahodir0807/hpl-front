@@ -14,7 +14,8 @@ import {
   TaskType,
   useCreateTask,
 } from '../../hooks/use-tasks';
-import { taskPriorityLabels, taskTypeLabels } from '../../lib/labels';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 
 const taskTypes: TaskType[] = [
   'FIRST_CONTACT',
@@ -34,17 +35,15 @@ const taskPriorities: TaskPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
 const relatedTypes = ['Lead', 'Deal', 'Client', 'Order'] as const;
 
-const createTaskSchema = z.object({
-  title: z.string().min(3, 'Название должно быть не короче 3 символов'),
-  description: z.string().optional(),
-  type: z.enum(taskTypes),
-  priority: z.enum(taskPriorities),
-  dueDate: z.string().min(1, 'Укажите срок'),
-  relatedType: z.enum(relatedTypes),
-  relatedId: z.string().uuid('Выберите связанный объект'),
-});
-
-type CreateTaskFormValues = z.infer<typeof createTaskSchema>;
+type CreateTaskFormValues = {
+  title: string;
+  description?: string;
+  type: TaskType;
+  priority: TaskPriority;
+  dueDate: string;
+  relatedType: (typeof relatedTypes)[number];
+  relatedId: string;
+};
 
 type CreateTaskModalProps = {
   assigneeId: string;
@@ -58,6 +57,21 @@ export function CreateTaskModal({
   onClose,
 }: CreateTaskModalProps) {
   const createTask = useCreateTask();
+  const { t } = useI18n();
+  const { taskPriorityLabels, taskTypeLabels, relatedTypeLabels } = useLabelMaps();
+  const createTaskSchema = useMemo(
+    () =>
+      z.object({
+        title: z.string().min(3, t('validation.taskTitleMin')),
+        description: z.string().optional(),
+        type: z.enum(taskTypes),
+        priority: z.enum(taskPriorities),
+        dueDate: z.string().min(1, t('validation.dueDateRequired')),
+        relatedType: z.enum(relatedTypes),
+        relatedId: z.string().uuid(t('validation.relatedObjectRequired')),
+      }),
+    [t],
+  );
   const {
     register,
     handleSubmit,
@@ -162,7 +176,7 @@ export function CreateTaskModal({
       <div className="w-full max-w-lg rounded border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4">
           <h2 className="text-base font-semibold text-slate-950">
-            Создать задачу
+            {t('tasks.createTitle')}
           </h2>
         </div>
 
@@ -174,7 +188,7 @@ export function CreateTaskModal({
         >
           <label className="col-span-2 block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Название
+              {t('common.titleField')}
             </span>
             <input
               type="text"
@@ -190,7 +204,7 @@ export function CreateTaskModal({
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Тип
+              {t('common.type')}
             </span>
             <select
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
@@ -206,7 +220,7 @@ export function CreateTaskModal({
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Приоритет
+              {t('tasks.priority')}
             </span>
             <select
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
@@ -222,7 +236,7 @@ export function CreateTaskModal({
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Срок
+              {t('common.dueDate')}
             </span>
             <input
               type="datetime-local"
@@ -238,16 +252,16 @@ export function CreateTaskModal({
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Тип объекта
+              {t('tasks.relatedType')}
             </span>
             <select
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
               {...register('relatedType')}
             >
-              <option value="Lead">Лид</option>
-              <option value="Deal">Сделка</option>
-              <option value="Client">Клиент</option>
-              <option value="Order">Заказ</option>
+              <option value="Lead">{relatedTypeLabels.Lead}</option>
+              <option value="Deal">{relatedTypeLabels.Deal}</option>
+              <option value="Client">{relatedTypeLabels.Client}</option>
+              <option value="Order">{relatedTypeLabels.Order}</option>
             </select>
             {errors.relatedType ? (
               <span className="mt-1 block text-sm text-red-600">
@@ -258,7 +272,7 @@ export function CreateTaskModal({
 
           <label className="col-span-2 block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Связанный объект
+              {t('tasks.relatedObject')}
             </span>
             <Controller
               name="relatedId"
@@ -268,9 +282,9 @@ export function CreateTaskModal({
                   value={field.value}
                   onChange={field.onChange}
                   options={relatedOptions}
-                  placeholder="Выберите объект"
-                  searchPlaceholder="Поиск по названию"
-                  emptyLabel="Объекты не найдены"
+                  placeholder={t('tasks.selectObject')}
+                  searchPlaceholder={t('tasks.searchByName')}
+                  emptyLabel={t('tasks.objectsEmpty')}
                   loading={isRelatedLoading}
                 />
               )}
@@ -284,7 +298,7 @@ export function CreateTaskModal({
 
           <label className="col-span-2 block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Описание
+              {t('common.description')}
             </span>
             <textarea
               rows={3}
@@ -295,7 +309,7 @@ export function CreateTaskModal({
 
           {createTask.isError ? (
             <p className="col-span-2 text-sm text-red-600">
-              Не удалось создать задачу
+              {t('tasks.createFailed')}
             </p>
           ) : null}
 
@@ -305,14 +319,14 @@ export function CreateTaskModal({
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={createTask.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              Создать
+              {t('common.create')}
             </button>
           </div>
         </form>

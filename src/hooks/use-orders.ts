@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/errors";
 import { showError, showSuccess } from "../lib/toast";
+import { useI18n } from "@/i18n/provider";
 import { Deal } from "./use-deals";
 import { Product } from "./use-inventory";
 
@@ -166,6 +167,7 @@ export function useOrder(id: string | null) {
 
 export function useCreateOrderFromDeal() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreateOrderFromDealPayload): Promise<Order> => {
@@ -177,7 +179,7 @@ export function useCreateOrderFromDeal() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess("Заказ успешно создан");
+      showSuccess(t("orders.toastCreated"));
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({ queryKey: ["stock-balances"] });
     },
@@ -189,6 +191,7 @@ export function useCreateOrderFromDeal() {
 
 export function useAddPayment() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: AddPaymentPayload): Promise<Payment> => {
@@ -206,7 +209,7 @@ export function useAddPayment() {
       return response.data;
     },
     onSuccess: (_payment, payload) => {
-      showSuccess("Платёж зарегистрирован");
+      showSuccess(t("orders.toastPaymentRegistered"));
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({
         queryKey: ["orders", payload.orderId],
@@ -220,6 +223,7 @@ export function useAddPayment() {
 
 export function useConfirmPayment() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: ConfirmPaymentPayload): Promise<Order> => {
@@ -231,7 +235,7 @@ export function useConfirmPayment() {
       return response.data;
     },
     onSuccess: (order) => {
-      showSuccess("Статус платежа обновлён");
+      showSuccess(t("orders.toastPaymentUpdated"));
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({ queryKey: ["orders", order.id] });
     },
@@ -243,6 +247,7 @@ export function useConfirmPayment() {
 
 export function useCreateDelivery() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreateDeliveryPayload): Promise<Delivery> => {
@@ -262,7 +267,7 @@ export function useCreateDelivery() {
       return response.data;
     },
     onSuccess: (_delivery, payload) => {
-      showSuccess("Отгрузка создана");
+      showSuccess(t("orders.toastShipmentCreated"));
       void queryClient.invalidateQueries({ queryKey: ["orders"] });
       void queryClient.invalidateQueries({
         queryKey: ["orders", payload.orderId],

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ExternalLink, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useAuth } from "../../context/auth-context";
@@ -21,16 +21,12 @@ import { useUsersList, User } from "../../hooks/use-users";
 import { formatDate, formatDateTime, formatNumber } from "../../lib/format";
 import { formatMoney } from "../../lib/currency";
 import { resolveUserName } from "../../lib/display-names";
-import { optionalPhoneSchema } from "../../lib/validations/phone";
+import { createOptionalPhoneSchema } from "../../lib/validations/phone";
 import { buildUpdateClientContactPayload } from "../../lib/client-contact";
-import {
-  clientSegmentLabels,
-  clientStatusLabels,
-  clientTypeLabels,
-  dealStageLabels,
-  enumLabel,
-  leadStatusLabels,
-} from "../../lib/labels";
+import { enumLabel } from "../../lib/labels";
+import { useI18n } from "@/i18n/provider";
+import type { Messages } from "@/i18n/types";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 import { AddObjectModal } from "./add-object-modal";
 import { ClientDocuments } from "./client-documents";
 import { ClientQuotes } from "./client-quotes";
@@ -50,45 +46,49 @@ type TabId =
   | "documents"
   | "timeline";
 
-const tabs: { id: TabId; label: string }[] = [
-  { id: "overview", label: "Обзор" },
-  { id: "contacts", label: "Контакты" },
-  { id: "objects", label: "Объекты" },
-  { id: "leads", label: "Лиды" },
-  { id: "deals", label: "Сделки" },
-  { id: "quotes", label: "Коммерческие предложения" },
-  { id: "documents", label: "Документы" },
-  { id: "timeline", label: "История" },
+const tabs: TabId[] = [
+  "overview",
+  "contacts",
+  "objects",
+  "leads",
+  "deals",
+  "quotes",
+  "documents",
+  "timeline",
 ];
 
-const contactSchema = z.object({
-  firstName: z.string().trim().min(1, "Укажите имя"),
-  lastName: z.string().trim().optional(),
-  position: z.string().trim().optional(),
-  phone: optionalPhoneSchema,
-  email: z
-    .string()
-    .trim()
-    .optional()
-    .refine((value) => !value || z.string().email().safeParse(value).success, {
-      message: "Некорректный email",
-    }),
-});
+function createContactSchema(messages: Messages) {
+  return z.object({
+    firstName: z.string().trim().min(1, messages.validation.firstNameRequired),
+    lastName: z.string().trim().optional(),
+    position: z.string().trim().optional(),
+    phone: createOptionalPhoneSchema(messages),
+    email: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || z.string().email().safeParse(value).success, {
+        message: messages.validation.invalidEmail,
+      }),
+  });
+}
 
-type ContactFormValues = z.infer<typeof contactSchema>;
+type ContactFormValues = z.infer<ReturnType<typeof createContactSchema>>;
 
-const clientContactSchema = z.object({
-  phone: optionalPhoneSchema,
-  email: z
-    .string()
-    .trim()
-    .optional()
-    .refine((value) => !value || z.string().email().safeParse(value).success, {
-      message: "Некорректный email",
-    }),
-});
+function createClientContactSchema(messages: Messages) {
+  return z.object({
+    phone: createOptionalPhoneSchema(messages),
+    email: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || z.string().email().safeParse(value).success, {
+        message: messages.validation.invalidEmail,
+      }),
+  });
+}
 
-type ClientContactFormValues = z.infer<typeof clientContactSchema>;
+type ClientContactFormValues = z.infer<ReturnType<typeof createClientContactSchema>>;
 
 function contactName(contact: Contact): string {
   return `${contact.firstName} ${contact.lastName ?? ""}`.trim();
@@ -98,9 +98,9 @@ function activeObjectsCount(objects?: ProjectObject[]): number {
   return (objects ?? []).filter((object) => object.stage !== "ARCHIVED").length;
 }
 
-function sourceLabel(source: string): string {
+function sourceLabel(source: string, websiteLabel: string): string {
   if (source === "telegram") return "Telegram";
-  if (source === "website") return "Сайт";
+  if (source === "website") return websiteLabel;
   return source;
 }
 
@@ -126,26 +126,35 @@ function HeaderSummary({
   client: Client;
   usersById: Map<string, User>;
 }) {
+  const { t } = useI18n();
+  const { clientStatusLabels } = useLabelMaps();
   return (
     <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
       <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-        Статус: {enumLabel(clientStatusLabels, client.status)}
+        {t("common.status")}: {enumLabel(clientStatusLabels, client.status)}
       </span>
       <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-        ИНН: {client.inn ?? "-"}
+        {t("clients.inn")}: {client.inn ?? t("common.dash")}
       </span>
       <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-        Ответственный:{" "}
+        {t("clients.owner")}:{" "}
         {resolveUserName(client.owner, client.ownerId, usersById)}
       </span>
       <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-        Активные объекты: {activeObjectsCount(client.projectObjects)}
+        {t("clients.activeObjects")}: {activeObjectsCount(client.projectObjects)}
       </span>
     </div>
   );
 }
 
 export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
+  const { t, messages } = useI18n();
+  const {
+    clientSegmentLabels,
+    clientTypeLabels,
+    dealStageLabels,
+    leadStatusLabels,
+  } = useLabelMaps();
   const { user } = useAuth();
   const clientQuery = useClient(clientId);
   const canReadAudit = user?.permissions.includes("audit:read") ?? false;
@@ -156,6 +165,10 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
   const canUpdateClient = user?.permissions.includes("clients:update") ?? false;
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [isAddObjectOpen, setIsAddObjectOpen] = useState(false);
+  const contactSchema = useMemo(
+    () => createContactSchema(messages),
+    [messages],
+  );
   const {
     register,
     handleSubmit,
@@ -195,14 +208,14 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-slate-950">
-              {client?.name ?? "Клиент"}
+              {client?.name ?? t("clients.fallback")}
             </h2>
             <div className="mt-1 text-sm text-slate-600">
-              {client ? enumLabel(clientTypeLabels, client.type) : "—"} ·{" "}
+              {client ? enumLabel(clientTypeLabels, client.type) : t("common.dash")} ·{" "}
               {client?.segment
                 ? enumLabel(clientSegmentLabels, client.segment)
-                : "без сегмента"}{" "}
-              · {client?.region ?? "регион не указан"}
+                : t("clients.noSegment")}{" "}
+              · {client?.region ?? t("clients.noRegion")}
             </div>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
@@ -210,7 +223,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
               href={client ? `/leads?clientId=${client.id}` : "/leads"}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Создать лид
+              {t("clients.createLead")}
             </Link>
             {onClose ? (
               <button
@@ -218,7 +231,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                 onClick={onClose}
                 className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
               >
-                Закрыть
+                {t("common.close")}
               </button>
             ) : null}
           </div>
@@ -233,18 +246,18 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
 
       <div className="shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5">
         <div className="flex w-max min-w-full gap-1">
-          {tabs.map((tab) => (
+          {tabs.map((tabId) => (
             <button
-              key={tab.id}
+              key={tabId}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setActiveTab(tabId)}
               className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
-                activeTab === tab.id
+                activeTab === tabId
                   ? "border-slate-900 text-slate-950"
                   : "border-transparent text-slate-600 hover:text-slate-950"
               }`}
             >
-              {tab.label}
+              {t(`clients.tabs.${tabId}`)}
             </button>
           ))}
         </div>
@@ -252,19 +265,19 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-5">
         {clientQuery.isLoading ? (
-          <div className="text-sm text-slate-600">Загрузка клиента...</div>
+          <div className="text-sm text-slate-600">{t("clients.loadingOne")}</div>
         ) : null}
 
         {clientQuery.isError ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <span>Не удалось загрузить клиента.</span>
+            <span>{t("clients.loadOneFailed")}</span>
             <button
               type="button"
               onClick={() => void clientQuery.refetch()}
               className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
             >
               <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              Повторить
+              {t("common.retry")}
             </button>
           </div>
         ) : null}
@@ -275,29 +288,29 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
               <div className="space-y-6">
                 <section>
                   <h3 className="text-sm font-semibold text-slate-950">
-                    Основная информация
+                    {t("clients.overviewTitle")}
                   </h3>
                   <dl className="mt-3 grid grid-cols-1 border-y border-slate-200 sm:grid-cols-2 lg:grid-cols-3">
                     <SummaryField
-                      label="Тип клиента"
+                      label={t("clients.clientType")}
                       value={enumLabel(clientTypeLabels, client.type)}
                     />
-                    <SummaryField label="ИНН" value={client.inn} />
-                    <SummaryField label="Телефон" value={client.phone} />
-                    <SummaryField label="Email" value={client.email} />
-                    <SummaryField label="Регион" value={client.region} />
-                    <SummaryField label="Адрес" value={client.address} />
+                    <SummaryField label={t("clients.inn")} value={client.inn} />
+                    <SummaryField label={t("common.phone")} value={client.phone} />
+                    <SummaryField label={t("common.email")} value={client.email} />
+                    <SummaryField label={t("common.region")} value={client.region} />
+                    <SummaryField label={t("common.address")} value={client.address} />
                     <SummaryField
-                      label="Сегмент"
+                      label={t("clients.segment")}
                       value={
                         client.segment
                           ? enumLabel(clientSegmentLabels, client.segment)
                           : null
                       }
                     />
-                    <SummaryField label="Источник" value={client.source} />
+                    <SummaryField label={t("common.source")} value={client.source} />
                     <SummaryField
-                      label="Основной контакт"
+                      label={t("clients.primaryContact")}
                       value={primaryContact ? contactName(primaryContact) : null}
                     />
                   </dl>
@@ -309,23 +322,23 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
 
                 <section>
                   <h3 className="text-sm font-semibold text-slate-950">
-                    Коммерческая история
+                    {t("clients.commercialHistory")}
                   </h3>
                   <div className="mt-3 grid grid-cols-2 gap-px border border-slate-200 bg-slate-200 sm:grid-cols-4">
-                    <Metric label="Контакты" value={client.contacts?.length ?? 0} />
+                    <Metric label={t("clients.contacts")} value={client.contacts?.length ?? 0} />
                     <Metric
-                      label="Объекты"
+                      label={t("clients.objects")}
                       value={client.projectObjects?.length ?? 0}
                     />
-                    <Metric label="Лиды" value={client.leads?.length ?? 0} />
-                    <Metric label="Сделки" value={client.deals?.length ?? 0} />
+                    <Metric label={t("clients.leads")} value={client.leads?.length ?? 0} />
+                    <Metric label={t("clients.deals")} value={client.deals?.length ?? 0} />
                   </div>
                 </section>
 
                 {client.comment ? (
                   <section>
                     <h3 className="text-sm font-semibold text-slate-950">
-                      Комментарий
+                      {t("common.comment")}
                     </h3>
                     <p className="mt-2 whitespace-pre-wrap border-l-2 border-slate-300 pl-3 text-sm text-slate-700">
                       {client.comment}
@@ -342,19 +355,19 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                     <thead className="bg-slate-50">
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          ФИО
+                          {t("users.fullName")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Должность
+                          {t("common.position")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Телефон
+                          {t("common.phone")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          E-mail
+                          {t("common.email")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Мессенджер
+                          {t("common.messenger")}
                         </th>
                       </tr>
                     </thead>
@@ -365,21 +378,21 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                             {contactName(contact)}
                             {contact.isPrimary ? (
                               <span className="ml-2 text-xs font-normal text-slate-500">
-                                Основной
+                                {t("common.primary")}
                               </span>
                             ) : null}
                           </td>
                           <td className="px-3 py-2 text-slate-700">
-                            {contact.position ?? "-"}
+                            {contact.position ?? t("common.dash")}
                           </td>
                           <td className="px-3 py-2 text-slate-700">
-                            {contact.phone ?? "-"}
+                            {contact.phone ?? t("common.dash")}
                           </td>
                           <td className="px-3 py-2 text-slate-700">
-                            {contact.email ?? "-"}
+                            {contact.email ?? t("common.dash")}
                           </td>
                           <td className="px-3 py-2 text-slate-500">
-                            {contact.messenger ?? "-"}
+                            {contact.messenger ?? t("common.dash")}
                           </td>
                         </tr>
                       ))}
@@ -388,7 +401,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                 </div>
 
                 {(client.contacts ?? []).length === 0 ? (
-                  <SectionEmpty>Контактов пока нет.</SectionEmpty>
+                  <SectionEmpty>{t("clients.emptyContacts")}</SectionEmpty>
                 ) : null}
 
                 <form
@@ -398,27 +411,27 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                   className="rounded border border-slate-200 bg-slate-50 p-3"
                 >
                   <div className="mb-3 text-sm font-semibold text-slate-950">
-                    Быстро добавить контакт
+                    {t("clients.quickAddContact")}
                   </div>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
                     <input
-                      placeholder="Имя"
+                      placeholder={t("common.firstName")}
                       className="rounded border border-slate-300 px-2 py-1.5 text-sm"
                       {...register("firstName")}
                     />
                     <input
-                      placeholder="Фамилия"
+                      placeholder={t("common.lastName")}
                       className="rounded border border-slate-300 px-2 py-1.5 text-sm"
                       {...register("lastName")}
                     />
                     <input
-                      placeholder="Должность"
+                      placeholder={t("common.position")}
                       className="rounded border border-slate-300 px-2 py-1.5 text-sm"
                       {...register("position")}
                     />
                     <input
                       type="tel"
-                      placeholder="Телефон"
+                      placeholder={t("common.phone")}
                       className="rounded border border-slate-300 px-2 py-1.5 text-sm"
                       {...register("phone")}
                     />
@@ -441,7 +454,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                       disabled={!isValid || addContact.isPending}
                       className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
                     >
-                      Добавить контакт
+                      {t("clients.addContact")}
                     </button>
                   </div>
                 </form>
@@ -456,7 +469,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                     onClick={() => setIsAddObjectOpen(true)}
                     className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
                   >
-                    Добавить объект
+                    {t("clients.addObject")}
                   </button>
                 </div>
                 <div className="overflow-x-auto rounded border border-slate-200">
@@ -464,19 +477,19 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                     <thead className="bg-slate-50">
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Название
+                          {t("common.titleField")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Адрес
+                          {t("common.address")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Стадия
+                          {t("clients.objectStage")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Площадь м²
+                          {t("clients.areaM2")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Срок
+                          {t("clients.objectDeadline")}
                         </th>
                       </tr>
                     </thead>
@@ -487,10 +500,10 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                             {object.name}
                           </td>
                           <td className="px-3 py-2 text-slate-700">
-                            {object.address ?? "-"}
+                            {object.address ?? t("common.dash")}
                           </td>
                           <td className="px-3 py-2 text-slate-700">
-                            {object.stage ?? "-"}
+                            {object.stage ?? t("common.dash")}
                           </td>
                           <td className="px-3 py-2 text-slate-700">
                             {formatNumber(object.approximateArea)}
@@ -504,7 +517,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                   </table>
                 </div>
                 {(client.projectObjects ?? []).length === 0 ? (
-                  <SectionEmpty>Объектов пока нет.</SectionEmpty>
+                  <SectionEmpty>{t("clients.emptyObjects")}</SectionEmpty>
                 ) : null}
               </div>
             ) : null}
@@ -515,12 +528,12 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                   <table className="min-w-[820px] w-full divide-y divide-slate-200 text-sm">
                     <thead className="bg-slate-50">
                       <tr>
-                        <TableHeader>Лид</TableHeader>
-                        <TableHeader>Источник</TableHeader>
-                        <TableHeader>Статус</TableHeader>
-                        <TableHeader>Ответственный</TableHeader>
-                        <TableHeader>Создан</TableHeader>
-                        <TableHeader className="text-right">Действие</TableHeader>
+                        <TableHeader>{t("clients.lead")}</TableHeader>
+                        <TableHeader>{t("common.source")}</TableHeader>
+                        <TableHeader>{t("common.status")}</TableHeader>
+                        <TableHeader>{t("clients.owner")}</TableHeader>
+                        <TableHeader>{t("common.created")}</TableHeader>
+                        <TableHeader className="text-right">{t("clients.action")}</TableHeader>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
@@ -530,7 +543,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                             {lead.title}
                           </td>
                           <td className="px-3 py-3 text-slate-700">
-                            {sourceLabel(lead.source)}
+                            {sourceLabel(lead.source, t("clients.website"))}
                           </td>
                           <td className="px-3 py-3">
                             <span
@@ -550,7 +563,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                               href={`/leads/${lead.id}`}
                               className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                             >
-                              Открыть
+                              {t("common.open")}
                               <ExternalLink
                                 className="h-3.5 w-3.5"
                                 aria-hidden="true"
@@ -563,7 +576,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                   </table>
                 </div>
               ) : (
-                <SectionEmpty>Лидов пока нет.</SectionEmpty>
+                <SectionEmpty>{t("clients.emptyLeads")}</SectionEmpty>
               )
             ) : null}
 
@@ -573,12 +586,12 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                   <table className="min-w-[900px] w-full divide-y divide-slate-200 text-sm">
                     <thead className="bg-slate-50">
                       <tr>
-                        <TableHeader>Сделка</TableHeader>
-                        <TableHeader>Этап</TableHeader>
-                        <TableHeader>Сумма</TableHeader>
-                        <TableHeader>Ответственный</TableHeader>
-                        <TableHeader>Обновлена</TableHeader>
-                        <TableHeader className="text-right">Действие</TableHeader>
+                        <TableHeader>{t("clients.deal")}</TableHeader>
+                        <TableHeader>{t("reports.stage")}</TableHeader>
+                        <TableHeader>{t("common.amount")}</TableHeader>
+                        <TableHeader>{t("clients.owner")}</TableHeader>
+                        <TableHeader>{t("clients.updatedColumn")}</TableHeader>
+                        <TableHeader className="text-right">{t("clients.action")}</TableHeader>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
@@ -589,7 +602,9 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                               {deal.title}
                             </div>
                             <div className="mt-0.5 text-xs text-slate-500">
-                              Следующее действие: {formatDateTime(deal.nextActionAt)}
+                              {t("clients.nextAction", {
+                                date: formatDateTime(deal.nextActionAt),
+                              })}
                             </div>
                           </td>
                           <td className="px-3 py-3 text-slate-700">
@@ -609,7 +624,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                               href="/deals"
                               className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                             >
-                              К сделкам
+                              {t("clients.toDeals")}
                               <ExternalLink
                                 className="h-3.5 w-3.5"
                                 aria-hidden="true"
@@ -622,7 +637,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                   </table>
                 </div>
               ) : (
-                <SectionEmpty>Сделок пока нет.</SectionEmpty>
+                <SectionEmpty>{t("clients.emptyDeals")}</SectionEmpty>
               )
             ) : null}
 
@@ -638,24 +653,24 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
               <div className="space-y-2">
                 {!canReadAudit ? (
                   <SectionEmpty>
-                    Недостаточно прав для просмотра истории.
+                    {t("clients.timelineForbidden")}
                   </SectionEmpty>
                 ) : null}
                 {timelineQuery.isLoading ? (
                   <div className="text-sm text-slate-600">
-                    Загрузка ленты...
+                    {t("clients.timelineLoading")}
                   </div>
                 ) : null}
                 {timelineQuery.isError ? (
                   <div className="flex flex-wrap items-center justify-between gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    <span>Не удалось загрузить историю клиента.</span>
+                    <span>{t("clients.timelineLoadFailed")}</span>
                     <button
                       type="button"
                       onClick={() => void timelineQuery.refetch()}
                       className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
                       <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                      Повторить
+                      {t("common.retry")}
                     </button>
                   </div>
                 ) : null}
@@ -683,7 +698,7 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
                 !timelineQuery.isLoading &&
                 !timelineQuery.isError &&
                 (timelineQuery.data ?? []).length === 0 ? (
-                  <SectionEmpty>История клиента пока пуста.</SectionEmpty>
+                  <SectionEmpty>{t("clients.emptyTimeline")}</SectionEmpty>
                 ) : null}
               </div>
             ) : null}
@@ -701,7 +716,12 @@ export function ClientDetails({ clientId, onClose }: ClientDetailsProps) {
 }
 
 function ClientPhoneEmailForm({ client }: { client: Client }) {
+  const { t, messages } = useI18n();
   const updateClient = useUpdateClient();
+  const clientContactSchema = useMemo(
+    () => createClientContactSchema(messages),
+    [messages],
+  );
   const {
     register,
     handleSubmit,
@@ -733,7 +753,7 @@ function ClientPhoneEmailForm({ client }: { client: Client }) {
   return (
     <section>
       <h3 className="text-sm font-semibold text-slate-950">
-        Телефон и email клиента
+        {t("clients.phoneAndEmail")}
       </h3>
       <form
         className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
@@ -743,7 +763,7 @@ function ClientPhoneEmailForm({ client }: { client: Client }) {
       >
         <label>
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Телефон
+            {t("common.phone")}
           </span>
           <input
             type="tel"
@@ -777,7 +797,7 @@ function ClientPhoneEmailForm({ client }: { client: Client }) {
             disabled={!isValid || !isDirty || updateClient.isPending}
             className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
           >
-            {updateClient.isPending ? "Сохранение..." : "Сохранить"}
+            {updateClient.isPending ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </form>

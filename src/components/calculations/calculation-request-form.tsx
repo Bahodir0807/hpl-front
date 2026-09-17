@@ -17,29 +17,22 @@ import {
   panelTypeLabel,
 } from '@/lib/hpl-domain';
 import {
-  QUALITY_LINES_NOT_FOUND,
-  QUALITY_LINE_PLACEHOLDER,
   qualityLineLabel,
 } from '@/lib/quality-line-presentation';
 import {
-  ADD_CALCULATION_LABEL,
-  ADD_HPL_ROW_LABEL,
-  CUSTOM_TYPE_DESCRIPTION_LABEL,
-  CUSTOM_SIZE_SNAPSHOT_HINT,
   CalculationRequestFormValues,
   CalculationRequestGroupForm,
   CalculationRequestItemErrors,
   CalculationRequestItemForm,
-  SUBMIT_TO_HEAD_LABEL,
   createEmptyRequestGroup,
   createEmptyRequestItem,
+  displayCalculationGroupTitle,
   duplicateRequestItem,
   requestItemSheetsCountDisplay,
 } from '@/lib/calculation-request';
 import { formatSupplierName } from '@/lib/labels';
-import {
-  MANAGER_CUSTOMER_NOTE_LABEL,
-} from '@/lib/manager-commercial-note';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 
 const inputClass =
   'w-full min-w-[7rem] rounded border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50';
@@ -97,6 +90,8 @@ function HplRequestRow({
   onDelete: () => void;
   canEditSupplier: boolean;
 }) {
+  const { t, messages } = useI18n();
+  const { supplierDisplayNames } = useLabelMaps();
   const panelType = panelTypeById(catalogs.panelTypes, item.panelTypeId);
   const application = applicationFromPanelTypeCode(panelType?.code);
   const classes = catalogs.qualityClasses;
@@ -144,7 +139,7 @@ function HplRequestRow({
       <tr className={errors ? 'bg-red-50/60' : undefined}>
         <td className="px-2 py-2">
           <select
-            aria-label={`Поставщик, строка ${index + 1}`}
+            aria-label={t('calculations.rowSupplier', { index: index + 1 })}
             aria-invalid={Boolean(errorText('supplierId'))}
             aria-describedby={errorId('supplierId')}
             className={inputClass}
@@ -152,10 +147,15 @@ function HplRequestRow({
             value={item.supplierId}
             onChange={(event) => setField('supplierId', event.target.value)}
           >
-            <option value="">Выберите</option>
+            <option value="">{t('common.select')}</option>
             {(catalogs.suppliers ?? []).map((supplier) => (
               <option key={supplier.id} value={supplier.id}>
-                {formatSupplierName(supplier.code, supplier.name)}
+                {formatSupplierName(
+                  supplier.code,
+                  supplier.name,
+                  messages.suppliers.fallback,
+                  supplierDisplayNames,
+                )}
               </option>
             ))}
           </select>
@@ -167,17 +167,17 @@ function HplRequestRow({
         </td>
         <td className="px-2 py-2">
           <SearchCombobox
-            ariaLabel={`Линейка, строка ${index + 1}`}
+            ariaLabel={t('calculations.rowLine', { index: index + 1 })}
             value={item.qualityClassId}
             onChange={(nextValue) => setField('qualityClassId', nextValue)}
             options={classes.map((entry) => ({
               value: entry.id,
-              label: qualityLineLabel(entry),
+              label: qualityLineLabel(entry, messages),
               description: entry.code ?? undefined,
             }))}
-            placeholder={QUALITY_LINE_PLACEHOLDER}
-            searchPlaceholder="Поиск линейки"
-            emptyLabel={QUALITY_LINES_NOT_FOUND}
+            placeholder={messages.hpl.qualityLinePlaceholder}
+            searchPlaceholder={t('calculations.searchLine')}
+            emptyLabel={messages.hpl.qualityLinesNotFound}
             disabled={readOnly}
           />
           {errorText('qualityClassId') ? (
@@ -188,7 +188,7 @@ function HplRequestRow({
         </td>
         <td className="px-2 py-2">
           <select
-            aria-label={`Тип HPL, строка ${index + 1}`}
+            aria-label={t('calculations.rowType', { index: index + 1 })}
             aria-invalid={Boolean(errorText('panelTypeId'))}
             aria-describedby={errorId('panelTypeId')}
             className={inputClass}
@@ -196,10 +196,10 @@ function HplRequestRow({
             value={item.panelTypeId}
             onChange={(event) => setField('panelTypeId', event.target.value)}
           >
-            <option value="">Выберите</option>
+            <option value="">{t('common.select')}</option>
             {catalogs.panelTypes.map((type) => (
               <option key={type.id} value={type.id}>
-                {panelTypeLabel(type)}
+                {panelTypeLabel(type, messages)}
               </option>
             ))}
           </select>
@@ -211,7 +211,7 @@ function HplRequestRow({
         </td>
         <td className="px-2 py-2">
           <input
-            aria-label={`Покрытие, строка ${index + 1}`}
+            aria-label={t('calculations.rowCoating', { index: index + 1 })}
             className={inputClass}
             disabled={readOnly}
             value={item.coating}
@@ -220,7 +220,7 @@ function HplRequestRow({
         </td>
         <td className="px-2 py-2">
           <select
-            aria-label={`Размер, строка ${index + 1}`}
+            aria-label={t('calculations.rowSize', { index: index + 1 })}
             aria-invalid={Boolean(errorText('panelSizeId'))}
             aria-describedby={errorId('panelSizeId')}
             className={inputClass}
@@ -228,10 +228,10 @@ function HplRequestRow({
             value={item.panelSizeId}
             onChange={(event) => setField('panelSizeId', event.target.value)}
           >
-            <option value="">Выберите</option>
+            <option value="">{t('common.select')}</option>
             {catalogs.panelSizes.map((size) => (
               <option key={size.id} value={size.id}>
-                {panelSizeLabel(size)}
+                {panelSizeLabel(size, messages)}
               </option>
             ))}
           </select>
@@ -239,26 +239,26 @@ function HplRequestRow({
             <>
               <div className="mt-1 flex gap-1">
                 <input
-                  aria-label={`Ширина мм, строка ${index + 1}`}
+                  aria-label={t('calculations.rowWidth', { index: index + 1 })}
                   aria-invalid={Boolean(errorText('customWidthMm'))}
                   aria-describedby={errorId('customWidthMm')}
                   className={inputClass}
                   disabled={readOnly}
                   inputMode="numeric"
-                  placeholder="Ширина"
+                  placeholder={t('calculations.width')}
                   value={item.customWidthMm}
                   onChange={(event) =>
                     setField('customWidthMm', event.target.value)
                   }
                 />
                 <input
-                  aria-label={`Высота мм, строка ${index + 1}`}
+                  aria-label={t('calculations.rowHeight', { index: index + 1 })}
                   aria-invalid={Boolean(errorText('customHeightMm'))}
                   aria-describedby={errorId('customHeightMm')}
                   className={inputClass}
                   disabled={readOnly}
                   inputMode="numeric"
-                  placeholder="Высота"
+                  placeholder={t('calculations.height')}
                   value={item.customHeightMm}
                   onChange={(event) =>
                     setField('customHeightMm', event.target.value)
@@ -266,7 +266,7 @@ function HplRequestRow({
                 />
               </div>
               <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                {CUSTOM_SIZE_SNAPSHOT_HINT}
+                {t('calculations.customSizeHint')}
               </p>
             </>
           ) : null}
@@ -298,7 +298,7 @@ function HplRequestRow({
         </td>
         <td className="px-2 py-2">
           <input
-            aria-label={`Объём м², строка ${index + 1}`}
+            aria-label={t('calculations.rowArea', { index: index + 1 })}
             aria-invalid={Boolean(errorText('requiredAreaM2'))}
             aria-describedby={errorId('requiredAreaM2')}
             className={inputClass}
@@ -315,34 +315,38 @@ function HplRequestRow({
         </td>
         <td className="px-2 py-2">
           <span
-            aria-label={`Количество, строка ${index + 1}`}
+            aria-label={t('calculations.rowQuantity', { index: index + 1 })}
             className="block min-w-[4.5rem] text-sm text-slate-900"
           >
-            {requestItemSheetsCountDisplay(item, selectedSize)}
+            {requestItemSheetsCountDisplay(item, selectedSize, messages)}
           </span>
         </td>
         <td className="px-2 py-2">
           <input
-            aria-label={`Декор, строка ${index + 1}`}
+            aria-label={t('calculations.rowDecor', { index: index + 1 })}
             className={inputClass}
             disabled={readOnly}
-            placeholder="Например, RAL 7016"
+            placeholder={t('calculations.decorPlaceholder')}
             value={item.decor}
             onChange={(event) => setField('decor', event.target.value)}
           />
           {item.colorName.trim() || item.colorCode.trim() ? (
             <p className="mt-1 text-[11px] leading-4 text-slate-600">
-              Пожелание клиента:{' '}
-              {formatColorLabel({
-                colorCode: item.colorCode,
-                colorName: item.colorName,
+              {t('calculations.customerWish', {
+                value: formatColorLabel(
+                  {
+                    colorCode: item.colorCode,
+                    colorName: item.colorName,
+                  },
+                  messages,
+                ),
               })}
             </p>
           ) : null}
         </td>
         <td className="px-2 py-2">
           <input
-            aria-label={`Текстура, строка ${index + 1}`}
+            aria-label={t('calculations.rowTexture', { index: index + 1 })}
             className={inputClass}
             disabled={readOnly}
             value={item.texture}
@@ -351,7 +355,7 @@ function HplRequestRow({
         </td>
         <td className="px-2 py-2">
           <input
-            aria-label={`Примечание, строка ${index + 1}`}
+            aria-label={t('calculations.rowNote', { index: index + 1 })}
             className={inputClass}
             disabled={readOnly}
             value={item.note}
@@ -365,20 +369,20 @@ function HplRequestRow({
                 type="button"
                 size="sm"
                 variant="outline"
-                aria-label={`Дублировать строку ${index + 1}`}
+                aria-label={t('calculations.duplicateRow', { index: index + 1 })}
                 onClick={onDuplicate}
               >
-                Дублировать
+                {t('common.duplicate')}
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="destructive"
-                aria-label={`Удалить строку ${index + 1}`}
+                aria-label={t('calculations.deleteRow', { index: index + 1 })}
                 disabled={!canDelete}
                 onClick={onDelete}
               >
-                Удалить
+                {t('common.delete')}
               </Button>
             </div>
           )}
@@ -389,10 +393,10 @@ function HplRequestRow({
           <td colSpan={11} className="px-2 pb-3">
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-slate-700">
-                {CUSTOM_TYPE_DESCRIPTION_LABEL}
+                {t('calculations.customTypeDescription')}
               </span>
               <input
-                aria-label={CUSTOM_TYPE_DESCRIPTION_LABEL}
+                aria-label={t('calculations.customTypeDescription')}
                 aria-invalid={Boolean(errorText('customTypeDescription'))}
                 aria-describedby={errorId('customTypeDescription')}
                 className={inputClass}
@@ -439,6 +443,7 @@ function CalculationGroup({
   onDelete: () => void;
   canEditSupplier: boolean;
 }) {
+  const { t } = useI18n();
   const updateItem = (itemIndex: number, item: CalculationRequestItemForm): void => {
     onChange({
       ...group,
@@ -452,11 +457,11 @@ function CalculationGroup({
     <section className="rounded border border-slate-200">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2">
         <h4 className="text-sm font-semibold text-slate-900">
-          {group.title || `Расчёт №${index + 1}`}
+          {displayCalculationGroupTitle(group.title, index, t)}
         </h4>
         {readOnly || !canDeleteGroup ? null : (
           <Button type="button" size="sm" variant="ghost" onClick={onDelete}>
-            Удалить расчёт
+            {t('calculations.deleteCalculation')}
           </Button>
         )}
       </div>
@@ -464,18 +469,18 @@ function CalculationGroup({
         <table className="min-w-[1280px] w-full border-collapse text-sm">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-600">
-              <th className="px-2 py-2">Поставщик</th>
-              <th className="px-2 py-2">Линейка</th>
-              <th className="px-2 py-2">Тип HPL</th>
-              <th className="px-2 py-2">Покрытие</th>
-              <th className="px-2 py-2">Размер</th>
-              <th className="px-2 py-2">Толщина</th>
-              <th className="px-2 py-2">Объём м²</th>
-              <th className="px-2 py-2">Кол-во</th>
-              <th className="px-2 py-2">Декор</th>
-              <th className="px-2 py-2">Текстура</th>
-              <th className="px-2 py-2">Примечание</th>
-              <th className="sticky right-0 bg-slate-50 px-2 py-2">Действия</th>
+              <th className="px-2 py-2">{t('calculations.supplier')}</th>
+              <th className="px-2 py-2">{t('calculations.qualityLine')}</th>
+              <th className="px-2 py-2">{t('calculations.hplType')}</th>
+              <th className="px-2 py-2">{t('calculations.coating')}</th>
+              <th className="px-2 py-2">{t('calculations.size')}</th>
+              <th className="px-2 py-2">{t('calculations.thickness')}</th>
+              <th className="px-2 py-2">{t('calculations.area')}</th>
+              <th className="px-2 py-2">{t('calculations.quantity')}</th>
+              <th className="px-2 py-2">{t('calculations.decor')}</th>
+              <th className="px-2 py-2">{t('calculations.texture')}</th>
+              <th className="px-2 py-2">{t('calculations.note')}</th>
+              <th className="sticky right-0 bg-slate-50 px-2 py-2">{t('calculations.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -524,7 +529,7 @@ function CalculationGroup({
               })
             }
           >
-            {ADD_HPL_ROW_LABEL}
+            {t('calculations.addPanelButton')}
           </Button>
         </div>
       )}
@@ -546,11 +551,14 @@ export function CalculationRequestForm({
   onSubmitToHead,
   canEditSupplier = true,
   notesReadOnly = false,
-  notesLabel = MANAGER_CUSTOMER_NOTE_LABEL,
-  saveLabel = 'Сохранить черновик',
+  notesLabel,
+  saveLabel,
 }: CalculationRequestFormProps) {
+  const { t } = useI18n();
   const busy = pending || submitPending;
   const notesDisabled = readOnly || notesReadOnly || busy;
+  const resolvedNotesLabel = notesLabel ?? t('calculations.managerNote');
+  const resolvedSaveLabel = saveLabel ?? t('calculations.saveDraft');
 
   return (
     <div className="space-y-4">
@@ -604,16 +612,16 @@ export function CalculationRequestForm({
             })
           }
         >
-          {ADD_CALCULATION_LABEL}
+          {t('calculations.addCalculationButton')}
         </Button>
       )}
 
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-slate-700">
-          {notesLabel}
+          {resolvedNotesLabel}
         </span>
         <textarea
-          aria-label={notesLabel}
+          aria-label={resolvedNotesLabel}
           className="min-h-24 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50"
           disabled={notesDisabled}
           value={value.notes}
@@ -630,12 +638,12 @@ export function CalculationRequestForm({
               disabled={busy}
               onClick={onSaveDraft}
             >
-              {pending ? 'Сохранение...' : saveLabel}
+              {pending ? t('common.saving') : resolvedSaveLabel}
             </Button>
           ) : null}
           {canSubmitToHead && onSubmitToHead ? (
             <Button type="button" disabled={busy} onClick={onSubmitToHead}>
-              {submitPending ? 'Отправка...' : SUBMIT_TO_HEAD_LABEL}
+              {submitPending ? t('common.sending') : t('calculations.sendToHead')}
             </Button>
           ) : null}
         </div>

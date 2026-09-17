@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/i18n/provider';
+
 export type InstallationSelection = 'yes' | 'no';
 
 type InstallationRequiredFieldProps = {
@@ -15,12 +17,13 @@ export function InstallationRequiredField({
   error,
   name = 'installationRequired',
 }: InstallationRequiredFieldProps) {
+  const { t } = useI18n();
   const errorId = `${name}-error`;
 
   return (
     <fieldset aria-describedby={error ? errorId : undefined}>
       <legend className="mb-1 block text-sm font-medium text-slate-700">
-        Монтаж
+        {t('navigation.installation')}
       </legend>
       <div className="grid grid-cols-2 gap-2">
         <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
@@ -32,7 +35,7 @@ export function InstallationRequiredField({
             required
             onChange={() => onChange('yes')}
           />
-          Да
+          {t('common.yes')}
         </label>
         <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
           <input
@@ -43,7 +46,7 @@ export function InstallationRequiredField({
             required
             onChange={() => onChange('no')}
           />
-          Нет
+          {t('common.no')}
         </label>
       </div>
       {error ? (

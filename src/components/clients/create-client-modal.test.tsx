@@ -27,6 +27,10 @@ describe('CreateClientModal contact fields', () => {
     render(<CreateClientModal isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('textbox', { name: 'Название' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /Тип/i })).toHaveDisplayValue('Компания');
+    expect(screen.getByRole('option', { name: 'Компания' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Физлицо' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'COMPANY' })).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Телефон' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Email' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Контакт: телефон' })).toBeInTheDocument();

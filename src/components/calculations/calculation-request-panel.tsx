@@ -20,15 +20,11 @@ import {
   useSuppliers,
 } from "@/hooks/use-panels";
 import {
-  ADD_CALCULATION_LABEL,
-  CONVERT_REQUEST_TO_QUOTE_LABEL,
-  CREATE_CALCULATION_REQUEST_LABEL,
   canConvertCalculationRequestToQuote,
   canConvertRequestToQuote,
   canCreateCalculationRequest,
   canShowCreateCalculationRequestAction,
   canShowSubmitCalculationRequestToHead,
-  calculationRequestStatusLabel,
   createEmptyRequestForm,
   isDraftCalculationRequest,
   isSubmittedCalculationRequest,
@@ -45,15 +41,12 @@ import { getErrorMessage } from "@/lib/errors";
 import {
   getApiErrorCode,
   QUOTE_SUPPLIER_REQUIRED,
-  QUOTE_SUPPLIER_REQUIRED_MESSAGE,
 } from "@/lib/hpl-errors";
 import { formatDateTime } from "@/lib/format";
 import { formatPersonName } from "@/lib/display-names";
-import {
-  MANAGER_CUSTOMER_NOTE_HEAD_LABEL,
-  MANAGER_CUSTOMER_NOTE_LABEL,
-} from "@/lib/manager-commercial-note";
 import type { CalculationRequest } from "@/types/hpl";
+import { useI18n } from "@/i18n/provider";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 type CalculationRequestPanelProps = {
   leadId?: string | null;
@@ -72,6 +65,7 @@ function HeadConvertControls({
   pending: boolean;
   onConvert: () => void;
 }) {
+  const { t } = useI18n();
   const errorId = error ? `convert-quote-${requestId}-error` : undefined;
 
   return (
@@ -84,7 +78,7 @@ function HeadConvertControls({
           aria-describedby={errorId}
           onClick={onConvert}
         >
-          {pending ? "Создание КП..." : CONVERT_REQUEST_TO_QUOTE_LABEL}
+          {pending ? t('calculations.creatingQuote') : t('calculations.convertToQuote')}
         </Button>
         {error ? (
           <span id={errorId} className="mt-1 block text-xs text-red-600">
@@ -101,6 +95,8 @@ export function CalculationRequestPanel({
   clientId,
 }: CalculationRequestPanelProps) {
   const { user } = useAuth();
+  const { t, messages } = useI18n();
+  const { calculationRequestStatusLabels } = useLabelMaps();
   const permissions = user?.permissions ?? [];
   const canCreate = canCreateCalculationRequest(permissions);
   const canShowCreate = canShowCreateCalculationRequestAction(permissions);
@@ -185,7 +181,7 @@ export function CalculationRequestPanel({
     colorsQuery.isError ||
     (canConvert && suppliersQuery.isError) ||
     (Boolean(leadId) && workspaceQuery.isError)
-      ? "Не удалось загрузить справочник линеек, типов, размеров или декоров."
+      ? t('calculations.catalogLoadError')
       : null;
 
   const openNew = (): void => {
@@ -205,7 +201,7 @@ export function CalculationRequestPanel({
   ): Promise<CalculationRequest | null> => {
     const isNew = !editingId || editingId === "new";
     if (isNew && !leadId) {
-      showError("Запрос расчёта создаётся из карточки лида: нужен leadId.");
+      showError(t('calculations.missingLeadId'));
       return null;
     }
     const payload = serializeCalculationRequest(
@@ -230,7 +226,10 @@ export function CalculationRequestPanel({
     current: CalculationRequestFormValues,
     options?: { requireCompleteTechnicalFields?: boolean },
   ): boolean => {
-    const result = validateRequestForm(current, catalogs.panelTypes, options);
+    const result = validateRequestForm(current, catalogs.panelTypes, {
+      ...options,
+      messages,
+    });
     setItemErrors(result.itemErrors);
     return result.valid;
   };
@@ -275,10 +274,10 @@ export function CalculationRequestPanel({
         ...current,
         [id]:
           getApiErrorCode(error) === QUOTE_SUPPLIER_REQUIRED
-            ? QUOTE_SUPPLIER_REQUIRED_MESSAGE
+            ? t('errors.quoteSupplierRequired')
             : getErrorMessage(
                 error,
-                "Не удалось выполнить коммерческий расчёт.",
+                t('calculations.commercialFailed'),
               ),
       }));
     }
@@ -289,35 +288,34 @@ export function CalculationRequestPanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-slate-950">
-            Запросы расчёта
+            {t('calculations.title')}
           </h3>
           {canShowCreate && !leadId ? (
             <p className="mt-1 text-sm text-slate-600">
-              Новый запрос создаётся из карточки лида — здесь можно открыть уже
-              существующие.
+              {t('calculations.createdFromLead')}
             </p>
           ) : null}
         </div>
         {canShowCreate && leadId ? (
           <Button type="button" size="sm" onClick={openNew}>
-            {CREATE_CALCULATION_REQUEST_LABEL}
+            {t('calculations.createRequest')}
           </Button>
         ) : null}
       </div>
 
       {requestsQuery.isLoading ? (
-        <p className="text-sm text-slate-600">Загрузка запросов...</p>
+        <p className="text-sm text-slate-600">{t('calculations.loading')}</p>
       ) : null}
       {requestsQuery.isError ? (
         <div className="flex items-center justify-between gap-3 border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          <span>Не удалось загрузить запросы расчёта.</span>
+          <span>{t('calculations.loadFailed')}</span>
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => void requestsQuery.refetch()}
           >
-            Повторить
+            {t('common.retry')}
           </Button>
         </div>
       ) : null}
@@ -327,19 +325,19 @@ export function CalculationRequestPanel({
           <thead className="bg-slate-50">
             <tr>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Дата
+                {t('calculations.date')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Статус
+                {t('calculations.status')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Автор
+                {t('calculations.author')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Расчёты
+                {t('calculations.calculations')}
               </th>
               <th className="px-3 py-2 text-right font-semibold text-slate-700">
-                Действия
+                {t('calculations.actions')}
               </th>
             </tr>
           </thead>
@@ -352,7 +350,9 @@ export function CalculationRequestPanel({
                     {formatDateTime(request.createdAt)}
                   </td>
                   <td className="px-3 py-2 text-slate-700">
-                    {calculationRequestStatusLabel(request.status)}
+                    {calculationRequestStatusLabels[
+                      request.status as keyof typeof calculationRequestStatusLabels
+                    ] ?? request.status}
                   </td>
                   <td className="px-3 py-2 text-slate-700">
                     {request.createdBy
@@ -368,7 +368,7 @@ export function CalculationRequestPanel({
                         variant="outline"
                         onClick={() => openExisting(request)}
                       >
-                        Открыть
+                        {t('common.open')}
                       </Button>
                       {canConvert && canConvertRequestToQuote(request) ? (
                         <HeadConvertControls
@@ -387,7 +387,7 @@ export function CalculationRequestPanel({
         </table>
         {!requestsQuery.isLoading && requests.length === 0 ? (
           <p className="p-6 text-center text-sm text-slate-500">
-            Запросов расчёта пока нет.
+            {t('calculations.empty')}
           </p>
         ) : null}
       </div>
@@ -397,14 +397,21 @@ export function CalculationRequestPanel({
           {editingRequest ? (
             <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-3">
               <div>
-                Клиент: {editingRequest.client?.name ?? clientId ?? "—"}
+                {t('calculations.clientLabel', {
+                  name: editingRequest.client?.name ?? clientId ?? t('common.dash'),
+                })}
               </div>
-              <div>Лид: {editingRequest.lead?.title ?? leadId ?? "—"}</div>
               <div>
-                Автор:{" "}
-                {editingRequest.createdBy
-                  ? formatPersonName(editingRequest.createdBy)
-                  : "—"}
+                {t('calculations.leadLabel', {
+                  name: editingRequest.lead?.title ?? leadId ?? t('common.dash'),
+                })}
+              </div>
+              <div>
+                {t('calculations.authorLabel', {
+                  name: editingRequest.createdBy
+                    ? formatPersonName(editingRequest.createdBy)
+                    : t('common.dash'),
+                })}
               </div>
             </div>
           ) : null}
@@ -423,10 +430,10 @@ export function CalculationRequestPanel({
             }
             notesLabel={
               headReviewEditable || readOnly
-                ? MANAGER_CUSTOMER_NOTE_HEAD_LABEL
-                : MANAGER_CUSTOMER_NOTE_LABEL
+                ? t('calculations.managerNoteHead')
+                : t('calculations.managerNote')
             }
-            saveLabel={headReviewEditable ? "Сохранить изменения" : undefined}
+            saveLabel={headReviewEditable ? t('calculations.saveChanges') : undefined}
             canSubmitToHead={
               canSubmitToHead && !readOnly && !headReviewEditable
             }
@@ -457,7 +464,7 @@ export function CalculationRequestPanel({
         </div>
       ) : null}
 
-      <span className="sr-only">{ADD_CALCULATION_LABEL}</span>
+      <span className="sr-only">{t('calculations.addCalculationButton')}</span>
     </div>
   );
 }

@@ -7,12 +7,10 @@ import { apiClient } from '../lib/api-client';
 import type { DealInstallation } from './use-deals';
 import {
   type InstallationJob,
-  useConfirmInstallerInstallation,
   useConfirmSupervisorInstallation,
   useInstallationJob,
   useInstallationJobs,
   useScheduleInstallation,
-  useStartInstallation,
   useUpdateInstallationAssessment,
 } from './use-installations';
 
@@ -146,7 +144,7 @@ describe('installation hooks', () => {
     expect(requestedUrls().some((url) => url.startsWith('/deals'))).toBe(false);
   });
 
-  it('returns a foreign Deal installation for INSTALLER without Deal ownership', async () => {
+  it('returns a management-visible installation without relying on Deal ownership', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({
       data: {
         items: [job({ dealId: 'deal-owned-by-manager' })],
@@ -271,38 +269,16 @@ describe('installation hooks', () => {
     );
   });
 
-  it('starts installation through the dedicated start action', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({
-      data: installation({ status: 'IN_PROGRESS', startedAt: '2026-08-20T08:00:00.000Z' }),
-    });
-    const { Wrapper } = createWrapper();
-    const { result } = renderHook(() => useStartInstallation(), {
-      wrapper: Wrapper,
-    });
-
-    await result.current.mutateAsync({ dealId: 'deal-1' });
-    expect(apiClient.post).toHaveBeenCalledWith(
-      '/deals/deal-1/installation/start',
-    );
-  });
-
-  it('confirms installer and supervisor through dedicated endpoints and refreshes Deal completion', async () => {
+  it('confirms installation through the supervisor endpoint and refreshes Deal completion', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: installation() });
     const { Wrapper, queryClient } = createWrapper();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-    const installer = renderHook(() => useConfirmInstallerInstallation(), {
-      wrapper: Wrapper,
-    });
     const supervisor = renderHook(() => useConfirmSupervisorInstallation(), {
       wrapper: Wrapper,
     });
 
-    await installer.result.current.mutateAsync({ dealId: 'deal-1' });
     await supervisor.result.current.mutateAsync({ dealId: 'deal-1' });
 
-    expect(apiClient.post).toHaveBeenCalledWith(
-      '/deals/deal-1/installation/confirm-installer',
-    );
     expect(apiClient.post).toHaveBeenCalledWith(
       '/deals/deal-1/installation/confirm-supervisor',
     );

@@ -12,7 +12,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 lg:pl-60">
+    <div className="min-h-screen bg-background lg:pl-60">
       {sidebarOpen ? (
         <div
           className="fixed inset-0 z-30 bg-slate-950/40 lg:hidden"

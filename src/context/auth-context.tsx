@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 import { apiClient } from '../lib/api-client';
+import { useI18n } from '../i18n/provider';
 
 export type AuthUser = {
   id: string;
@@ -36,6 +37,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthContextProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const profileRequestId = useRef(0);
@@ -62,7 +64,7 @@ export function AuthContextProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        let message = 'Не удалось войти. Проверьте email и пароль.';
+        let message = t('auth.loginFailed');
 
         try {
           const errorBody = (await response.json()) as { message?: string };
@@ -78,7 +80,7 @@ export function AuthContextProvider({ children }: { children: ReactNode }) {
 
       return loadProfile();
     },
-    [loadProfile],
+    [loadProfile, t],
   );
 
   const logout = useCallback(async (): Promise<void> => {

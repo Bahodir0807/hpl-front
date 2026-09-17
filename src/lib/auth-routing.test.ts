@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ACCOUNTANT_PERMISSION_SHAPE,
   STOREKEEPER_PERMISSION_SHAPE,
-  INSTALLER_PERMISSION_SHAPE,
   getDefaultAuthenticatedPath,
   prefersAccountantWorkspace,
-  prefersInstallerWorkspace,
   prefersStorekeeperWorkspace,
 } from './auth-routing';
 
@@ -40,15 +38,6 @@ describe('getDefaultAuthenticatedPath', () => {
       }),
     ).toBe('/receipts');
     expect(prefersStorekeeperWorkspace(STOREKEEPER_PERMISSION_SHAPE)).toBe(true);
-  });
-
-  it('routes real INSTALLER permissions to the installation workspace', () => {
-    expect(
-      getDefaultAuthenticatedPath({
-        permissions: [...INSTALLER_PERMISSION_SHAPE],
-      }),
-    ).toBe('/installations');
-    expect(prefersInstallerWorkspace(INSTALLER_PERMISSION_SHAPE)).toBe(true);
   });
 
   it('keeps HEAD and DIRECTOR on leads even with installation authority', () => {

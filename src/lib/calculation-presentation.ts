@@ -1,3 +1,8 @@
+import { ru } from '@/i18n/ru';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
+import { interpolate } from '@/i18n/translate';
+
 export const CALCULATIONS_CREATE_PERMISSION = 'calculations:create';
 export const CALCULATIONS_READ_PERMISSION = 'calculations:read';
 export const CALCULATIONS_READ_ALL_PERMISSION = 'calculations:read_all';
@@ -9,17 +14,17 @@ export const QUOTES_CLIENT_ACCEPT_PERMISSION = 'quotes:client_accept';
 export const LEADS_COMMERCIAL_QUALIFY_PERMISSION = 'leads:commercial_qualify';
 
 export const COMMERCIAL_CALCULATION_WAITING_COPY =
-  'Коммерческий расчёт ожидает руководителя.';
+  ru.calculations.waitingCopy;
 
 export const HPL_SELLING_COEFFICIENT = 2;
 
-export const PURCHASE_PRICE_LABEL = 'Закупочная цена, CNY/м²';
+export const PURCHASE_PRICE_LABEL = ru.calculations.purchasePrice;
 
 export const PURCHASE_PRICE_REQUIRED_MESSAGE =
-  'Укажите закупочную цену, CNY/м²';
+  ru.validation.purchasePriceRequired;
 
 export const PURCHASE_PRICE_INVALID_MESSAGE =
-  'Закупочная цена должна быть числом больше 0, CNY/м²';
+  ru.validation.purchasePriceInvalid;
 
 function hasPermission(
   permissions: readonly string[] | null | undefined,
@@ -63,26 +68,30 @@ export function canEnterManualPurchasePrice(
 
 export function validateManualPurchasePriceCny(
   value: string,
+  messages: Messages = getActiveMessages(),
 ): string | null {
   const trimmed = value.trim().replace(',', '.');
   if (!trimmed) {
-    return PURCHASE_PRICE_REQUIRED_MESSAGE;
+    return messages.validation.purchasePriceRequired;
   }
 
   const amount = Number(trimmed);
   if (!Number.isFinite(amount) || amount <= 0) {
-    return PURCHASE_PRICE_INVALID_MESSAGE;
+    return messages.validation.purchasePriceInvalid;
   }
 
   return null;
 }
 
-export function formatCnyUsdRateLabel(rate: string | number | null | undefined): string {
+export function formatCnyUsdRateLabel(
+  rate: string | number | null | undefined,
+  messages: Messages = getActiveMessages(),
+): string {
   if (rate === undefined || rate === null || rate === '') {
-    return '1 CNY = — USD';
+    return messages.currency.rateUnknown;
   }
 
-  return `1 CNY = ${rate} USD`;
+  return interpolate(messages.currency.rateLabel, { rate: String(rate) });
 }
 
 export function canConvertCalculationToQuote(

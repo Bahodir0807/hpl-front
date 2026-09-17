@@ -16,18 +16,18 @@ import {
   isInstallationNotFoundError,
 } from '@/lib/installation-errors';
 import {
-  INSTALLATION_NOT_FOUND_MESSAGE,
-  INSTALLER_EMPTY_JOBS_MESSAGE,
   installationJobClientName,
   installationJobTitle,
   installationStatusLabel,
   isInstallationJobMaterialsDelivered,
 } from '@/lib/installation-presentation';
 import { installationWorkspaceHref } from '@/lib/entity-routes';
+import { useI18n } from '@/i18n/provider';
 
 const PAGE_LIMIT = 20;
 
 export function InstallationJobsPage() {
+  const { t, messages } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -112,9 +112,9 @@ export function InstallationJobsPage() {
     return (
       <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
         {forbidden
-          ? 'Недостаточно прав для просмотра монтажных работ.'
-          : getInstallationErrorMessage(jobsQuery.error) ||
-            'Не удалось загрузить монтажные работы.'}
+          ? t('installations.viewForbidden')
+          : getInstallationErrorMessage(jobsQuery.error, messages) ||
+            t('installations.jobsLoadFailed')}
       </div>
     );
   }
@@ -136,23 +136,22 @@ export function InstallationJobsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold text-slate-950">Монтажные работы</h2>
+        <h2 className="text-xl font-semibold text-slate-950">{t('installations.title')}</h2>
         <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          Назначенные и доступные работы по монтажу: оценка, старт и
-          подтверждение выполнения.
+          {t('installations.subtitle')}
         </p>
       </div>
 
       {jobs.length === 0 && !selectedJob && !selectedInstallationId ? (
         <div className="rounded border border-slate-200 bg-white p-8 text-center text-sm text-slate-700">
-          {INSTALLER_EMPTY_JOBS_MESSAGE}
+          {t('installations.empty')}
         </div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
           <div className="space-y-2">
             {jobs.length === 0 ? (
               <div className="rounded border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                {INSTALLER_EMPTY_JOBS_MESSAGE}
+                {t('installations.empty')}
               </div>
             ) : (
               jobs.map((job) => {
@@ -175,39 +174,47 @@ export function InstallationJobsPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-slate-950">
-                          {installationJobTitle(job)}
+                          {installationJobTitle(job, messages)}
                         </div>
                         <div className="mt-0.5 truncate text-xs text-slate-500">
                           {installationJobClientName(job)}
                         </div>
                       </div>
                       <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                        {installationStatusLabel(job.status)}
+                        {installationStatusLabel(job.status, messages)}
                       </span>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
                       <div>
-                        Монтаж: {formatDateTime(job.expectedInstallationAt)}
+                        {t('installations.expectedAt', {
+                          date: formatDateTime(job.expectedInstallationAt),
+                        })}
                       </div>
                       <div>
-                        Завершение: {formatDateTime(job.expectedCompletionAt)}
+                        {t('installations.completionAt', {
+                          date: formatDateTime(job.expectedCompletionAt),
+                        })}
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
                       <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
                         {delivered
-                          ? 'Материал доставлен'
-                          : 'Материал не доставлен'}
+                          ? t('installations.materialDelivered')
+                          : t('installations.materialNotDelivered')}
                       </span>
                       <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
-                        Оценка: {job.assessedAt ? 'есть' : 'нет'}
+                        {t('installations.assessment', {
+                          value: job.assessedAt
+                            ? t('installations.assessmentYes')
+                            : t('installations.assessmentNo'),
+                        })}
                       </span>
                       <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
-                        Монтажник: {job.installerConfirmedAt ? 'да' : 'нет'}
-                      </span>
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
-                        Руководитель:{' '}
-                        {job.supervisorConfirmedAt ? 'да' : 'нет'}
+                        {t('installations.supervisor', {
+                          value: job.supervisorConfirmedAt
+                            ? t('installations.yes')
+                            : t('installations.no'),
+                        })}
                       </span>
                     </div>
                   </button>
@@ -224,19 +231,19 @@ export function InstallationJobsPage() {
 
           {detailNotFound ? (
             <div className="rounded border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-              {INSTALLATION_NOT_FOUND_MESSAGE}
+              {t('errors.installationNotFound')}
             </div>
           ) : detailForbidden ? (
             <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-              Недостаточно прав для просмотра монтажных работ.
+              {t('installations.viewForbidden')}
             </div>
           ) : detailError ? (
             <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-              {getInstallationErrorMessage(jobQuery.error)}
+              {getInstallationErrorMessage(jobQuery.error, messages)}
             </div>
           ) : jobQuery.isLoading && selectedInstallationId && !selectedJob ? (
             <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
-              Загрузка монтажной работы...
+              {t('installations.loadingJob')}
             </div>
           ) : selectedJob ? (
             <InstallationPanel
@@ -246,7 +253,7 @@ export function InstallationJobsPage() {
             />
           ) : (
             <div className="rounded border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-              Выберите монтажную работу, чтобы открыть детали.
+              {t('installations.selectJob')}
             </div>
           )}
         </div>

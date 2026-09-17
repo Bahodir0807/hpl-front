@@ -76,6 +76,17 @@ describe('HPL calculation business errors', () => {
     ).toBe(QUOTE_SUPPLIER_REQUIRED_MESSAGE);
   });
 
+  it('maps QUOTE_SUPPLIER_REQUIRED with English messages', async () => {
+    const { en } = await import('@/i18n/en');
+    expect(
+      getErrorMessage(
+        axiosError({ code: 'QUOTE_SUPPLIER_REQUIRED' }),
+        undefined,
+        en,
+      ),
+    ).toBe('Select a supplier for each item.');
+  });
+
   it('extracts quote codes from a JSON blob Axios payload', async () => {
     const error = axiosError({});
     error.response!.data = {

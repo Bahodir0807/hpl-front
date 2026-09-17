@@ -23,147 +23,79 @@ import type {
 } from '@/hooks/use-tasks';
 import type { RoleName } from '@/hooks/use-users';
 import type { SupplierCode } from '@/types/hpl';
+import { getActiveMessages } from '@/i18n/active-messages';
+import { localizeSystemText } from '@/i18n/system-labels';
+import { ru } from '@/i18n/ru';
 
 export const taskStatusLabels: Record<TaskStatus, string> = {
-  PENDING: 'Ожидает',
-  IN_PROGRESS: 'В работе',
-  COMPLETED: 'Завершена',
-  CANCELLED: 'Отменена',
+  ...ru.statuses.task,
 };
 
 export const taskComputedStatusLabels: Record<TaskComputedStatus, string> = {
-  ON_TIME: 'В срок',
-  WARNING: 'Срок приближается',
-  TODAY: 'Срок сегодня',
-  OVERDUE: 'Просрочена',
-  CRITICAL_OVERDUE: 'Критическая просрочка',
-  BLOCKED: 'Заблокирована',
+  ...ru.statuses.taskComputed,
 };
 
 export const taskPriorityLabels: Record<TaskPriority, string> = {
-  LOW: 'Низкий',
-  MEDIUM: 'Средний',
-  HIGH: 'Высокий',
-  URGENT: 'Срочный',
+  ...ru.statuses.taskPriority,
 };
 
 export const taskTypeLabels: Record<TaskType, string> = {
-  FIRST_CONTACT: 'Первый контакт',
-  CALL: 'Звонок',
-  MESSAGE: 'Сообщение',
-  EMAIL: 'Email',
-  MEETING: 'Встреча',
-  SAMPLE_SEND: 'Образцы',
-  CALCULATION: 'Расчет',
-  OFFER: 'КП',
-  PAYMENT_CHECK: 'Оплата',
-  SHIPMENT_CHECK: 'Отгрузка',
-  OTHER: 'Другое',
+  ...ru.statuses.taskType,
 };
 
-// Лейблы совпадают с локальным stageLabels на странице сделок.
 export const dealStageLabels: Record<DealStage, string> = {
-  QUALIFICATION: 'Квалификация',
-  HPL_SELECTION: 'Подбор HPL',
-  OFFER_PREPARATION: 'Подготовка КП',
-  NEGOTIATION: 'Переговоры',
-  AGREEMENT_PENDING: 'Согласование',
-  PAYMENT_PREPARATION: 'Подготовка оплаты',
-  SHIPPED: 'Отгружено',
-  WON: 'Выиграна',
-  LOST: 'Проиграна',
+  ...ru.statuses.dealStage,
 };
 
 export const orderStatusLabels: Record<OrderStatus, string> = {
-  DRAFT: 'Черновик',
-  CONFIRMED: 'Подтверждён',
-  WAITING_PAYMENT: 'Ожидает оплаты',
-  PARTIALLY_PAID: 'Оплачен частично',
-  PAID: 'Оплачен',
-  WAITING_STOCK: 'Ожидает товар',
-  PENDING_SUPPLIER: 'Ожидает поставщика',
-  READY_FOR_SHIPMENT: 'Готов к отгрузке',
-  PARTIALLY_SHIPPED: 'Частично отгружен',
-  SHIPPED: 'Отгружен',
-  COMPLETED: 'Завершён',
-  CANCELLED: 'Отменён',
+  ...ru.statuses.order,
 };
 
 export const paymentStatusLabels: Record<PaymentStatus, string> = {
-  UNPAID: 'Не оплачен',
-  PARTIALLY_PAID: 'Оплачен частично',
-  PAID: 'Оплачен',
+  ...ru.statuses.payment,
 };
 
 export const paymentRecordStatusLabels: Record<PaymentRecordStatus, string> = {
-  PENDING: 'На проверке',
-  CONFIRMED: 'Подтверждён',
-  REJECTED: 'Отклонён',
+  ...ru.statuses.paymentRecord,
 };
 
 export const deliveryStatusLabels: Record<DeliveryStatus, string> = {
-  PLANNED: 'Запланирована',
-  DELIVERED: 'Доставлена',
-  CANCELLED: 'Отменена',
+  ...ru.statuses.delivery,
 };
 
 export const leadStatusLabels: Record<LeadStatus, string> = {
-  NEW: 'Новый',
-  IN_PROGRESS: 'В работе',
-  QUALIFIED: 'Квалифицирован',
-  UNQUALIFIED: 'Не квалифицирован',
-  CONVERTED: 'Конвертирован',
-  LOST: 'Проигран',
+  ...ru.statuses.lead,
 };
 
 export const clientStatusLabels: Record<ClientStatus, string> = {
-  ACTIVE: 'Активный',
-  ARCHIVED: 'В архиве',
-  BLACKLISTED: 'В чёрном списке',
+  ...ru.statuses.client,
 };
 
 export const clientTypeLabels: Record<ClientType, string> = {
-  COMPANY: 'Компания',
-  INDIVIDUAL: 'Физлицо',
+  ...ru.statuses.clientType,
 };
 
 export const clientSegmentLabels: Record<ClientSegment, string> = {
-  DEALER: 'Дилер',
-  ARCHITECT: 'Архитектор',
-  CONTRACTOR: 'Подрядчик',
-  END_CUSTOMER: 'Конечный клиент',
-  OTHER: 'Другой',
+  ...ru.statuses.clientSegment,
 };
 
 export const productStatusLabels: Record<ProductStatus, string> = {
-  ACTIVE: 'Активен',
-  ARCHIVED: 'В архиве',
-  OUT_OF_STOCK: 'Нет в наличии',
+  ...ru.statuses.product,
 };
 
 export const expectedReceiptStatusLabels: Record<ExpectedReceiptStatus, string> =
   {
-    PENDING: 'Ожидается',
-    PARTIALLY_RECEIVED: 'Частично принят',
-    RECEIVED: 'Принят',
-    CANCELLED: 'Отменён',
+    ...ru.statuses.expectedReceipt,
   };
 
 export const roleLabels: Record<RoleName, string> = {
-  ADMIN: 'Администратор',
-  DIRECTOR: 'Директор',
-  HEAD: 'Руководитель',
-  MANAGER: 'Менеджер',
-  ACCOUNTANT: 'Бухгалтер',
-  STOREKEEPER: 'Кладовщик',
-  INSTALLER: 'Монтажник',
+  ...ru.roles,
 };
 
 export const ADMIN_PROVISIONABLE_ROLES: RoleName[] = [
   'ADMIN',
   'MANAGER',
   'STOREKEEPER',
-  'INSTALLER',
 ];
 
 export const ADMIN_PROTECTED_ASSIGNMENT_ROLES: RoleName[] = [
@@ -179,26 +111,24 @@ export const CANONICAL_ROLES: RoleName[] = [
   'MANAGER',
   'ACCOUNTANT',
   'STOREKEEPER',
-  'INSTALLER',
 ];
 
-// relatedType приходит от backend строкой, поэтому Record<string, string>.
 export const relatedTypeLabels: Record<string, string> = {
-  lead: 'Лид',
-  Lead: 'Лид',
-  deal: 'Сделка',
-  Deal: 'Сделка',
-  client: 'Клиент',
-  Client: 'Клиент',
-  order: 'Заказ',
-  Order: 'Заказ',
-  supplierOrder: 'Заказ поставщику',
-  SupplierOrder: 'Заказ поставщику',
-  DealInstallation: 'Монтаж',
-  dealInstallation: 'Монтаж',
-  LeadRecovery: 'Восстановление лида',
-  DealRecovery: 'Восстановление сделки',
-  task: 'Задача',
+  lead: ru.relatedTypes.lead,
+  Lead: ru.relatedTypes.lead,
+  deal: ru.relatedTypes.deal,
+  Deal: ru.relatedTypes.deal,
+  client: ru.relatedTypes.client,
+  Client: ru.relatedTypes.client,
+  order: ru.relatedTypes.order,
+  Order: ru.relatedTypes.order,
+  supplierOrder: ru.relatedTypes.supplierOrder,
+  SupplierOrder: ru.relatedTypes.supplierOrder,
+  DealInstallation: ru.relatedTypes.dealInstallation,
+  dealInstallation: ru.relatedTypes.dealInstallation,
+  LeadRecovery: ru.relatedTypes.leadRecovery,
+  DealRecovery: ru.relatedTypes.dealRecovery,
+  task: ru.relatedTypes.task,
 };
 
 export function enumLabel(
@@ -206,16 +136,25 @@ export function enumLabel(
   value: string | null | undefined,
 ): string {
   if (!value) {
-    return '—';
+    return getActiveMessages().common.dash;
   }
 
-  return labels[value] ?? value;
+  if (labels[value]) {
+    return labels[value];
+  }
+
+  const compact = value.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (labels[compact]) {
+    return labels[compact];
+  }
+
+  return localizeSystemText(value);
 }
 
 export const supplierDisplayNames: Record<SupplierCode, string> = {
-  wuya: 'Вуя',
-  tianran: 'Тианран',
-  polybet: 'Полибет',
+  wuya: ru.suppliers.wuya,
+  tianran: ru.suppliers.tianran,
+  polybet: ru.suppliers.polybet,
 };
 
 const LEGACY_WUYA_DISPLAY_NAMES = new Set([
@@ -224,14 +163,24 @@ const LEGACY_WUYA_DISPLAY_NAMES = new Set([
   'wuya',
 ]);
 
+function activeSupplierDisplayNames(): Record<SupplierCode, string> {
+  const suppliers = getActiveMessages().suppliers;
+  return {
+    wuya: suppliers.wuya,
+    tianran: suppliers.tianran,
+    polybet: suppliers.polybet,
+  };
+}
+
 export function formatSupplierName(
   code?: string | null,
   name?: string | null,
-  fallback = 'Поставщик',
+  fallback: string = getActiveMessages().suppliers.fallback,
+  displayNames: Record<SupplierCode, string> = activeSupplierDisplayNames(),
 ): string {
   const normalized = code?.trim().toLowerCase();
-  if (normalized && normalized in supplierDisplayNames) {
-    return supplierDisplayNames[normalized as SupplierCode];
+  if (normalized && normalized in displayNames) {
+    return displayNames[normalized as SupplierCode];
   }
 
   const trimmed = name?.trim();
@@ -240,7 +189,7 @@ export function formatSupplierName(
   }
 
   if (LEGACY_WUYA_DISPLAY_NAMES.has(trimmed.toLowerCase())) {
-    return supplierDisplayNames.wuya;
+    return displayNames.wuya;
   }
 
   return trimmed;

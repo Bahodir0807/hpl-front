@@ -21,9 +21,11 @@ import {
 } from '../../../lib/display-names';
 import { formatDateTime } from '../../../lib/format';
 import { getErrorMessage } from '../../../lib/errors';
-import { leadStatusLabels } from '../../../lib/labels';
 import { lossReasonLabel } from '../../../lib/loss-reasons';
 import { resolveLeadWorkflowState } from '../../../lib/lead-workflow';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
+import type { TranslateFn } from '@/i18n/translate';
 
 const QualifyLeadModal = dynamic(
   () =>
@@ -37,16 +39,6 @@ const PAGE_LIMIT = 20;
 
 type StatusFilter = 'ALL' | LeadStatus;
 
-const statusOptions: { value: StatusFilter; label: string }[] = [
-  { value: 'ALL', label: 'Все статусы' },
-  { value: 'NEW', label: leadStatusLabels.NEW },
-  { value: 'IN_PROGRESS', label: leadStatusLabels.IN_PROGRESS },
-  { value: 'QUALIFIED', label: leadStatusLabels.QUALIFIED },
-  { value: 'UNQUALIFIED', label: leadStatusLabels.UNQUALIFIED },
-  { value: 'LOST', label: leadStatusLabels.LOST },
-  { value: 'CONVERTED', label: leadStatusLabels.CONVERTED },
-];
-
 const knownSourceOptions = [
   'telegram',
   'website',
@@ -56,19 +48,37 @@ const knownSourceOptions = [
   'Тендерная площадка',
 ];
 
-function sourceLabel(source: string): string {
+function sourceLabel(source: string, t: TranslateFn): string {
   if (source === 'telegram') {
     return 'Telegram';
   }
 
   if (source === 'website') {
-    return 'Сайт';
+    return t('leads.website');
+  }
+
+  if (source === 'Сайт компании') {
+    return t('leads.websiteCompany');
+  }
+
+  if (source === 'Входящий звонок') {
+    return t('leads.incomingCall');
+  }
+
+  if (source === 'Рекомендация партнёра') {
+    return t('leads.partnerReferral');
+  }
+
+  if (source === 'Тендерная площадка') {
+    return t('leads.tender');
   }
 
   return source;
 }
 
 export default function LeadsPage() {
+  const { t, locale, messages } = useI18n();
+  const labels = useLabelMaps();
   const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('ALL');
@@ -106,9 +116,21 @@ export default function LeadsPage() {
     role: 'MANAGER',
     limit: 100,
   });
+  const statusOptions = useMemo(
+    (): { value: StatusFilter; label: string }[] => [
+      { value: 'ALL', label: t('common.allStatuses') },
+      { value: 'NEW', label: labels.leadStatusLabels.NEW },
+      { value: 'IN_PROGRESS', label: labels.leadStatusLabels.IN_PROGRESS },
+      { value: 'QUALIFIED', label: labels.leadStatusLabels.QUALIFIED },
+      { value: 'UNQUALIFIED', label: labels.leadStatusLabels.UNQUALIFIED },
+      { value: 'LOST', label: labels.leadStatusLabels.LOST },
+      { value: 'CONVERTED', label: labels.leadStatusLabels.CONVERTED },
+    ],
+    [labels.leadStatusLabels, t],
+  );
   const managerOptions = useMemo(
     () => [
-      { value: '', label: 'Все менеджеры' },
+      { value: '', label: t('common.allManagers') },
       ...usersQuery.users
         .filter((manager) => manager.isActive)
         .map((manager) => ({
@@ -118,7 +140,7 @@ export default function LeadsPage() {
           description: manager.email,
         })),
     ],
-    [usersQuery.users],
+    [t, usersQuery.users],
   );
 
   const leads = leadsQuery.data?.items ?? [];
@@ -141,22 +163,22 @@ export default function LeadsPage() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-slate-950">Лиды</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Заявки и их текущий этап в процессе продаж HPL.
-            </p>
+            <h2 className="text-xl font-semibold text-slate-950">
+              {t('leads.title')}
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">{t('leads.subtitle')}</p>
           </div>
 
           <Button type="button" onClick={() => setIsCreateModalOpen(true)}>
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Создать лид
+            {t('leads.create')}
           </Button>
         </div>
 
         <div className="flex flex-wrap items-end gap-3 border-y border-slate-200 bg-white py-3">
           <label className="min-w-[240px] flex-1">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Поиск
+              {t('common.search')}
             </span>
             <span className="relative block">
               <Search
@@ -169,7 +191,7 @@ export default function LeadsPage() {
                   setSearch(event.target.value);
                   setPage(1);
                 }}
-                placeholder="Поиск по лидам..."
+                placeholder={t('leads.searchPlaceholder')}
                 className="w-full rounded border border-slate-300 py-2 pl-9 pr-3 text-sm text-slate-900 outline-none focus:border-slate-500"
               />
             </span>
@@ -177,7 +199,7 @@ export default function LeadsPage() {
 
           <label className="w-full sm:w-48">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Статус
+              {t('common.status')}
             </span>
             <select
               value={status}
@@ -197,7 +219,7 @@ export default function LeadsPage() {
 
           <label className="w-full sm:w-52">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Источник
+              {t('leads.source')}
             </span>
             <input
               list="lead-source-options"
@@ -206,12 +228,14 @@ export default function LeadsPage() {
                 setSource(event.target.value);
                 setPage(1);
               }}
-              placeholder="Все источники"
+              placeholder={t('common.allSources')}
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
             />
             <datalist id="lead-source-options">
               {knownSourceOptions.map((option) => (
-                <option key={option} value={option} />
+                <option key={option} value={option}>
+                  {sourceLabel(option, t)}
+                </option>
               ))}
             </datalist>
           </label>
@@ -219,7 +243,7 @@ export default function LeadsPage() {
           {canFilterOwners ? (
             <label className="w-full sm:w-64">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Менеджер
+                {t('leads.manager')}
               </span>
               <SearchCombobox
                 value={ownerId}
@@ -228,9 +252,9 @@ export default function LeadsPage() {
                   setPage(1);
                 }}
                 options={managerOptions}
-                placeholder="Все менеджеры"
-                searchPlaceholder="Поиск менеджера"
-                emptyLabel="Менеджеры не найдены"
+                placeholder={t('common.allManagers')}
+                searchPlaceholder={t('leads.searchManager')}
+                emptyLabel={t('leads.managersEmpty')}
                 loading={usersQuery.isFetching}
               />
             </label>
@@ -239,36 +263,38 @@ export default function LeadsPage() {
           {hasActiveFilters ? (
             <Button type="button" variant="outline" onClick={resetFilters}>
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              Сбросить
+              {t('common.reset')}
             </Button>
           ) : null}
         </div>
 
         <div className="flex min-h-5 items-center justify-between text-xs text-slate-500">
-          <span>{leadsQuery.data ? `Найдено: ${total}` : null}</span>
+          <span>
+            {leadsQuery.data ? t('common.found', { count: total }) : null}
+          </span>
           <span aria-live="polite">
             {leadsQuery.isFetching && !leadsQuery.isLoading
-              ? 'Обновляем список...'
+              ? t('common.updatingList')
               : null}
           </span>
         </div>
 
         {leadsQuery.isLoading ? (
           <div className="border-y border-slate-200 bg-white p-6 text-sm text-slate-600">
-            Загрузка лидов...
+            {t('leads.loading')}
           </div>
         ) : null}
 
         {leadsQuery.isError ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-y border-red-200 bg-red-50 p-5 text-sm text-red-700">
-            <span>Не удалось загрузить лиды.</span>
+            <span>{t('leads.loadFailed')}</span>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => void leadsQuery.refetch()}
             >
-              Повторить
+              {t('common.retry')}
             </Button>
           </div>
         ) : null}
@@ -276,12 +302,12 @@ export default function LeadsPage() {
         {!leadsQuery.isLoading && !leadsQuery.isError && leads.length === 0 ? (
           <div className="border-y border-slate-200 bg-white p-8 text-center">
             <div className="text-sm font-medium text-slate-900">
-              {hasActiveFilters ? 'По текущим фильтрам лидов нет' : 'Лидов пока нет'}
+              {hasActiveFilters ? t('leads.emptyFiltered') : t('leads.empty')}
             </div>
             <div className="mt-1 text-sm text-slate-600">
               {hasActiveFilters
-                ? 'Измените условия поиска или сбросьте фильтры.'
-                : 'Создайте первый лид, чтобы начать работу.'}
+                ? t('leads.emptyFilteredHint')
+                : t('leads.emptyHint')}
             </div>
           </div>
         ) : null}
@@ -292,28 +318,28 @@ export default function LeadsPage() {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Лид / клиент
+                    {t('leads.columnLead')}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Источник
+                    {t('leads.columnSource')}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Ответственный
+                    {t('leads.columnOwner')}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Этап HPL
+                    {t('leads.columnStage')}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Оценка / создан
+                    {t('leads.columnEstimate')}
                   </th>
                   <th className="px-3 py-2 text-right font-semibold text-slate-700">
-                    Действия
+                    {t('common.actions')}
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {leads.map((lead) => {
-                  const workflow = resolveLeadWorkflowState(lead);
+                  const workflow = resolveLeadWorkflowState(lead, messages);
                   const needsAction =
                     workflow.needsCommercialAction && canCommerciallyQualify;
 
@@ -332,7 +358,11 @@ export default function LeadsPage() {
                           {lead.title}
                         </Link>
                         <div className="mt-1 text-xs text-slate-600">
-                          {resolveEntityName(lead.client, lead.clientId, 'Клиент не указан')}
+                          {resolveEntityName(
+                            lead.client,
+                            lead.clientId,
+                            t('leads.clientMissing'),
+                          )}
                         </div>
                         {lead.projectObject || lead.projectObjectId ? (
                           <div className="mt-0.5 text-xs text-slate-500">
@@ -341,7 +371,7 @@ export default function LeadsPage() {
                         ) : null}
                       </td>
                       <td className="px-3 py-3 text-slate-700">
-                        {sourceLabel(lead.source)}
+                        {sourceLabel(lead.source, t)}
                       </td>
                       <td className="px-3 py-3 text-slate-700">
                         {resolveUserName(lead.owner, lead.ownerId)}
@@ -355,12 +385,12 @@ export default function LeadsPage() {
                         {needsAction ? (
                           <div className="mt-1.5 flex items-center gap-1 text-xs font-medium text-orange-700">
                             <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                            Требует действия
+                            {t('leads.needsAction')}
                           </div>
                         ) : null}
                         {lead.status === 'LOST' ? (
                           <div className="mt-1 text-xs text-slate-500">
-                            {lossReasonLabel(lead.lostReasonCode)}
+                            {lossReasonLabel(lead.lostReasonCode, messages)}
                           </div>
                         ) : null}
                       </td>
@@ -369,7 +399,7 @@ export default function LeadsPage() {
                           {formatMoney(lead.estimatedAmount)}
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500">
-                          {formatDateTime(lead.createdAt)}
+                          {formatDateTime(lead.createdAt, locale)}
                         </div>
                       </td>
                       <td className="px-3 py-3">
@@ -380,7 +410,7 @@ export default function LeadsPage() {
                             disabled={lead.status === 'CONVERTED'}
                             className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
                           >
-                            Квалифицировать
+                            {t('leads.qualify')}
                           </button>
                           <button
                             type="button"
@@ -391,7 +421,7 @@ export default function LeadsPage() {
                             }
                             className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
                           >
-                            Не квалифицирован
+                            {t('leads.unqualify')}
                           </button>
                           {canLoseLead ? (
                             <button
@@ -403,14 +433,14 @@ export default function LeadsPage() {
                               }
                               className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
                             >
-                              Проигран
+                              {t('leads.lost')}
                             </button>
                           ) : null}
                           <Link
                             href={`/leads/${lead.id}`}
                             className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                           >
-                            Открыть
+                            {t('common.open')}
                           </Link>
                         </div>
                       </td>
@@ -449,9 +479,9 @@ export default function LeadsPage() {
       <LoseOpportunityModal
         isOpen={Boolean(losingLead)}
         title={losingLead?.title ?? ''}
-        entityLabel="лид"
+        entityLabel={t('leads.entityLabel')}
         pending={loseLead.isPending}
-        error={loseLead.isError ? getErrorMessage(loseLead.error) : null}
+        error={loseLead.isError ? getErrorMessage(loseLead.error, undefined, messages) : null}
         onClose={() => setLosingLead(null)}
         onSubmit={async (payload) => {
           if (!losingLead) {

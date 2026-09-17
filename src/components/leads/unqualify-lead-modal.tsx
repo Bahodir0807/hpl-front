@@ -1,16 +1,20 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Lead, useUnqualifyLead } from '../../hooks/use-leads';
+import { useI18n } from '@/i18n/provider';
+import type { TranslateFn } from '@/i18n/translate';
 
-const unqualifySchema = z.object({
-  reason: z.string().trim().min(5, 'Причина должна быть не короче 5 символов'),
-});
+function createUnqualifySchema(t: TranslateFn) {
+  return z.object({
+    reason: z.string().trim().min(5, t('leads.unqualifyReasonMin')),
+  });
+}
 
-type UnqualifyFormValues = z.infer<typeof unqualifySchema>;
+type UnqualifyFormValues = z.infer<ReturnType<typeof createUnqualifySchema>>;
 
 type UnqualifyLeadModalProps = {
   lead: Lead | null;
@@ -23,7 +27,9 @@ export function UnqualifyLeadModal({
   isOpen,
   onClose,
 }: UnqualifyLeadModalProps) {
+  const { t } = useI18n();
   const unqualifyLead = useUnqualifyLead();
+  const unqualifySchema = useMemo(() => createUnqualifySchema(t), [t]);
   const {
     register,
     handleSubmit,
@@ -62,7 +68,7 @@ export function UnqualifyLeadModal({
       <div className="w-full max-w-md rounded border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4">
           <h2 className="text-base font-semibold text-slate-950">
-            Дисквалифицировать лид
+            {t('leads.unqualifyTitle')}
           </h2>
           <p className="mt-1 text-sm text-slate-600">{lead.title}</p>
         </div>
@@ -75,7 +81,7 @@ export function UnqualifyLeadModal({
         >
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Причина
+              {t('leads.reason')}
             </span>
             <textarea
               rows={4}
@@ -91,7 +97,7 @@ export function UnqualifyLeadModal({
 
           {unqualifyLead.isError ? (
             <p className="text-sm text-red-600">
-              Не удалось дисквалифицировать лид.
+              {t('leads.unqualifyFailed')}
             </p>
           ) : null}
 
@@ -101,14 +107,14 @@ export function UnqualifyLeadModal({
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={!isValid || unqualifyLead.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              Сохранить
+              {t('common.save')}
             </button>
           </div>
         </form>

@@ -15,7 +15,7 @@ import {
   useUpdateSupplierOrderDates,
 } from '@/hooks/use-supplier-orders';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { formatSupplierName, paymentStatusLabels } from '@/lib/labels';
+import { formatSupplierName } from '@/lib/labels';
 import { getSupplierOrderErrorMessage } from '@/lib/supplier-order-errors';
 import {
   canCreateSupplierOrder,
@@ -24,11 +24,12 @@ import {
   getSupplierOrderActions,
   isCustomerOrderPaid,
   normalizeSupplierOrderStatus,
-  supplierOrderStatusLabels,
   toDateInputValue,
   type SupplierOrderUiAction,
 } from '@/lib/supplier-order-presentation';
 import type { SupplierOrder } from '@/types/hpl';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 
 type SupplierOrderPanelProps = {
   dealId: string;
@@ -52,12 +53,16 @@ const emptyDateForm: DateFormState = {
   comment: '',
 };
 
-function paymentLabel(status?: string | null): string {
+function paymentLabel(
+  status: string | null | undefined,
+  labels: Record<string, string>,
+  dash: string,
+): string {
   if (!status) {
-    return '—';
+    return dash;
   }
 
-  return paymentStatusLabels[status as PaymentStatus] ?? status;
+  return labels[status as PaymentStatus] ?? status;
 }
 
 export function SupplierOrderPanel({
@@ -65,6 +70,8 @@ export function SupplierOrderPanel({
   deal,
   highlightedSupplierOrderId,
 }: SupplierOrderPanelProps) {
+  const { t, messages } = useI18n();
+  const { paymentStatusLabels } = useLabelMaps();
   const { user } = useAuth();
   const permissions = user?.permissions ?? [];
   const canManage = canCreateSupplierOrder(permissions);
@@ -107,11 +114,10 @@ export function SupplierOrderPanel({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-slate-950">
-              Заказы поставщику
+              {t('deals.supplierOrders.title')}
             </h3>
             <p className="mt-1 text-xs text-slate-500">
-              Один заказ клиента может закрываться несколькими заказами
-              поставщику.
+              {t('deals.supplierOrders.hint')}
             </p>
           </div>
           {canManage ? (
@@ -125,31 +131,31 @@ export function SupplierOrderPanel({
               }}
             >
               {showCreateForm
-                ? 'Скрыть форму'
-                : 'Добавить заказ поставщику'}
+                ? t('common.hideForm')
+                : t('deals.supplierOrders.add')}
             </Button>
           ) : null}
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
           <div>
-            <div className="text-xs text-slate-500">Оплата заказа клиента</div>
+            <div className="text-xs text-slate-500">{t('deals.supplierOrders.customerPayment')}</div>
             <div className="mt-1 font-medium text-slate-900">
               {customerOrdersQuery.isLoading
-                ? 'Загрузка...'
-                : paymentLabel(paymentStatus)}
+                ? t('common.loadingEllipsis')
+                : paymentLabel(paymentStatus, paymentStatusLabels, t('common.dash'))}
             </div>
           </div>
           <div>
-            <div className="text-xs text-slate-500">Отгрузка</div>
+            <div className="text-xs text-slate-500">{t('deals.supplierOrders.shipment')}</div>
             <div className="mt-1 text-slate-900">
               {paid
-                ? 'Полная оплата подтверждена — отгрузка разрешена бэкендом.'
-                : 'Отгрузка недоступна: заказ ещё не оплачен полностью.'}
+                ? t('deals.supplierOrders.shipmentAllowed')
+                : t('errors.shipmentPaymentRequired')}
             </div>
           </div>
           <div>
-            <div className="text-xs text-slate-500">Адрес доставки</div>
+            <div className="text-xs text-slate-500">{t('deals.supplierOrders.deliveryAddress')}</div>
             <div className="mt-1 text-slate-900">{deliveryAddress || '—'}</div>
           </div>
         </div>
@@ -175,14 +181,14 @@ export function SupplierOrderPanel({
           <div className="mt-4 space-y-2" aria-busy="true">
             <div className="h-16 animate-pulse rounded bg-slate-100" />
             <div className="h-16 animate-pulse rounded bg-slate-100" />
-            <p className="text-sm text-slate-600">Загрузка заказов поставщику...</p>
+            <p className="text-sm text-slate-600">{t('deals.supplierOrders.loading')}</p>
           </div>
         ) : null}
 
         {ordersQuery.isError ? (
           <p className="mt-4 text-sm text-red-600">
-            {getSupplierOrderErrorMessage(ordersQuery.error) ||
-              'Не удалось загрузить заказы поставщику.'}
+            {getSupplierOrderErrorMessage(ordersQuery.error, messages) ||
+              t('deals.supplierOrders.loadFailed')}
           </p>
         ) : null}
 
@@ -190,7 +196,7 @@ export function SupplierOrderPanel({
         !ordersQuery.isError &&
         supplierOrders.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">
-            Заказы поставщику ещё не созданы.
+            {t('deals.supplierOrders.empty')}
           </p>
         ) : null}
 
@@ -221,6 +227,8 @@ function CreateSupplierOrderForm({
   onCreated: () => void;
   onError: (message: string) => void;
 }) {
+  const { t, messages } = useI18n();
+  const { supplierDisplayNames } = useLabelMaps();
   const suppliersQuery = useSuppliers();
   const createOrder = useCreateSupplierOrder();
   const [supplierId, setSupplierId] = useState('');
@@ -232,7 +240,7 @@ function CreateSupplierOrderForm({
     const expectedReadyAt = dateInputToIso(form.expectedReadyAt);
 
     if (!supplierId || !orderedAt || !expectedReadyAt) {
-      onError('Укажите поставщика, дату заказа и ожидаемую готовность.');
+      onError(t('validation.supplierOrderRequiredFields'));
       return;
     }
 
@@ -250,40 +258,40 @@ function CreateSupplierOrderForm({
       setForm(emptyDateForm);
       onCreated();
     } catch (error) {
-      onError(getSupplierOrderErrorMessage(error));
+      onError(getSupplierOrderErrorMessage(error, messages));
     }
   };
 
   return (
     <form className="space-y-3" onSubmit={(event) => void submit(event)}>
       <h4 className="text-sm font-medium text-slate-900">
-        Новый заказ поставщику
+        {t('deals.supplierOrders.newTitle')}
       </h4>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <label className="text-sm text-slate-700">
-          <span className="mb-1 block text-xs text-slate-500">Поставщик</span>
+          <span className="mb-1 block text-xs text-slate-500">{t('common.supplier')}</span>
           <select
             required
             value={supplierId}
             onChange={(event) => setSupplierId(event.target.value)}
             className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
           >
-            <option value="">Выберите поставщика</option>
+            <option value="">{t('validation.selectSupplier')}</option>
             {(suppliersQuery.data ?? []).map((supplier) => (
               <option key={supplier.id} value={supplier.id}>
-                {formatSupplierName(supplier.code, supplier.name)}
+                {formatSupplierName(supplier.code, supplier.name, t('common.dash'), supplierDisplayNames)}
               </option>
             ))}
           </select>
         </label>
         <DateField
-          label="Дата заказа"
+          label={t('deals.supplierOrders.orderDate')}
           required
           value={form.orderedAt}
           onChange={(orderedAt) => setForm((current) => ({ ...current, orderedAt }))}
         />
         <DateField
-          label="Ожидаемая готовность"
+          label={t('deals.supplierOrders.expectedReady')}
           required
           value={form.expectedReadyAt}
           onChange={(expectedReadyAt) =>
@@ -291,14 +299,14 @@ function CreateSupplierOrderForm({
           }
         />
         <DateField
-          label="Ожидаемая отгрузка"
+          label={t('deals.supplierOrders.expectedShipment')}
           value={form.expectedShipmentAt}
           onChange={(expectedShipmentAt) =>
             setForm((current) => ({ ...current, expectedShipmentAt }))
           }
         />
         <DateField
-          label="Ожидаемое прибытие"
+          label={t('deals.supplierOrders.expectedArrival')}
           value={form.expectedArrivalAt}
           onChange={(expectedArrivalAt) =>
             setForm((current) => ({ ...current, expectedArrivalAt }))
@@ -306,7 +314,7 @@ function CreateSupplierOrderForm({
         />
       </div>
       <label className="block text-sm text-slate-700">
-        <span className="mb-1 block text-xs text-slate-500">Комментарий</span>
+        <span className="mb-1 block text-xs text-slate-500">{t('common.comment')}</span>
         <textarea
           value={form.comment}
           onChange={(event) =>
@@ -317,7 +325,7 @@ function CreateSupplierOrderForm({
         />
       </label>
       <Button type="submit" size="sm" disabled={createOrder.isPending}>
-        {createOrder.isPending ? 'Создание...' : 'Создать заказ поставщику'}
+        {createOrder.isPending ? t('common.creating') : t('deals.supplierOrders.create')}
       </Button>
     </form>
   );
@@ -338,6 +346,8 @@ function SupplierOrderCard({
   paymentKnown: boolean;
   onError: (message: string) => void;
 }) {
+  const { t, messages } = useI18n();
+  const { supplierOrderStatusLabels, supplierDisplayNames } = useLabelMaps();
   const updateDates = useUpdateSupplierOrderDates();
   const confirmReady = useConfirmSupplierOrderReady();
   const shipOrder = useShipSupplierOrder();
@@ -384,7 +394,7 @@ function SupplierOrderCard({
       }
       await confirmDelivery.mutateAsync(payload);
     } catch (error) {
-      onError(getSupplierOrderErrorMessage(error));
+      onError(getSupplierOrderErrorMessage(error, messages));
     }
   };
 
@@ -402,10 +412,17 @@ function SupplierOrderCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-950">
-            Заказ {compactSupplierOrderId(order.id)}
+            {t('deals.supplierOrders.orderLabel', {
+              id: compactSupplierOrderId(order.id),
+            })}
           </div>
           <div className="mt-1 text-sm text-slate-700">
-            {formatSupplierName(order.supplier?.code, order.supplier?.name, '—')}
+            {formatSupplierName(
+              order.supplier?.code,
+              order.supplier?.name,
+              t('common.dash'),
+              supplierDisplayNames,
+            )}
           </div>
         </div>
         <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">
@@ -414,38 +431,42 @@ function SupplierOrderCard({
       </div>
 
       <dl className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2 lg:grid-cols-4">
-        <Info label="Дата заказа" value={formatDate(order.orderedAt)} />
+        <Info label={t('deals.supplierOrders.orderDate')} value={formatDate(order.orderedAt)} />
         <Info
-          label="Ожидаемая готовность"
+          label={t('deals.supplierOrders.expectedReady')}
           value={formatDate(order.expectedReadyAt)}
         />
         <Info
-          label="Ожидаемая отгрузка"
+          label={t('deals.supplierOrders.expectedShipment')}
           value={formatDate(order.expectedShipmentAt)}
         />
         <Info
-          label="Ожидаемое прибытие"
+          label={t('deals.supplierOrders.expectedArrival')}
           value={formatDate(order.expectedArrivalAt)}
         />
       </dl>
 
       <div className="mt-3 text-sm">
-        <div className="text-xs text-slate-500">Готовность</div>
+        <div className="text-xs text-slate-500">{t('deals.supplierOrders.readiness')}</div>
         <div className="mt-1 text-slate-900">
           {order.readyConfirmedAt
-            ? `Подтверждена ${formatDateTime(order.readyConfirmedAt)}`
-            : 'Ещё не подтверждена'}
+            ? t('deals.supplierOrders.confirmedAt', {
+                date: formatDateTime(order.readyConfirmedAt),
+              })
+            : t('deals.supplierOrders.notConfirmed')}
         </div>
       </div>
 
       <div className="mt-3 text-sm">
-        <div className="text-xs text-slate-500">Доставка клиенту</div>
+        <div className="text-xs text-slate-500">{t('deals.supplierOrders.clientDelivery')}</div>
         <div className="mt-1 text-slate-900">
           {status === 'DELIVERED'
-            ? `Подтверждена ${formatDateTime(order.deliveredAt)}`
+            ? t('deals.supplierOrders.confirmedAt', {
+                date: formatDateTime(order.deliveredAt),
+              })
             : status === 'SHIPPED'
-              ? 'Отгружено, ожидает подтверждения доставки клиенту'
-              : 'Ещё не доставлено'}
+              ? t('deals.supplierOrders.shippedAwaiting')
+              : t('deals.supplierOrders.notDelivered')}
         </div>
       </div>
 
@@ -457,21 +478,21 @@ function SupplierOrderCard({
         <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <DateField
-              label="Ожидаемая готовность"
+              label={t('deals.supplierOrders.expectedReady')}
               value={dates.expectedReadyAt}
               onChange={(expectedReadyAt) =>
                 setDates((current) => ({ ...current, expectedReadyAt }))
               }
             />
             <DateField
-              label="Ожидаемая отгрузка"
+              label={t('deals.supplierOrders.expectedShipment')}
               value={dates.expectedShipmentAt}
               onChange={(expectedShipmentAt) =>
                 setDates((current) => ({ ...current, expectedShipmentAt }))
               }
             />
             <DateField
-              label="Ожидаемое прибытие"
+              label={t('deals.supplierOrders.expectedArrival')}
               value={dates.expectedArrivalAt}
               onChange={(expectedArrivalAt) =>
                 setDates((current) => ({ ...current, expectedArrivalAt }))
@@ -479,7 +500,7 @@ function SupplierOrderCard({
             />
           </div>
           <label className="block text-sm text-slate-700">
-            <span className="mb-1 block text-xs text-slate-500">Комментарий</span>
+            <span className="mb-1 block text-xs text-slate-500">{t('common.comment')}</span>
             <textarea
               value={dates.comment}
               onChange={(event) =>
@@ -499,7 +520,7 @@ function SupplierOrderCard({
             disabled={pending}
             onClick={() => void runAction('edit-dates')}
           >
-            {updateDates.isPending ? 'Сохранение...' : 'Сохранить даты'}
+            {updateDates.isPending ? t('common.saving') : t('deals.supplierOrders.saveDates')}
           </Button>
         </div>
       ) : null}
@@ -513,8 +534,8 @@ function SupplierOrderCard({
             onClick={() => void runAction('confirm-ready')}
           >
             {confirmReady.isPending
-              ? 'Подтверждение...'
-              : 'Подтвердить готовность'}
+              ? t('common.confirming')
+              : t('deals.supplierOrders.confirmReady')}
           </Button>
         ) : null}
         {actions.includes('ship') ? (
@@ -526,15 +547,15 @@ function SupplierOrderCard({
               title={
                 paid
                   ? undefined
-                  : 'Отгрузка недоступна: заказ ещё не оплачен полностью.'
+                  : t('errors.shipmentPaymentRequired')
               }
               onClick={() => void runAction('ship')}
             >
-              {shipOrder.isPending ? 'Отгрузка...' : 'Отгрузить'}
+              {shipOrder.isPending ? t('deals.supplierOrders.shipping') : t('deals.supplierOrders.ship')}
             </Button>
             {!paid ? (
               <span className="text-xs text-amber-700">
-                Отгрузка недоступна: заказ ещё не оплачен полностью.
+                {t('errors.shipmentPaymentRequired')}
               </span>
             ) : null}
           </div>
@@ -547,13 +568,13 @@ function SupplierOrderCard({
             onClick={() => void runAction('confirm-client-delivery')}
           >
             {confirmDelivery.isPending
-              ? 'Подтверждение...'
-              : 'Подтвердить доставку клиенту'}
+              ? t('common.confirming')
+              : t('deals.supplierOrders.confirmClientDelivery')}
           </Button>
         ) : null}
         {status === 'DELIVERED' ? (
           <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-            Доставка клиенту завершена
+            {t('deals.supplierOrders.clientDeliveryDone')}
           </span>
         ) : null}
       </div>

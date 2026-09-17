@@ -4,62 +4,75 @@ import { X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../context/auth-context';
+import { useI18n } from '@/i18n/provider';
 
 type NavigationItem = {
   href: string;
-  label: string;
+  labelKey:
+    | 'overview'
+    | 'leads'
+    | 'deals'
+    | 'installation'
+    | 'clients'
+    | 'tasks'
+    | 'panels'
+    | 'suppliers'
+    | 'warehouse'
+    | 'orders'
+    | 'receipts'
+    | 'reports'
+    | 'users';
   permission?: string;
   anyOf?: string[];
 };
 
 type NavigationGroup = {
-  title: string;
+  titleKey: 'sales' | 'references' | 'warehouse' | 'analytics';
   items: NavigationItem[];
 };
 
 const navigationGroups: NavigationGroup[] = [
   {
-    title: 'Продажи',
+    titleKey: 'sales',
     items: [
-      { href: '/', label: 'Обзор' },
-      { href: '/leads', label: 'Лиды', permission: 'leads:read' },
-      { href: '/deals', label: 'Сделки', permission: 'deals:read' },
+      { href: '/', labelKey: 'overview' },
+      { href: '/leads', labelKey: 'leads', permission: 'leads:read' },
+      { href: '/deals', labelKey: 'deals', permission: 'deals:read' },
       {
         href: '/installations',
-        label: 'Монтаж',
+        labelKey: 'installation',
         anyOf: [
-          'installation:confirm_work',
           'installation:schedule',
           'installation:confirm_supervisor',
           'installation:assess',
         ],
       },
-      { href: '/clients', label: 'Клиенты и Контакты', permission: 'clients:read' },
-      { href: '/tasks', label: 'Задачи', permission: 'tasks:read' },
+      { href: '/clients', labelKey: 'clients', permission: 'clients:read' },
+      { href: '/tasks', labelKey: 'tasks', permission: 'tasks:read' },
     ],
   },
   {
-    title: 'Справочники',
+    titleKey: 'references',
     items: [
-      { href: '/references/panels', label: 'Панели', permission: 'panel_catalog:read' },
-      { href: '/references/panels#suppliers', label: 'Поставщики', permission: 'panel_catalog:read' },
+      { href: '/references/panels', labelKey: 'panels', permission: 'panel_catalog:read' },
+      { href: '/references/panels#suppliers', labelKey: 'suppliers', permission: 'panel_catalog:read' },
     ],
   },
   {
-    title: 'Склад',
+    titleKey: 'warehouse',
     items: [
-      { href: '/products', label: 'Склад', permission: 'products:read' },
-      { href: '/orders', label: 'Заказы', permission: 'orders:read' },
-      { href: '/receipts', label: 'Ожидаемые приходы', permission: 'inventory:read' },
+      { href: '/products', labelKey: 'warehouse', permission: 'products:read' },
+      { href: '/orders', labelKey: 'orders', permission: 'orders:read' },
+      { href: '/receipts', labelKey: 'receipts', permission: 'inventory:read' },
     ],
   },
   {
-    title: 'Аналитика и Настройки',
+    titleKey: 'analytics',
     items: [
-      { href: '/reports', label: 'Отчеты и KPI', permission: 'reports:read' },
+      { href: '/reports', labelKey: 'reports', permission: 'reports:read' },
       {
         href: '/users',
-        label: 'Команда и Доступы',
+        labelKey: 'users',
         permission: 'users:read',
       },
     ],
@@ -74,6 +87,7 @@ type SidebarProps = {
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { t } = useI18n();
   const visibleGroups = getVisibleNavigationGroups(user?.permissions ?? []);
 
   return (
@@ -84,13 +98,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     >
       <div className="flex h-14 items-center justify-between border-b border-slate-200 px-4">
         <div className="text-sm font-semibold tracking-wide text-slate-950">
-          HPL CRM MVP
+          {t('common.brand')}
         </div>
         <button
           type="button"
           onClick={onClose}
           className="rounded p-1 text-slate-600 hover:bg-slate-100 lg:hidden"
-          title="Закрыть меню"
+          title={t('common.closeMenu')}
         >
           <X className="h-5 w-5" />
         </button>
@@ -98,9 +112,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
       <nav className="space-y-5 px-3 py-4">
         {visibleGroups.map((group) => (
-          <div key={group.title}>
+          <div key={group.titleKey}>
             <div className="px-2 pb-2 text-xs font-semibold uppercase text-slate-500">
-              {group.title}
+              {t(`navigation.groups.${group.titleKey}`)}
             </div>
             <div className="space-y-1">
               {group.items.map((item) => (
@@ -110,7 +124,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                     onClick={onClose}
                     className={getItemClassName(pathname, item.href)}
                   >
-                    {item.label}
+                    {t(`navigation.${item.labelKey}`)}
                   </Link>
                 ))}
             </div>

@@ -21,7 +21,7 @@ import {
   unwrapHplList,
 } from '../types/hpl';
 
-export type { CalculationRequest } from '../types/hpl';
+import { useI18n } from '@/i18n/provider';
 
 export type CalculationRequestListFilters = {
   leadId?: string;
@@ -80,6 +80,7 @@ export function useCalculationRequest(id?: string | null) {
 
 export function useCreateCalculationRequest() {
   const queryClient = useQueryClient();
+  const { t, messages } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -92,17 +93,18 @@ export function useCreateCalculationRequest() {
       return response.data;
     },
     onSuccess: (request) => {
-      showSuccess('Запрос расчёта создан');
+      showSuccess(t('calculations.toastCreated'));
       invalidateRequestQueries(queryClient, request);
     },
     onError: (error) => {
-      showError(getErrorMessage(error, 'Не удалось создать запрос расчёта.'));
+      showError(getErrorMessage(error, t('calculations.createFailed'), messages));
     },
   });
 }
 
 export function useUpdateCalculationRequest() {
   const queryClient = useQueryClient();
+  const { t, messages } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: {
@@ -116,20 +118,21 @@ export function useUpdateCalculationRequest() {
       return response.data;
     },
     onSuccess: (request) => {
-      showSuccess('Запрос расчёта сохранён');
+      showSuccess(t('calculations.toastSaved'));
       invalidateRequestQueries(queryClient, request);
       void queryClient.invalidateQueries({
         queryKey: ['calculation-requests', request.id],
       });
     },
     onError: (error) => {
-      showError(getErrorMessage(error, 'Не удалось сохранить запрос расчёта.'));
+      showError(getErrorMessage(error, t('calculations.saveFailed'), messages));
     },
   });
 }
 
 export function useSubmitCalculationRequest() {
   const queryClient = useQueryClient();
+  const { t, messages } = useI18n();
 
   return useMutation({
     mutationFn: async (id: string): Promise<CalculationRequest> => {
@@ -139,20 +142,21 @@ export function useSubmitCalculationRequest() {
       return response.data;
     },
     onSuccess: (request) => {
-      showSuccess('Запрос отправлен руководителю');
+      showSuccess(t('calculations.toastSubmitted'));
       invalidateRequestQueries(queryClient, request);
       void queryClient.invalidateQueries({
         queryKey: ['calculation-requests', request.id],
       });
     },
     onError: (error) => {
-      showError(getErrorMessage(error, 'Не удалось отправить запрос руководителю.'));
+      showError(getErrorMessage(error, t('calculations.submitFailed'), messages));
     },
   });
 }
 
 export function useConvertCalculationRequestToQuote() {
   const queryClient = useQueryClient();
+  const { t, messages } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: {
@@ -165,7 +169,7 @@ export function useConvertCalculationRequestToQuote() {
       return response.data;
     },
     onSuccess: (quote) => {
-      showSuccess('Черновик КП создан из запроса');
+      showSuccess(t('calculations.toastQuoteCreated'));
       queryClient.setQueryData(['quotes', 'detail', quote.id], quote);
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({ queryKey: ['calculation-requests'] });
@@ -184,7 +188,7 @@ export function useConvertCalculationRequestToQuote() {
       showError(
         getApiErrorCode(error) === QUOTE_SUPPLIER_REQUIRED
           ? QUOTE_SUPPLIER_REQUIRED_MESSAGE
-          : getErrorMessage(error, 'Не удалось создать черновик КП.'),
+          : getErrorMessage(error, t('calculations.quoteCreateFailed'), messages),
       );
       if (getApiErrorCode(error) === QUOTE_ALREADY_EXISTS) {
         void queryClient.invalidateQueries({ queryKey: ['calculation-requests'] });

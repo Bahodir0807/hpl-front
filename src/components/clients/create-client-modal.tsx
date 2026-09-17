@@ -10,10 +10,12 @@ import {
   useCheckClientDuplicates,
   useCreateClient,
 } from "../../hooks/use-clients";
-import { clientSegmentLabels } from "../../lib/labels";
-import { optionalInnSchema } from "../../lib/validations/inn";
-import { optionalPhoneSchema } from "../../lib/validations/phone";
+import { createOptionalInnSchema } from "../../lib/validations/inn";
+import { createOptionalPhoneSchema } from "../../lib/validations/phone";
 import { buildCreateClientPayload } from "../../lib/client-contact";
+import { useI18n } from "@/i18n/provider";
+import type { Messages } from "@/i18n/types";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 const clientSegments: ClientSegment[] = [
   "DEALER",
@@ -23,42 +25,44 @@ const clientSegments: ClientSegment[] = [
   "OTHER",
 ];
 
-const createClientSchema = z.object({
-  type: z.enum(["COMPANY", "INDIVIDUAL"]),
-  name: z.string().trim().min(2, "Укажите название клиента"),
-  inn: optionalInnSchema,
-  phone: optionalPhoneSchema,
-  email: z
-    .string()
-    .trim()
-    .optional()
-    .refine((value) => !value || z.string().email().safeParse(value).success, {
-      message: "Некорректный email",
-    }),
-  segment: z.preprocess(
-    (value) => (value === '' ? undefined : value),
-    z
-      .enum(['DEALER', 'ARCHITECT', 'CONTRACTOR', 'END_CUSTOMER', 'OTHER'])
-      .optional(),
-  ),
-  region: z.string().trim().optional(),
-  address: z.string().trim().optional(),
-  source: z.string().trim().optional(),
-  comment: z.string().trim().optional(),
-  contactFirstName: z.string().trim().optional(),
-  contactLastName: z.string().trim().optional(),
-  contactPhone: optionalPhoneSchema,
-  contactEmail: z
-    .string()
-    .trim()
-    .optional()
-    .refine((value) => !value || z.string().email().safeParse(value).success, {
-      message: "Некорректный email контакта",
-    }),
-});
+function createClientSchemaFactory(messages: Messages) {
+  return z.object({
+    type: z.enum(["COMPANY", "INDIVIDUAL"]),
+    name: z.string().trim().min(2, messages.validation.clientNameRequired),
+    inn: createOptionalInnSchema(messages),
+    phone: createOptionalPhoneSchema(messages),
+    email: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || z.string().email().safeParse(value).success, {
+        message: messages.validation.invalidEmail,
+      }),
+    segment: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z
+        .enum(['DEALER', 'ARCHITECT', 'CONTRACTOR', 'END_CUSTOMER', 'OTHER'])
+        .optional(),
+    ),
+    region: z.string().trim().optional(),
+    address: z.string().trim().optional(),
+    source: z.string().trim().optional(),
+    comment: z.string().trim().optional(),
+    contactFirstName: z.string().trim().optional(),
+    contactLastName: z.string().trim().optional(),
+    contactPhone: createOptionalPhoneSchema(messages),
+    contactEmail: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || z.string().email().safeParse(value).success, {
+        message: messages.validation.invalidEmail,
+      }),
+  });
+}
 
-type CreateClientFormInput = z.input<typeof createClientSchema>;
-type CreateClientFormValues = z.output<typeof createClientSchema>;
+type CreateClientFormInput = z.input<ReturnType<typeof createClientSchemaFactory>>;
+type CreateClientFormValues = z.output<ReturnType<typeof createClientSchemaFactory>>;
 
 type CreateClientModalProps = {
   isOpen: boolean;
@@ -74,6 +78,8 @@ export function CreateClientModal({ isOpen, onClose }: CreateClientModalProps) {
 }
 
 function CreateClientModalContent({ onClose }: { onClose: () => void }) {
+  const { t, messages } = useI18n();
+  const { clientSegmentLabels, clientTypeLabels } = useLabelMaps();
   const createClient = useCreateClient();
   const [duplicateInput, setDuplicateInput] = useState({
     inn: "",
@@ -83,6 +89,10 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
   });
   const duplicatesQuery = useCheckClientDuplicates(duplicateInput);
   const duplicates = duplicatesQuery.data ?? [];
+  const createClientSchema = useMemo(
+    () => createClientSchemaFactory(messages),
+    [messages],
+  );
   const {
     register,
     handleSubmit,
@@ -161,10 +171,10 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-slate-950">
-              Добавить клиента
+              {t("clients.createModal.title")}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Проверка дублей запускается по ИНН, телефону и email.
+              {t("clients.createModal.hint")}
             </p>
           </div>
           <button
@@ -172,7 +182,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
           >
-            Закрыть
+            {t("common.close")}
           </button>
         </div>
 
@@ -185,26 +195,26 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Тип
+                {t("clients.type")}
               </span>
               <select
                 className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 {...register("type")}
               >
-                <option value="COMPANY">COMPANY</option>
-                <option value="INDIVIDUAL">INDIVIDUAL</option>
+                <option value="COMPANY">{clientTypeLabels.COMPANY}</option>
+                <option value="INDIVIDUAL">{clientTypeLabels.INDIVIDUAL}</option>
               </select>
             </label>
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Сегмент
+                {t("clients.segment")}
               </span>
               <select
                 className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
                 {...register("segment")}
               >
-                <option value="">Не указан</option>
+                <option value="">{t("clients.createModal.segmentEmpty")}</option>
                 {clientSegments.map((segment) => (
                   <option key={segment} value={segment}>
                     {clientSegmentLabels[segment]}
@@ -215,7 +225,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label className="md:col-span-2">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Название
+                {t("clients.name")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -230,7 +240,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                ИНН
+                {t("clients.inn")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -245,7 +255,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Телефон
+                {t("common.phone")}
               </span>
               <input
                 type="tel"
@@ -277,7 +287,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Регион
+                {t("common.region")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -287,7 +297,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label className="md:col-span-2">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Адрес
+                {t("common.address")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -297,7 +307,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Контакт: имя
+                {t("clients.createModal.contactFirstName")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -307,7 +317,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Контакт: фамилия
+                {t("clients.createModal.contactLastName")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -317,7 +327,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Контакт: телефон
+                {t("clients.createModal.contactPhone")}
               </span>
               <input
                 type="tel"
@@ -333,7 +343,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Контакт: email
+                {t("clients.createModal.contactEmail")}
               </span>
               <input
                 type="email"
@@ -349,13 +359,13 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
           </div>
 
           {duplicatesQuery.isFetching ? (
-            <p className="text-sm text-slate-600">Проверка дублей...</p>
+            <p className="text-sm text-slate-600">{t("clients.createModal.checkingDuplicates")}</p>
           ) : null}
 
           {duplicates.length > 0 ? (
             <div className="rounded border border-yellow-300 bg-yellow-50 p-3">
               <div className="text-sm font-semibold text-yellow-900">
-                Найдены похожие клиенты:
+                {t("clients.createModal.duplicatesFound")}
               </div>
               <div className="mt-2 space-y-1">
                 {duplicates.map((duplicate) => (
@@ -371,7 +381,7 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
           ) : null}
 
           {createClient.isError ? (
-            <p className="text-sm text-red-600">Не удалось создать клиента.</p>
+            <p className="text-sm text-red-600">{t("clients.createModal.createFailed")}</p>
           ) : null}
 
           <div className="flex justify-end gap-2">
@@ -380,14 +390,14 @@ function CreateClientModalContent({ onClose }: { onClose: () => void }) {
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Отмена
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={!isValid || createClient.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              Создать
+              {t("common.create")}
             </button>
           </div>
         </form>

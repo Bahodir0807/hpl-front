@@ -12,22 +12,26 @@ import {
 } from "../../../hooks/use-inventory";
 import { useSuppliers } from "../../../hooks/use-panels";
 import { formatDate } from "../../../lib/format";
-import {
-  enumLabel,
-  expectedReceiptStatusLabels,
-  formatSupplierName,
-} from "../../../lib/labels";
+import { enumLabel, formatSupplierName } from "../../../lib/labels";
+import { useI18n } from "@/i18n/provider";
+import { useLabelMaps } from "@/i18n/use-label-maps";
+import type { TranslateFn } from "@/i18n/translate";
 
-function itemsText(receipt: ExpectedReceipt): string {
+function itemsText(receipt: ExpectedReceipt, t: TranslateFn): string {
   return receipt.items
-    .map(
-      (item) =>
-        `${item.product?.name ?? item.product?.sku ?? "Товар"}: ${item.receivedQuantity}/${item.quantity}`,
+    .map((item) =>
+      t("receipts.composition", {
+        product: item.product?.name ?? item.product?.sku ?? t("receipts.product"),
+        received: item.receivedQuantity,
+        quantity: item.quantity,
+      }),
     )
     .join(", ");
 }
 
 export default function ReceiptsPage() {
+  const { t, locale } = useI18n();
+  const labels = useLabelMaps();
   const router = useRouter();
   const { user, isInitialized } = useAuth();
   const canAccess =
@@ -112,7 +116,7 @@ export default function ReceiptsPage() {
   if (!canAccess) {
     return (
       <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        Нет доступа к ожидаемым приходам.
+        {t("receipts.noAccess")}
       </div>
     );
   }
@@ -122,16 +126,16 @@ export default function ReceiptsPage() {
       <div className="space-y-4">
         <div>
           <h2 className="text-xl font-semibold text-slate-950">
-            Ожидаемые приходы
+            {t("receipts.title")}
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Планирование поставок и фактическая приемка товара на склад.
+            {t("receipts.subtitle")}
           </p>
         </div>
 
         {canPlan ? <div className="rounded border border-slate-200 bg-white p-3">
           <div className="mb-3 text-sm font-semibold text-slate-950">
-            Создать ожидаемый приход
+            {t("receipts.create")}
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
             <select
@@ -139,10 +143,15 @@ export default function ReceiptsPage() {
               onChange={(event) => setSupplierId(event.target.value)}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
             >
-              <option value="">Поставщик</option>
+              <option value="">{t("common.supplier")}</option>
               {(suppliersQuery.data ?? []).map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
-                  {formatSupplierName(supplier.code, supplier.name)}
+                  {formatSupplierName(
+                    supplier.code,
+                    supplier.name,
+                    t("suppliers.fallback"),
+                    labels.supplierDisplayNames,
+                  )}
                 </option>
               ))}
             </select>
@@ -163,7 +172,7 @@ export default function ReceiptsPage() {
               type="number"
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
-              placeholder="Кол-во"
+              placeholder={t("receipts.quantity")}
               className="rounded border border-slate-300 px-3 py-2 text-sm"
             />
           </div>
@@ -176,14 +185,14 @@ export default function ReceiptsPage() {
               disabled={createReceipt.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              Запланировать
+              {t("receipts.schedule")}
             </button>
           </div>
         </div> : null}
 
         {receiptsQuery.isError ? (
           <div className="rounded border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
-            Не удалось загрузить реестр ожидаемых приходов.
+            {t("receipts.loadFailed")}
           </div>
         ) : null}
 
@@ -193,19 +202,19 @@ export default function ReceiptsPage() {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Дата
+                    {t("common.date")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Поставщик
+                    {t("common.supplier")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Статус
+                    {t("common.status")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Состав
+                    {t("receipts.compositionTitle")}
                   </th>
                   <th className="px-3 py-2 text-right font-semibold text-slate-700">
-                    Действия
+                    {t("common.actions")}
                   </th>
                 </tr>
               </thead>
@@ -213,20 +222,21 @@ export default function ReceiptsPage() {
                 {receipts.map((receipt) => (
                   <tr key={receipt.id}>
                     <td className="px-3 py-3 text-slate-700">
-                      {formatDate(receipt.expectedDate)}
+                      {formatDate(receipt.expectedDate, locale)}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
                       {formatSupplierName(
                         receipt.supplier?.code,
                         receipt.supplier?.name,
-                        receipt.supplierId ?? "-",
+                        receipt.supplierId ?? t("common.dash"),
+                        labels.supplierDisplayNames,
                       )}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {enumLabel(expectedReceiptStatusLabels, receipt.status)}
+                      {enumLabel(labels.expectedReceiptStatusLabels, receipt.status)}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {itemsText(receipt)}
+                      {itemsText(receipt, t)}
                     </td>
                     <td className="px-3 py-3 text-right">
                       {canReceive ? <button
@@ -234,7 +244,7 @@ export default function ReceiptsPage() {
                         onClick={() => setReceivingReceipt(receipt)}
                         className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                       >
-                        Принять на склад
+                        {t("receipts.accept")}
                       </button> : null}
                     </td>
                   </tr>
@@ -243,7 +253,7 @@ export default function ReceiptsPage() {
             </table>
             {receipts.length === 0 ? (
               <div className="p-8 text-center text-sm text-slate-600">
-                Приходы не найдены.
+                {t("receipts.empty")}
               </div>
             ) : null}
           </div>
@@ -254,19 +264,20 @@ export default function ReceiptsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
           <div className="w-full max-w-lg rounded border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-semibold text-slate-950">
-              Принять на склад
+              {t("receipts.accept")}
             </h2>
             <div className="mt-4 space-y-3">
               {receivingReceipt.items.map((item) => (
                 <div key={item.id} className="space-y-2">
                   <div className="text-sm font-medium text-slate-700">
-                    {item.product?.name ?? "Товар"}
-                    {item.product?.sku ? ` · ${item.product.sku}` : ""} · ожидается{" "}
+                    {item.product?.name ?? t("receipts.product")}
+                    {item.product?.sku ? ` · ${item.product.sku}` : ""} ·{" "}
+                    {t("receipts.expected")}{" "}
                     {item.quantity - item.receivedQuantity}
                   </div>
                   <label className="block">
                     <span className="mb-1 block text-xs text-slate-500">
-                      Принято
+                      {t("receipts.received")}
                     </span>
                     <input
                       type="number"
@@ -282,7 +293,7 @@ export default function ReceiptsPage() {
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-xs text-slate-500">
-                      Отклонено
+                      {t("receipts.rejected")}
                     </span>
                     <input
                       type="number"
@@ -300,7 +311,7 @@ export default function ReceiptsPage() {
               ))}
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-slate-700">
-                  Комментарий
+                  {t("receipts.comment")}
                 </span>
                 <textarea
                   value={receiveComment}
@@ -320,7 +331,7 @@ export default function ReceiptsPage() {
                 }}
                 className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700"
               >
-                Отмена
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -330,7 +341,7 @@ export default function ReceiptsPage() {
                 disabled={receiveReceipt.isPending}
                 className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
               >
-                Провести приемку
+                {t("receipts.completeReceipt")}
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useClient, useClients } from '../../hooks/use-clients';
 import { useDebouncedValue } from '../../hooks/use-debounced-value';
@@ -16,7 +16,6 @@ import { formatContactName } from '../../lib/display-names';
 import { getErrorMessage } from '../../lib/errors';
 import { toDateInputValue } from '../../lib/format';
 import {
-  CUSTOM_SIZE_PRICING_NOTE,
   findPanelTypeIdByApplication,
   isValidThicknessForApplication,
   panelSizeLabel,
@@ -26,6 +25,7 @@ import {
 } from '../../lib/hpl-domain';
 import type { LeadQualification, LeadQualificationItem } from '../../types/hpl';
 import { SearchCombobox } from '../ui/search-combobox';
+import { useI18n } from '@/i18n/provider';
 import { HplApplicationField } from './hpl-application-field';
 import { HplThicknessField } from './hpl-thickness-field';
 import {
@@ -43,7 +43,7 @@ import {
   defaultSizeModeFromQualification,
   normalizeQualificationAreaM2,
   nullableBooleanToTriStateSelection,
-  qualifyLeadSchema,
+  createQualifyLeadSchema,
   type QualificationItemPayload,
 } from './qualify-lead-form';
 
@@ -195,6 +195,7 @@ function HplItemCard({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
+  const { t, messages } = useI18n();
   const update = <K extends keyof Omit<QualificationItemDraft, 'key'>>(
     field: K,
     value: QualificationItemDraft[K],
@@ -205,7 +206,7 @@ function HplItemCard({
     <fieldset className="rounded border border-slate-300 bg-slate-50 p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <legend className="text-sm font-semibold text-slate-900">
-          HPL-позиция {itemNumber}
+          {t('leads.hplItem', { number: itemNumber })}
         </legend>
         <div className="flex gap-2">
           <button
@@ -214,7 +215,7 @@ function HplItemCard({
             disabled={disabled}
             onClick={onDuplicate}
           >
-            Дублировать
+            {t('common.duplicate')}
           </button>
           <button
             type="button"
@@ -222,7 +223,7 @@ function HplItemCard({
             disabled={disabled}
             onClick={onDelete}
           >
-            Удалить
+            {t('common.delete')}
           </button>
         </div>
       </div>
@@ -250,13 +251,13 @@ function HplItemCard({
           value={item.thicknessMm}
           disabled={disabled}
           name={`qualification-item-${itemNumber}-thickness`}
-          label="Толщина, мм (если известна)"
+          label={t('leads.thicknessIfKnown')}
           onChange={(value) => update('thicknessMm', value)}
         />
 
         <fieldset>
           <legend className="mb-1 block text-sm font-medium text-slate-700">
-            Размер (если известен)
+            {t('leads.sizeIfKnown')}
           </legend>
           <div className="flex gap-3 text-sm">
             <label className="flex items-center gap-1">
@@ -274,7 +275,7 @@ function HplItemCard({
                   })
                 }
               />
-              Стандартный
+              {t('leads.standardSize')}
             </label>
             <label className="flex items-center gap-1">
               <input
@@ -286,60 +287,60 @@ function HplItemCard({
                   onChange({ ...item, sizeMode: 'CUSTOM', panelSizeId: '' })
                 }
               />
-              Нестандартный
+              {t('leads.customSize')}
             </label>
           </div>
           {item.sizeMode === 'STANDARD' ? (
             <select
-              aria-label={`Размер позиции ${itemNumber}`}
+              aria-label={t('leads.itemSizeAria', { number: itemNumber })}
               className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm"
               disabled={disabled}
               value={item.panelSizeId}
               onChange={(event) => update('panelSizeId', event.target.value)}
             >
-              <option value="">Не указан</option>
+              <option value="">{t('common.notSpecifiedMasculine')}</option>
               {panelSizes.map((size) => (
                 <option key={size.id} value={size.id}>
-                  {panelSizeLabel(size)}
+                  {panelSizeLabel(size, messages)}
                 </option>
               ))}
             </select>
           ) : (
             <div className="mt-2 grid grid-cols-2 gap-2">
               <input
-                aria-label={`Ширина позиции ${itemNumber}`}
+                aria-label={t('leads.itemWidthAria', { number: itemNumber })}
                 inputMode="numeric"
                 className="w-full rounded border border-slate-300 px-2 py-2 text-sm"
                 disabled={disabled}
-                placeholder="Ширина, мм"
+                placeholder={t('leads.widthMmPlaceholder')}
                 value={item.customWidthMm}
                 onChange={(event) => update('customWidthMm', event.target.value)}
               />
               <input
-                aria-label={`Высота позиции ${itemNumber}`}
+                aria-label={t('leads.itemHeightAria', { number: itemNumber })}
                 inputMode="numeric"
                 className="w-full rounded border border-slate-300 px-2 py-2 text-sm"
                 disabled={disabled}
-                placeholder="Высота, мм"
+                placeholder={t('leads.heightMmPlaceholder')}
                 value={item.customHeightMm}
                 onChange={(event) => update('customHeightMm', event.target.value)}
               />
             </div>
           )}
           {item.sizeMode === 'CUSTOM' ? (
-            <p className="mt-2 text-xs text-amber-700">{CUSTOM_SIZE_PRICING_NOTE}</p>
+            <p className="mt-2 text-xs text-amber-700">{messages.hpl.customSizePricingNote}</p>
           ) : null}
         </fieldset>
 
         <label>
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Желаемый цвет / описание
+            {t('leads.desiredColor')}
           </span>
           <input
-            aria-label={`Желаемый цвет / описание позиции ${itemNumber}`}
+            aria-label={t('leads.desiredColorAria', { number: itemNumber })}
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
             disabled={disabled}
-            placeholder="Например, тёмно-серый или под дерево"
+            placeholder={t('leads.desiredColorPlaceholder')}
             value={item.colorName}
             onChange={(event) => update('colorName', event.target.value)}
           />
@@ -347,13 +348,13 @@ function HplItemCard({
 
         <label>
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Точный код (если известен)
+            {t('leads.exactCode')}
           </span>
           <input
-            aria-label={`Точный код позиции ${itemNumber}`}
+            aria-label={t('leads.exactCodeAria', { number: itemNumber })}
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
             disabled={disabled}
-            placeholder="Например, RAL-9005"
+            placeholder={t('leads.exactCodePlaceholder')}
             value={item.colorCode}
             onChange={(event) => update('colorCode', event.target.value)}
           />
@@ -361,13 +362,13 @@ function HplItemCard({
 
         <label>
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Покрытие
+            {t('calculations.coating')}
           </span>
           <input
-            aria-label={`Покрытие позиции ${itemNumber}`}
+            aria-label={t('leads.coatingAria', { number: itemNumber })}
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
             disabled={disabled}
-            placeholder="Например, матовое"
+            placeholder={t('leads.coatingPlaceholder')}
             value={item.coating}
             onChange={(event) => update('coating', event.target.value)}
           />
@@ -375,13 +376,13 @@ function HplItemCard({
 
         <label>
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Текстура
+            {t('calculations.texture')}
           </span>
           <input
-            aria-label={`Текстура позиции ${itemNumber}`}
+            aria-label={t('leads.textureAria', { number: itemNumber })}
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
             disabled={disabled}
-            placeholder="Например, под дерево"
+            placeholder={t('leads.texturePlaceholder')}
             value={item.texture}
             onChange={(event) => update('texture', event.target.value)}
           />
@@ -389,16 +390,16 @@ function HplItemCard({
 
         <label>
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Площадь, м²
+            {t('leads.areaM2')}
             <RequiredMark />
           </span>
           <input
-            aria-label={`Площадь позиции ${itemNumber}`}
+            aria-label={t('leads.itemAreaAria', { number: itemNumber })}
             type="text"
             inputMode="decimal"
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
             disabled={disabled}
-            placeholder="Например, 24,5"
+            placeholder={t('leads.areaPlaceholder')}
             value={item.requiredAreaM2}
             onChange={(event) => update('requiredAreaM2', event.target.value)}
           />
@@ -422,14 +423,15 @@ function TriStateField({
   disabled: boolean;
   onChange: (value: 'yes' | 'no' | 'unknown') => void;
 }) {
+  const { t } = useI18n();
   return (
     <fieldset>
       <legend className="mb-1 block text-sm font-medium text-slate-700">{label}</legend>
       <div className="grid grid-cols-3 gap-2">
         {[
-          ['yes', 'Да'],
-          ['no', 'Нет'],
-          ['unknown', 'Неизвестно'],
+          ['yes', t('common.yes')],
+          ['no', t('common.no')],
+          ['unknown', t('common.unknown')],
         ].map(([option, optionLabel]) => (
           <label
             key={option}
@@ -467,6 +469,8 @@ function QualifyLeadModalContent({
   onClose: () => void;
 }) {
   const qualifyLead = useQualifyLead();
+  const { t, messages } = useI18n();
+  const qualifySchema = useMemo(() => createQualifyLeadSchema(messages), [messages]);
   const panelTypesQuery = usePanelTypes();
   const panelSizesQuery = usePanelSizes();
   const [formError, setFormError] = useState<string | null>(null);
@@ -491,7 +495,7 @@ function QualifyLeadModalContent({
     setValue,
     formState: { errors, isSubmitted, isValid },
   } = useForm<QualifyLeadFormInput, unknown, QualifyLeadFormValues>({
-    resolver: zodResolver(qualifyLeadSchema),
+    resolver: zodResolver(qualifySchema),
     mode: 'onChange',
     defaultValues: {
       clientId: lead.clientId ?? '',
@@ -647,13 +651,13 @@ function QualifyLeadModalContent({
     items.forEach((item, index) => {
       const itemNumber = index + 1;
       if (!item.application) {
-        nextErrors[item.key] = `Позиция ${itemNumber}: выберите применение / тип HPL`;
+        nextErrors[item.key] = t('leads.itemNeedApplication', { number: itemNumber });
         return;
       }
 
       const panelTypeId = findPanelTypeIdByApplication(panelTypes, item.application);
       if (!panelTypeId) {
-        nextErrors[item.key] = `Позиция ${itemNumber}: не удалось определить тип панели`;
+        nextErrors[item.key] = t('leads.itemNeedPanelType', { number: itemNumber });
         return;
       }
 
@@ -661,7 +665,7 @@ function QualifyLeadModalContent({
         item.thicknessMm.trim() &&
         !isValidThicknessForApplication(item.application, item.thicknessMm)
       ) {
-        nextErrors[item.key] = `Позиция ${itemNumber}: укажите корректную толщину или очистите поле`;
+        nextErrors[item.key] = t('leads.itemNeedThickness', { number: itemNumber });
         return;
       }
 
@@ -679,27 +683,28 @@ function QualifyLeadModalContent({
             !Number.isInteger(width) ||
             !Number.isInteger(height)
           ) {
-            nextErrors[item.key] = `Позиция ${itemNumber}: укажите целые ширину и высоту больше 0 или очистите оба поля`;
+            nextErrors[item.key] = t('leads.itemNeedSize', { number: itemNumber });
             return;
           }
         }
       }
 
       if (normalizeQualificationAreaM2(item.requiredAreaM2) === null) {
-        nextErrors[item.key] = `Позиция ${itemNumber}: площадь должна быть положительным числом (до 4 знаков после запятой)`;
+        nextErrors[item.key] = t('leads.itemNeedArea', { number: itemNumber });
         return;
       }
 
       const payload = buildQualificationItemPayload(
         { ...item, application: item.application },
         panelTypeId,
+        messages,
       );
       serialized.push(item.id ? { ...payload, id: item.id } : payload);
     });
 
     setItemErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
-      setFormError('Проверьте HPL-позиции.');
+      setFormError(t('leads.checkHplItems'));
       return null;
     }
 
@@ -735,7 +740,7 @@ function QualifyLeadModalContent({
       }
 
       if (!projectObjectId) {
-        setFormError('Не удалось определить объект проекта.');
+        setFormError(t('leads.objectResolveFailed'));
         return;
       }
 
@@ -754,7 +759,7 @@ function QualifyLeadModalContent({
       }
 
       if (!contactId) {
-        setFormError('Не удалось определить контакт.');
+        setFormError(t('leads.contactResolveFailed'));
         return;
       }
 
@@ -785,7 +790,7 @@ function QualifyLeadModalContent({
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-950">Квалификация лида</h2>
+            <h2 className="text-lg font-semibold text-slate-950">{t('leads.qualifyTitle')}</h2>
             <p className="mt-1 text-sm text-slate-500">{lead.title}</p>
           </div>
           <button
@@ -793,7 +798,7 @@ function QualifyLeadModalContent({
             onClick={onClose}
             className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
           >
-            Закрыть
+            {t('common.close')}
           </button>
         </div>
 
@@ -804,7 +809,7 @@ function QualifyLeadModalContent({
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Клиент
+                {t('common.client')}
                 <RequiredMark />
               </span>
               <Controller
@@ -815,9 +820,9 @@ function QualifyLeadModalContent({
                     value={field.value ?? ''}
                     onChange={field.onChange}
                     options={clientOptions}
-                    placeholder="Выберите клиента"
-                    searchPlaceholder="Поиск клиента"
-                    emptyLabel="Клиенты не найдены"
+                    placeholder={t('leads.selectClient')}
+                    searchPlaceholder={t('leads.searchClient')}
+                    emptyLabel={t('leads.clientsEmpty')}
                     loading={clientsQuery.isFetching}
                     onSearchChange={setClientSearch}
                   />
@@ -828,7 +833,7 @@ function QualifyLeadModalContent({
 
             <fieldset className="md:col-span-2">
               <legend className="mb-1 block text-sm font-medium text-slate-700">
-                Объект
+                {t('leads.object')}
                 <RequiredMark />
               </legend>
               <div className="grid grid-cols-2 gap-2">
@@ -843,7 +848,7 @@ function QualifyLeadModalContent({
                       setValue('newObjectAddress', '');
                     }}
                   />
-                  Существующий объект
+                  {t('leads.existingObject')}
                 </label>
                 <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
                   <input
@@ -855,7 +860,7 @@ function QualifyLeadModalContent({
                       setValue('projectObjectId', '');
                     }}
                   />
-                  Новый объект
+                  {t('leads.newObject')}
                 </label>
               </div>
               {objectMode === 'EXISTING' ? (
@@ -880,9 +885,9 @@ function QualifyLeadModalContent({
                           );
                         }}
                         options={projectObjectOptions}
-                        placeholder="Выберите объект"
-                        searchPlaceholder="Поиск объекта"
-                        emptyLabel="Объекты не найдены"
+                        placeholder={t('leads.selectObject')}
+                        searchPlaceholder={t('leads.searchObject')}
+                        emptyLabel={t('leads.objectsEmpty')}
                         disabled={!selectedClientId}
                         loading={clientDetailsQuery.isFetching}
                       />
@@ -891,7 +896,7 @@ function QualifyLeadModalContent({
                   <FieldError message={errors.projectObjectId?.message} />
                   {selectedProjectObject?.address ? (
                     <p className="mt-2 text-sm text-slate-600">
-                      Адрес: {selectedProjectObject.address}
+                      {t('leads.objectAddressValue', { address: selectedProjectObject.address })}
                     </p>
                   ) : null}
                 </div>
@@ -899,7 +904,7 @@ function QualifyLeadModalContent({
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label>
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      Название нового объекта
+                      {t('leads.newObjectName')}
                       <RequiredMark />
                     </span>
                     <input
@@ -910,7 +915,7 @@ function QualifyLeadModalContent({
                   </label>
                   <label>
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      Адрес нового объекта
+                      {t('leads.newObjectAddress')}
                     </span>
                     <input
                       className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -923,7 +928,7 @@ function QualifyLeadModalContent({
 
             <fieldset className="md:col-span-2">
               <legend className="mb-1 block text-sm font-medium text-slate-700">
-                Контакт
+                {t('leads.contact')}
                 <RequiredMark />
               </legend>
               <div className="grid grid-cols-2 gap-2">
@@ -940,7 +945,7 @@ function QualifyLeadModalContent({
                       setValue('contactEmail', '');
                     }}
                   />
-                  Существующий контакт
+                  {t('leads.existingContact')}
                 </label>
                 <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm">
                   <input
@@ -952,7 +957,7 @@ function QualifyLeadModalContent({
                       setValue('contactId', '');
                     }}
                   />
-                  Новый контакт
+                  {t('leads.newContact')}
                 </label>
               </div>
               {contactMode === 'EXISTING' ? (
@@ -965,9 +970,9 @@ function QualifyLeadModalContent({
                         value={field.value ?? ''}
                         onChange={field.onChange}
                         options={contactOptions}
-                        placeholder="Выберите контакт"
-                        searchPlaceholder="Поиск контакта"
-                        emptyLabel="Контакты не найдены"
+                        placeholder={t('leads.selectContact')}
+                        searchPlaceholder={t('leads.searchContact')}
+                        emptyLabel={t('leads.contactsEmpty')}
                         disabled={!selectedClientId}
                         loading={clientDetailsQuery.isFetching}
                       />
@@ -976,13 +981,13 @@ function QualifyLeadModalContent({
                   <FieldError message={errors.contactId?.message} />
                   <dl className="grid grid-cols-1 gap-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm sm:grid-cols-3">
                     <div>
-                      <dt className="text-xs uppercase text-slate-500">Контакт</dt>
+                      <dt className="text-xs uppercase text-slate-500">{t('leads.contact')}</dt>
                       <dd className="mt-1 text-slate-900">
                         {displayContactValue(selectedContactPresentation.contactName)}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs uppercase text-slate-500">Телефон</dt>
+                      <dt className="text-xs uppercase text-slate-500">{t('leads.phone')}</dt>
                       <dd className="mt-1 text-slate-900">
                         {displayContactValue(selectedContactPresentation.phone)}
                       </dd>
@@ -999,7 +1004,7 @@ function QualifyLeadModalContent({
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label>
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      Имя контакта
+                      {t('leads.contactFirstName')}
                       <RequiredMark />
                     </span>
                     <input
@@ -1010,7 +1015,7 @@ function QualifyLeadModalContent({
                   </label>
                   <label>
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      Фамилия контакта
+                      {t('leads.contactLastName')}
                     </span>
                     <input
                       className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
@@ -1019,7 +1024,7 @@ function QualifyLeadModalContent({
                   </label>
                   <label>
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      Телефон контакта
+                      {t('leads.contactPhone')}
                     </span>
                     <input
                       type="tel"
@@ -1030,7 +1035,7 @@ function QualifyLeadModalContent({
                   </label>
                   <label>
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      Email контакта
+                      {t('leads.contactEmail')}
                     </span>
                     <input
                       type="email"
@@ -1045,7 +1050,7 @@ function QualifyLeadModalContent({
 
             <label className="md:col-span-2">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                ЛПР / лицо, принимающее решение
+                {t('leads.decisionMaker')}
                 <RequiredMark />
               </span>
               <input
@@ -1065,12 +1070,12 @@ function QualifyLeadModalContent({
                 disabled={busy}
                 onClick={addItem}
               >
-                + Добавить HPL-позицию
+                {t('leads.addHplItem')}
               </button>
             </div>
             {items.length === 0 ? (
               <p className="text-sm text-slate-500">
-                HPL-позиции пока не добавлены.
+                {t('leads.hplItemsEmpty')}
               </p>
             ) : null}
             {items.map((item, index) => (
@@ -1106,11 +1111,11 @@ function QualifyLeadModalContent({
 
           <section className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
             <h3 className="md:col-span-2 text-base font-semibold text-slate-900">
-              Сроки и объект
+              {t('leads.datesAndObject')}
             </h3>
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Дедлайн клиента
+                {t('leads.customerDeadline')}
               </span>
               <input
                 type="date"
@@ -1120,11 +1125,11 @@ function QualifyLeadModalContent({
             </label>
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Стадия объекта
+                {t('leads.objectStage')}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                placeholder="Например, скоро фасад"
+                placeholder={t('leads.objectStagePlaceholder')}
                 {...register('objectStage')}
               />
             </label>
@@ -1143,7 +1148,7 @@ function QualifyLeadModalContent({
                       }
                     }}
                   />
-                  Срочно
+                  {t('leads.urgent')}
                 </label>
               )}
             />
@@ -1162,7 +1167,7 @@ function QualifyLeadModalContent({
                       }
                     }}
                   />
-                  Готов ждать
+                  {t('leads.willingToWait')}
                 </label>
               )}
             />
@@ -1171,7 +1176,7 @@ function QualifyLeadModalContent({
 
           <section className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
             <h3 className="md:col-span-2 text-base font-semibold text-slate-900">
-              Вентфасад
+              {t('leads.ventFacade')}
             </h3>
             <Controller
               name="ventFacadeExists"
@@ -1179,7 +1184,7 @@ function QualifyLeadModalContent({
               render={({ field }) => (
                 <TriStateField
                   name={field.name}
-                  label="Вентфасад уже есть?"
+                  label={t('leads.ventilatedFacade')}
                   value={field.value}
                   disabled={busy}
                   onChange={field.onChange}
@@ -1192,7 +1197,7 @@ function QualifyLeadModalContent({
               render={({ field }) => (
                 <TriStateField
                   name={field.name}
-                  label="Нужна комплектация вентфасада?"
+                  label={t('leads.facadeKitQuestion')}
                   value={field.value}
                   disabled={busy}
                   onChange={field.onChange}
@@ -1216,7 +1221,7 @@ function QualifyLeadModalContent({
           <section className="mt-5">
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Потребность / требования клиента
+                {t('leads.needRequirements')}
                 <RequiredMark />
               </span>
               <textarea
@@ -1230,7 +1235,7 @@ function QualifyLeadModalContent({
 
           {isSubmitted && !isValid ? (
             <p className="mt-4 text-sm text-red-600">
-              Заполните обязательные поля, отмеченные *.
+              {t('leads.requiredFieldsHint')}
             </p>
           ) : null}
           {formError ? <p className="mt-4 text-sm text-red-600">{formError}</p> : null}
@@ -1241,14 +1246,14 @@ function QualifyLeadModalContent({
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={busy}
               className="inline-flex items-center gap-2 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-500 disabled:opacity-60"
             >
-              {busy ? 'Сохранение...' : 'Квалифицировать'}
+              {busy ? t('common.saving') : t('leads.qualify')}
             </button>
           </div>
         </form>

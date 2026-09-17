@@ -1,8 +1,11 @@
+import { INTL_LOCALES, type Locale } from '@/i18n/config';
+import { getActiveLocale, getActiveMessages } from '@/i18n/active-messages';
+
 export type MoneyCurrency = 'USD' | 'UZS';
 
 export const moneyCurrencyInputLabels: Record<MoneyCurrency, string> = {
   USD: 'USD',
-  UZS: 'сум',
+  UZS: 'UZS',
 };
 
 export function normalizeCurrency(raw?: string | null): MoneyCurrency {
@@ -28,14 +31,18 @@ function parseMoneyValue(
 export function formatMoney(
   value: string | number | null | undefined,
   currency: MoneyCurrency = 'UZS',
+  locale: Locale = getActiveLocale(),
+  uzsSuffix = getActiveMessages().currency.uzsSuffix,
 ): string {
   const num = parseMoneyValue(value);
   if (num === null) {
     return '—';
   }
 
+  const intlLocale = INTL_LOCALES[locale];
+
   if (currency === 'USD') {
-    return new Intl.NumberFormat('ru-RU', {
+    return new Intl.NumberFormat(intlLocale, {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
@@ -43,8 +50,8 @@ export function formatMoney(
     }).format(num);
   }
 
-  return `${new Intl.NumberFormat('ru-RU', {
+  return `${new Intl.NumberFormat(intlLocale, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(num)} сум`;
+  }).format(num)} ${uzsSuffix}`;
 }

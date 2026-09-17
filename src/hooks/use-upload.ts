@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
+import { useI18n } from '@/i18n/provider';
 
 export type FileRelatedType =
   | 'DEAL'
@@ -40,6 +41,7 @@ export function useEntityFiles(
 
 export function useUploadFile() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (formData: FormData): Promise<UploadedFile> => {
@@ -56,7 +58,7 @@ export function useUploadFile() {
       return response.data;
     },
     onSuccess: (_file, formData) => {
-      showSuccess('Файл успешно загружен');
+      showSuccess(t('toasts.fileUploaded'));
 
       const relatedType = formData.get('relatedType');
       const relatedId = formData.get('relatedId');

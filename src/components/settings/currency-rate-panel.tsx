@@ -10,8 +10,10 @@ import {
   useCurrentCurrencyRate,
 } from '@/hooks/use-currency-rates';
 import { formatDateTime } from '@/lib/format';
+import { useI18n } from '@/i18n/provider';
 
 export function CurrencyRatePanel() {
+  const { t } = useI18n();
   const { user } = useAuth();
   const canRead = user?.permissions.includes(CURRENCY_RATES_READ_PERMISSION) ?? false;
   const canManage =
@@ -43,16 +45,15 @@ export function CurrencyRatePanel() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-950">
-            Курс CNY → USD
+            {t('currencySettings.title')}
           </h3>
           <p className="mt-1 text-sm text-slate-600">
-            Ручной курс для калькулятора HPL: сколько долларов США стоит 1
-            китайский юань.
+            {t('currencySettings.hint')}
           </p>
         </div>
         {current ? (
           <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-right">
-            <div className="text-xs text-slate-500">Активный курс</div>
+            <div className="text-xs text-slate-500">{t('currencySettings.activeRate')}</div>
             <div className="text-lg font-semibold text-slate-950">
               1 {current.fromCurrency} = {current.rate} {current.toCurrency}
             </div>
@@ -61,20 +62,19 @@ export function CurrencyRatePanel() {
       </div>
 
       {currentQuery.isLoading ? (
-        <p className="mt-3 text-sm text-slate-600">Загрузка курса...</p>
+        <p className="mt-3 text-sm text-slate-600">{t('currencySettings.loading')}</p>
       ) : null}
 
       {currentQuery.isError ? (
         <p className="mt-3 text-sm text-amber-800">
-          Активный курс CNY → USD ещё не задан. Директор может указать его
-          вручную.
+          {t('currencySettings.missing')}
         </p>
       ) : null}
 
       {canManage ? (
         <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(event) => void submit(event)}>
           <label className="min-w-[12rem] flex-1 text-sm text-slate-700">
-            <span className="mb-1 block font-medium">Новый курс (1 CNY = X USD)</span>
+            <span className="mb-1 block font-medium">{t('currencySettings.newRate')}</span>
             <input
               type="text"
               inputMode="decimal"
@@ -85,18 +85,20 @@ export function CurrencyRatePanel() {
             />
           </label>
           <Button type="submit" size="sm" disabled={createRate.isPending}>
-            {createRate.isPending ? 'Сохранение...' : 'Сохранить курс'}
+            {createRate.isPending ? t('common.saving') : t('currencySettings.saveRate')}
           </Button>
         </form>
       ) : (
         <p className="mt-3 text-xs text-slate-500">
-          Изменять курс может только директор.
+          {t('currencySettings.directorOnly')}
         </p>
       )}
 
       {createRate.data?.effectiveFrom ? (
         <p className="mt-3 text-xs text-slate-500">
-          Последнее сохранение: {formatDateTime(createRate.data.effectiveFrom)}
+          {t('currencySettings.lastSaved', {
+            date: formatDateTime(createRate.data.effectiveFrom),
+          })}
         </p>
       ) : null}
     </section>

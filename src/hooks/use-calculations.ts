@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
+import { useI18n } from '@/i18n/provider';
 import {
   CalculationPreview,
   CalculationSession,
@@ -70,6 +71,7 @@ export function useCalculationPreview() {
 
 export function useCreateCalculation() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -106,7 +108,7 @@ export function useCreateCalculation() {
       return response.data;
     },
     onSuccess: (calculation) => {
-      showSuccess('Расчёт сохранён');
+      showSuccess(t('calculations.savedCalculation'));
       void queryClient.invalidateQueries({ queryKey: ['calculations'] });
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', calculation.leadId],

@@ -10,7 +10,7 @@ import {
 } from './hpl-domain';
 
 describe('HPL domain mapping', () => {
-  it('prefers PanelType.displayNameRu over a stale name field', () => {
+  it('uses canonical i18n over displayNameRu when the panel type code is known', () => {
     expect(
       panelTypeLabel({
         code: 'interior',

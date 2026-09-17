@@ -16,35 +16,40 @@ import {
 import { useUsersList } from '../../hooks/use-users';
 import { apiClient } from '../../lib/api-client';
 import { formatPersonName } from '../../lib/display-names';
-import { optionalInnSchema } from '../../lib/validations/inn';
-import { optionalPhoneSchema } from '../../lib/validations/phone';
+import { createOptionalInnSchema } from '../../lib/validations/inn';
+import { createOptionalPhoneSchema } from '../../lib/validations/phone';
 import { getErrorMessage } from '../../lib/errors';
+import { useI18n } from '@/i18n/provider';
+import type { Messages } from '@/i18n/types';
+import type { TranslateFn } from '@/i18n/translate';
 
-const optionalUuid = z
-  .string()
-  .trim()
-  .optional()
-  .refine((value) => !value || z.string().uuid().safeParse(value).success, {
-    message: 'Выберите сотрудника из списка',
-  });
-
-const createLeadSchema = z.object({
-  title: z.string().trim().min(3, 'Укажите название лида'),
-  source: z.string().trim().min(2, 'Укажите источник'),
-  ownerId: optionalUuid,
-  phone: optionalPhoneSchema,
-  email: z
+function createLeadSchemaFactory(t: TranslateFn, messages: Messages) {
+  const optionalUuid = z
     .string()
     .trim()
     .optional()
-    .refine((value) => !value || z.string().email().safeParse(value).success, {
-      message: 'Некорректный email',
-    }),
-  inn: optionalInnSchema,
-  contactName: z.string().trim().optional(),
-});
+    .refine((value) => !value || z.string().uuid().safeParse(value).success, {
+      message: t('leads.selectEmployeeFromList'),
+    });
 
-type CreateLeadFormValues = z.infer<typeof createLeadSchema>;
+  return z.object({
+    title: z.string().trim().min(3, t('leads.titleRequired')),
+    source: z.string().trim().min(2, t('leads.sourceRequired')),
+    ownerId: optionalUuid,
+    phone: createOptionalPhoneSchema(messages),
+    email: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || z.string().email().safeParse(value).success, {
+        message: t('leads.invalidEmail'),
+      }),
+    inn: createOptionalInnSchema(messages),
+    contactName: z.string().trim().optional(),
+  });
+}
+
+type CreateLeadFormValues = z.infer<ReturnType<typeof createLeadSchemaFactory>>;
 
 type CreateLeadModalProps = {
   isOpen: boolean;
@@ -79,6 +84,7 @@ export function CreateLeadModal({ isOpen, onClose }: CreateLeadModalProps) {
 }
 
 function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
+  const { t, messages } = useI18n();
   const { user } = useAuth();
   const canAssignOwner = Boolean(
     user?.permissions.includes('leads:assign') &&
@@ -100,6 +106,10 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
         description: item.email,
       })),
     [users],
+  );
+  const createLeadSchema = useMemo(
+    () => createLeadSchemaFactory(t, messages),
+    [messages, t],
   );
   const {
     register,
@@ -199,7 +209,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
       setSelectedDuplicate(null);
       onClose();
     } catch (error) {
-      setFormError(getErrorMessage(error, 'Не удалось создать лид.'));
+      setFormError(getErrorMessage(error, t('leads.createFailed')));
     } finally {
       setIsSubmitting(false);
     }
@@ -211,10 +221,10 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-slate-950">
-              Создать лид
+              {t('leads.create')}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Первичная задача контакта будет создана автоматически.
+              {t('leads.createHint')}
             </p>
           </div>
           <button
@@ -222,7 +232,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
           >
-            Закрыть
+            {t('common.close')}
           </button>
         </div>
 
@@ -235,7 +245,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label className="md:col-span-2">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Название
+                {t('leads.titleField')}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -250,11 +260,11 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Источник
+                {t('leads.source')}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
-                placeholder="Сайт, звонок, рекомендация"
+                placeholder={t('leads.sourcePlaceholder')}
                 {...register('source')}
               />
               {errors.source ? (
@@ -267,7 +277,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
             {canAssignOwner ? (
               <label>
                 <span className="mb-1 block text-sm font-medium text-slate-700">
-                  Ответственный
+                  {t('leads.owner')}
                 </span>
                 <Controller
                   name="ownerId"
@@ -277,9 +287,9 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
                       value={field.value ?? ''}
                       onChange={field.onChange}
                       options={ownerOptions}
-                      placeholder="Выберите сотрудника"
-                      searchPlaceholder="Поиск по имени или email"
-                      emptyLabel="Сотрудники не найдены"
+                      placeholder={t('leads.selectEmployee')}
+                      searchPlaceholder={t('leads.searchEmployeeByName')}
+                      emptyLabel={t('clients.employeesEmpty')}
                     />
                   )}
                 />
@@ -293,7 +303,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Телефон
+                {t('leads.phone')}
               </span>
               <input
                 type="tel"
@@ -326,7 +336,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                ИНН
+                {t('clients.inn')}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -341,7 +351,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                ФИО контакта
+                {t('leads.contactFullName')}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -351,13 +361,13 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
           </div>
 
           {duplicatesQuery.isFetching ? (
-            <p className="text-sm text-slate-600">Проверка дублей...</p>
+            <p className="text-sm text-slate-600">{t('leads.checkingDuplicates')}</p>
           ) : null}
 
           {duplicates.length > 0 ? (
             <div className="rounded border border-yellow-300 bg-yellow-50 p-3">
               <div className="text-sm font-semibold text-yellow-900">
-                Найдены похожие клиенты в базе:
+                {t('leads.similarClientsFound')}
               </div>
               <div className="mt-2 divide-y divide-yellow-200">
                 {duplicates.map((duplicate) => (
@@ -378,14 +388,14 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
                       onClick={() => setSelectedDuplicate(duplicate)}
                       className="shrink-0 rounded border border-yellow-400 bg-white px-2 py-1 text-xs font-medium text-yellow-900 hover:bg-yellow-100"
                     >
-                      Привязать к существующему
+                      {t('leads.linkExisting')}
                     </button>
                   </div>
                 ))}
               </div>
               {selectedDuplicate ? (
                 <div className="mt-2 text-xs font-medium text-yellow-950">
-                  Выбран клиент: {selectedDuplicate.client.name}
+                  {t('leads.selectedClient', { name: selectedDuplicate.client.name })}
                 </div>
               ) : null}
             </div>
@@ -396,7 +406,7 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
           ) : null}
 
           {createLead.isError && !formError ? (
-            <p className="text-sm text-red-600">Не удалось создать лид.</p>
+            <p className="text-sm text-red-600">{t('leads.createFailed')}</p>
           ) : null}
 
           <div className="flex justify-end gap-2 pt-1">
@@ -405,14 +415,14 @@ function CreateLeadModalContent({ onClose }: { onClose: () => void }) {
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={!isValid || isSubmitting || createLead.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              {isSubmitting ? 'Создание...' : 'Создать лид'}
+              {isSubmitting ? t('common.creating') : t('leads.create')}
             </button>
           </div>
         </form>

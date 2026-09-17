@@ -15,11 +15,6 @@ import { formatMoney, normalizeCurrency } from '@/lib/currency';
 import { dealWorkspaceHref } from '@/lib/entity-routes';
 import { formatDate, formatDateTime, formatNumber, toDateInputValue } from '@/lib/format';
 import {
-  COMMERCIAL_NOTE_LABEL,
-  DOCUMENT_DATE_LABEL,
-  DELIVERY_PERIOD_LABEL,
-  PRODUCTION_PERIOD_LABEL,
-  VALID_UNTIL_LABEL,
   buildQuoteCommercialTermsPayload,
   canEditQuoteCommercialNote,
   canMutateQuoteDraftClientTerms,
@@ -35,15 +30,14 @@ import {
   QuoteItemDetail,
   quoteItemTitle,
   quoteStatusClassNames,
-  quoteStatusLabels,
 } from '@/lib/quote-presentation';
 import { QuoteApprovedPricing } from '@/components/quotes/quote-approved-pricing';
 import type { UpdateQuoteCommercialTermsPayload } from '@/hooks/use-quotes';
 import type { Quote, QuotePricingPreview } from '@/types/hpl';
 import type { ApprovedPricingItemPayload } from '@/lib/quote-pricing';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 import {
-  MIXED_CURRENCY_TOTAL_HINT,
-  QUOTE_FINALIZED_LABEL,
   canDownloadQuoteDocument,
   isQuoteFinalized,
   parseCommercialCurrency,
@@ -89,15 +83,16 @@ type QuoteCardProps = {
 function detailValue(
   detail: QuoteItemDetail,
   currency: ReturnType<typeof normalizeCurrency>,
+  t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
   if (detail.kind === 'money') {
     return formatMoney(detail.value, currency);
   }
   if (detail.kind === 'area') {
-    return `${formatNumber(detail.value)} м²`;
+    return t('common.m2', { value: formatNumber(detail.value) });
   }
   if (detail.kind === 'percent') {
-    return `${formatNumber(detail.value)} %`;
+    return t('common.percent', { value: formatNumber(detail.value) });
   }
   if (detail.kind === 'number') {
     return formatNumber(detail.value);
@@ -114,13 +109,14 @@ function ActionButton({
   pendingAction?: QuoteAction | null;
   onClick: () => void;
 }) {
+  const { t } = useI18n();
   const pending = pendingAction === action;
   const labels: Record<QuoteAction, string> = {
-    send: 'Отправить клиенту',
-    approve: 'Согласовать',
-    reject: 'Отклонить',
-    'client-accept': 'Зафиксировать согласие клиента',
-    convert: 'Создать сделку',
+    send: t('quotes.sendToClient'),
+    approve: t('quotes.approve'),
+    reject: t('quotes.reject'),
+    'client-accept': t('quotes.clientAccept'),
+    convert: t('quotes.convertToDeal'),
   };
   const icons: Record<QuoteAction, typeof Send> = {
     send: Send,
@@ -140,7 +136,7 @@ function ActionButton({
       onClick={onClick}
     >
       <Icon aria-hidden="true" />
-      {pending ? 'Выполнение...' : labels[action]}
+      {pending ? t('common.executing') : labels[action]}
     </Button>
   );
 }
@@ -174,6 +170,8 @@ export function QuoteCard({
   finalizePending = false,
   highlightUnapproved = false,
 }: QuoteCardProps) {
+  const { t, messages } = useI18n();
+  const { quoteStatusLabels } = useLabelMaps();
   const mixedCurrencies = quoteUsesMixedCurrencies(quote);
   const locked = isQuoteFinalized(quote);
   const currency = normalizeCurrency(quote.displayCurrency);
@@ -205,7 +203,7 @@ export function QuoteCard({
     (quote.status === 'converted' && !quote.pdfFileId);
   const customerDocumentIssues = locked
     ? []
-    : quoteCustomerDocumentIssues(quote);
+    : quoteCustomerDocumentIssues(quote, messages);
 
   return (
     <article className="rounded border border-slate-200 bg-white">
@@ -213,7 +211,10 @@ export function QuoteCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="font-semibold text-slate-950" title={quote.id}>
-              КП v{quote.versionNumber ?? 1} · {compactQuoteId(quote.id)}
+              {t('quotes.titleVersion', {
+                version: quote.versionNumber ?? 1,
+                id: compactQuoteId(quote.id),
+              })}
             </h4>
             <span
               className={`inline-flex rounded border px-2 py-0.5 text-xs font-semibold ${quoteStatusClassNames[quote.status]}`}
@@ -222,23 +223,27 @@ export function QuoteCard({
             </span>
             {locked ? (
               <span className="inline-flex rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                {QUOTE_FINALIZED_LABEL}
+                {t('quotes.finalized')}
               </span>
             ) : null}
             {isLatest ? (
-              <span className="text-xs font-medium text-slate-500">Последнее</span>
+              <span className="text-xs font-medium text-slate-500">{t('common.latest')}</span>
             ) : null}
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            Создано {formatDateTime(quote.createdAt)}
-            {managerName ? ` · Менеджер: ${managerName}` : ''}
+            {managerName
+              ? t('quotes.createdWithManager', {
+                  date: formatDateTime(quote.createdAt),
+                  manager: managerName,
+                })
+              : t('quotes.created', { date: formatDateTime(quote.createdAt) })}
           </div>
         </div>
         <div className="shrink-0 text-left sm:text-right">
-          <div className="text-xs text-slate-500">Итого</div>
+          <div className="text-xs text-slate-500">{t('common.total')}</div>
           <div className="text-lg font-semibold text-slate-950">
             {mixedCurrencies
-              ? MIXED_CURRENCY_TOTAL_HINT
+              ? t('quotes.mixedCurrencyHint')
               : formatMoney(quote.totalAmount, currency)}
           </div>
         </div>
@@ -246,25 +251,25 @@ export function QuoteCard({
 
       <dl className="grid grid-cols-2 gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-4">
         <MetaField
-          label="Доставка"
+          label={t('quotes.delivery')}
           value={
             quote.deliveryCost !== undefined && quote.deliveryCost !== null
               ? mixedCurrencies
-                ? MIXED_CURRENCY_TOTAL_HINT
+                ? t('quotes.mixedCurrencyHint')
                 : formatMoney(quote.deliveryCost, currency)
-              : 'Не указана'
+              : t('common.notSpecified')
           }
         />
-        <MetaField label="Действует до" value={formatDate(quote.validUntil)} />
+        <MetaField label={t('quotes.validUntilMeta')} value={formatDate(quote.validUntil)} />
         <MetaField
-          label="Согласие клиента"
+          label={t('quotes.clientConsent')}
           value={
             quote.clientAcceptedAt
               ? formatDateTime(quote.clientAcceptedAt)
-              : 'Не зафиксировано'
+              : t('common.notRecorded')
           }
         />
-        <MetaField label="Позиций" value={String(quote.items.length)} />
+        <MetaField label={t('quotes.itemCount')} value={String(quote.items.length)} />
       </dl>
 
       {(canApprovePricing || locked) && quote.items.length > 0 ? (
@@ -306,32 +311,33 @@ export function QuoteCard({
       {quote.clientComment || quote.rejectionReason ? (
         <div className="space-y-3 border-b border-slate-200 p-4 text-sm">
           {quote.clientComment ? (
-            <TextBlock label="Комментарий клиенту" value={quote.clientComment} />
+            <TextBlock label={t('quotes.clientComment')} value={quote.clientComment} />
           ) : null}
           {quote.rejectionReason ? (
-            <TextBlock label="Причина отказа" value={quote.rejectionReason} tone="danger" />
+            <TextBlock label={t('quotes.rejectionReason')} value={quote.rejectionReason} tone="danger" />
           ) : null}
         </div>
       ) : null}
 
       <details className="border-b border-slate-200">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 hover:bg-slate-50">
-          Состав предложения · {quote.items.length}
+          {t('quotes.composition', { count: quote.items.length })}
         </summary>
         <div className="divide-y divide-slate-200 border-t border-slate-200">
           {quote.items.map((item, index) => (
             <div key={item.id} className="p-4">
               <div className="text-sm font-semibold text-slate-950">
-                {index + 1}. {quoteItemTitle(item)}
+                {index + 1}. {quoteItemTitle(item, messages)}
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 text-xs sm:grid-cols-3 lg:grid-cols-4">
-                {getQuoteItemDetails(item).map((detail) => (
+                {getQuoteItemDetails(item, messages).map((detail) => (
                   <div key={detail.label} className="min-w-0">
                     <dt className="text-slate-500">{detail.label}</dt>
                     <dd className="mt-0.5 break-words font-medium text-slate-800">
                       {detailValue(
                       detail,
                       parseCommercialCurrency(item.currencyCode) ?? currency,
+                      t,
                     )}
                     </dd>
                   </div>
@@ -340,7 +346,7 @@ export function QuoteCard({
             </div>
           ))}
           {quote.items.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500">Позиции отсутствуют.</div>
+            <div className="p-4 text-sm text-slate-500">{t('quotes.emptyItems')}</div>
           ) : null}
         </div>
       </details>
@@ -352,10 +358,10 @@ export function QuoteCard({
               href={dealWorkspaceHref({ dealId: quote.dealId })}
               className="font-medium text-slate-700 underline underline-offset-4"
             >
-              Открыть раздел сделок · {quote.dealId.slice(0, 8).toUpperCase()}
+              {t('quotes.openDeal', { id: quote.dealId.slice(0, 8).toUpperCase() })}
             </Link>
           ) : (
-            <span className="text-slate-500">Сделка ещё не создана</span>
+            <span className="text-slate-500">{t('quotes.dealNotCreated')}</span>
           )}
           {customerDocumentIssues.length > 0 ? (
             <div className="w-full space-y-1 text-sm text-red-700">
@@ -366,7 +372,7 @@ export function QuoteCard({
           ) : null}
           {legacyDocumentMissing ? (
             <span className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-800">
-              Документ отсутствует (legacy)
+              {t('quotes.legacyMissing')}
             </span>
           ) : null}
           {onDownloadDocx && !legacyDocumentMissing ? (
@@ -378,7 +384,7 @@ export function QuoteCard({
               onClick={onDownloadDocx}
             >
               <Download aria-hidden="true" />
-              {docxPending ? 'Скачивание...' : 'Скачать КП DOCX'}
+              {docxPending ? t('common.downloading') : t('quotes.downloadDocx')}
             </Button>
           ) : null}
           {onDownloadPdf && !legacyDocumentMissing ? (
@@ -390,7 +396,7 @@ export function QuoteCard({
               onClick={onDownloadPdf}
             >
               <Download aria-hidden="true" />
-              {pdfPending ? 'Скачивание...' : 'Скачать КП PDF'}
+              {pdfPending ? t('common.downloading') : t('quotes.downloadPdf')}
             </Button>
           ) : null}
           {locked && onCreateVersion && !quote.nextVersion ? (
@@ -404,8 +410,8 @@ export function QuoteCard({
               }
             >
               {createVersionPending
-                ? 'Создание версии...'
-                : 'Создать новую версию'}
+                ? t('quotes.creatingVersion')
+                : t('quotes.createVersion')}
             </Button>
           ) : null}
         </div>
@@ -457,14 +463,15 @@ function TextBlock({
 }
 
 function formatDayRange(
-  from?: number | null,
-  to?: number | null,
+  from: number | null | undefined,
+  to: number | null | undefined,
+  t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
   if (from == null || to == null) {
-    return '—';
+    return t('common.dash');
   }
 
-  return `${from}–${to} дней`;
+  return t('common.daysRange', { from, to });
 }
 
 function QuoteCommercialTermsSection({
@@ -482,6 +489,7 @@ function QuoteCommercialTermsSection({
     payload: Omit<UpdateQuoteCommercialTermsPayload, 'id'>,
   ) => Promise<unknown> | unknown;
 }) {
+  const { t } = useI18n();
   if (canMutate && onSave) {
     return (
       <QuoteDraftTermsForm
@@ -498,29 +506,29 @@ function QuoteCommercialTermsSection({
     <div className="space-y-3 border-b border-slate-200 p-4 text-sm">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetaField
-          label={PRODUCTION_PERIOD_LABEL}
+          label={t('quotes.productionTerms')}
           value={
             quote.productionTerms?.trim() ||
-            formatDayRange(quote.productionDaysFrom, quote.productionDaysTo)
+            formatDayRange(quote.productionDaysFrom, quote.productionDaysTo, t)
           }
         />
         <MetaField
-          label={DELIVERY_PERIOD_LABEL}
+          label={t('quotes.deliveryTerms')}
           value={
             quote.deliveryTerms?.trim() ||
-            formatDayRange(quote.deliveryDaysFrom, quote.deliveryDaysTo)
+            formatDayRange(quote.deliveryDaysFrom, quote.deliveryDaysTo, t)
           }
         />
-        <MetaField label={DOCUMENT_DATE_LABEL} value={quoteAutomaticDate(quote)} />
+        <MetaField label={t('quotes.documentDate')} value={quoteAutomaticDate(quote)} />
         <MetaField
-          label={VALID_UNTIL_LABEL}
+          label={t('quotes.validUntil')}
           value={formatDate(quote.validUntil)}
         />
       </dl>
       <div>
-        <div className="font-medium text-slate-700">{COMMERCIAL_NOTE_LABEL}</div>
+        <div className="font-medium text-slate-700">{t('quotes.commercialNote')}</div>
         <p className="mt-1 whitespace-pre-wrap text-slate-700">
-          {quote.commercialNote?.trim() || '—'}
+          {quote.commercialNote?.trim() || t('common.dash')}
         </p>
       </div>
     </div>
@@ -540,6 +548,7 @@ function QuoteDraftTermsForm({
     payload: Omit<UpdateQuoteCommercialTermsPayload, 'id'>,
   ) => Promise<unknown> | unknown;
 }) {
+  const { t, messages } = useI18n();
   const [productionTerms, setProductionTerms] = useState(
     quote.productionTerms?.trim() || '',
   );
@@ -564,7 +573,7 @@ function QuoteDraftTermsForm({
       validUntil,
       commercialNote,
       internalCommercialNote,
-    });
+    }, messages);
     if (termsError) {
       setError(termsError);
       return;
@@ -596,14 +605,14 @@ function QuoteDraftTermsForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            {PRODUCTION_PERIOD_LABEL}
+            {t('quotes.productionTerms')}
           </span>
           <textarea
             value={productionTerms}
             maxLength={500}
             rows={2}
-            aria-label={PRODUCTION_PERIOD_LABEL}
-            placeholder="15–20 рабочих дней"
+            aria-label={t('quotes.productionTerms')}
+            placeholder={t('quotes.productionTermsPlaceholder')}
             onChange={(event) => {
               setProductionTerms(event.target.value);
               setError(null);
@@ -613,14 +622,14 @@ function QuoteDraftTermsForm({
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            {DELIVERY_PERIOD_LABEL}
+            {t('quotes.deliveryTerms')}
           </span>
           <textarea
             value={deliveryTerms}
             maxLength={500}
             rows={2}
-            aria-label={DELIVERY_PERIOD_LABEL}
-            placeholder="Ориентировочно 4 недели после утверждения декора"
+            aria-label={t('quotes.deliveryTerms')}
+            placeholder={t('quotes.deliveryTermsPlaceholder')}
             onChange={(event) => {
               setDeliveryTerms(event.target.value);
               setError(null);
@@ -631,12 +640,12 @@ function QuoteDraftTermsForm({
       </div>
       <label className="block max-w-xs">
         <span className="mb-1 block text-sm font-medium text-slate-700">
-          {VALID_UNTIL_LABEL}
-        </span>
-        <input
-          type="date"
-          value={validUntil}
-          aria-label={VALID_UNTIL_LABEL}
+            {t('quotes.validUntil')}
+          </span>
+          <input
+            type="date"
+            value={validUntil}
+            aria-label={t('quotes.validUntil')}
           onChange={(event) => {
             setValidUntil(event.target.value);
             setError(null);
@@ -645,7 +654,7 @@ function QuoteDraftTermsForm({
         />
       </label>
       <div>
-        <div className="text-xs text-slate-500">{DOCUMENT_DATE_LABEL}</div>
+        <div className="text-xs text-slate-500">{t('quotes.documentDate')}</div>
         <div className="mt-1 font-medium text-slate-900">
           {quoteAutomaticDate(quote)}
         </div>
@@ -654,11 +663,11 @@ function QuoteDraftTermsForm({
         <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            {COMMERCIAL_NOTE_LABEL}
+            {t('quotes.commercialNote')}
           </span>
           <textarea
             value={commercialNote}
-            aria-label={COMMERCIAL_NOTE_LABEL}
+            aria-label={t('quotes.commercialNote')}
             rows={3}
             onChange={(event) => {
               setCommercialNote(event.target.value);
@@ -669,11 +678,11 @@ function QuoteDraftTermsForm({
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Внутреннее коммерческое примечание
+            {t('quotes.internalNote')}
           </span>
           <textarea
             value={internalCommercialNote}
-            aria-label="Внутреннее коммерческое примечание"
+            aria-label={t('quotes.internalNote')}
             rows={3}
             maxLength={2000}
             onChange={(event) => {
@@ -686,15 +695,15 @@ function QuoteDraftTermsForm({
         </div>
       ) : (
         <div>
-          <div className="font-medium text-slate-700">{COMMERCIAL_NOTE_LABEL}</div>
+          <div className="font-medium text-slate-700">{t('quotes.commercialNote')}</div>
           <p className="mt-1 whitespace-pre-wrap text-slate-700">
-            {quote.commercialNote?.trim() || '—'}
+            {quote.commercialNote?.trim() || t('common.dash')}
           </p>
         </div>
       )}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <Button type="submit" size="sm" disabled={pending}>
-        {pending ? 'Сохранение...' : 'Сохранить условия КП'}
+        {pending ? t('common.saving') : t('quotes.saveTerms')}
       </Button>
     </form>
   );

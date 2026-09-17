@@ -9,8 +9,6 @@ const useDealInstallationMock = vi.fn();
 const useUsersListMock = vi.fn();
 const scheduleMutate = vi.fn();
 const assessMutate = vi.fn();
-const startMutate = vi.fn();
-const installerMutate = vi.fn();
 const supervisorMutate = vi.fn();
 
 vi.mock('@/context/auth-context', () => ({
@@ -25,14 +23,6 @@ vi.mock('@/hooks/use-installations', () => ({
   }),
   useUpdateInstallationAssessment: () => ({
     mutateAsync: assessMutate,
-    isPending: false,
-  }),
-  useStartInstallation: () => ({
-    mutateAsync: startMutate,
-    isPending: false,
-  }),
-  useConfirmInstallerInstallation: () => ({
-    mutateAsync: installerMutate,
     isPending: false,
   }),
   useConfirmSupervisorInstallation: () => ({
@@ -97,8 +87,6 @@ describe('InstallationPanel', () => {
     useUsersListMock.mockReturnValue({ usersById: new Map() });
     scheduleMutate.mockResolvedValue(installation());
     assessMutate.mockResolvedValue(installation());
-    startMutate.mockResolvedValue(installation());
-    installerMutate.mockResolvedValue(installation());
     supervisorMutate.mockResolvedValue(installation());
   });
 
@@ -122,43 +110,6 @@ describe('InstallationPanel', () => {
     expect(screen.getByRole('button', { name: 'Запланировать монтаж' })).toBeInTheDocument();
   });
 
-  it('lets INSTALLER start and confirm work, but not schedule or supervise', async () => {
-    useAuthMock.mockReturnValue(
-      auth(
-        ['deals:read', 'installation:assess', 'installation:confirm_work'],
-        ['INSTALLER'],
-        'installer-1',
-      ),
-    );
-
-    render(
-      <InstallationPanel
-        dealId="deal-1"
-        deal={deal()}
-        installation={installation()}
-      />,
-    );
-
-    expect(screen.getByRole('button', { name: 'Начать монтаж' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Подтвердить как монтажник' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Запланировать монтаж' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Подтвердить как руководитель' }),
-    ).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Начать монтаж' }));
-    expect(startMutate).toHaveBeenCalledWith({ dealId: 'deal-1' });
-
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Подтвердить как монтажник' }),
-    );
-    expect(installerMutate).toHaveBeenCalledWith({ dealId: 'deal-1' });
-  });
-
   it('lets DIRECTOR perform supervisor confirmation', async () => {
     useAuthMock.mockReturnValue(
       auth(
@@ -172,10 +123,7 @@ describe('InstallationPanel', () => {
       <InstallationPanel
         dealId="deal-1"
         deal={deal()}
-        installation={installation({
-          installerConfirmedAt: '2026-08-20T10:00:00.000Z',
-          installerConfirmedById: 'installer-1',
-        })}
+        installation={installation()}
       />,
     );
 
@@ -185,7 +133,7 @@ describe('InstallationPanel', () => {
     expect(supervisorMutate).toHaveBeenCalledWith({ dealId: 'deal-1' });
   });
 
-  it('does not show installer or supervisor actions to MANAGER or ADMIN-only', () => {
+  it('does not show management installation actions to MANAGER or ADMIN-only', () => {
     useAuthMock.mockReturnValue(auth(['deals:read'], ['MANAGER'], 'manager-1'));
     const { rerender } = render(
       <InstallationPanel
@@ -195,7 +143,6 @@ describe('InstallationPanel', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Начать монтаж' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Подтвердить как руководитель' }),
     ).not.toBeInTheDocument();
@@ -208,7 +155,6 @@ describe('InstallationPanel', () => {
         installation={installation()}
       />,
     );
-    expect(screen.queryByRole('button', { name: 'Начать монтаж' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Запланировать монтаж' }),
     ).not.toBeInTheDocument();
@@ -235,7 +181,7 @@ describe('InstallationPanel', () => {
 
   it('saves operational assessment through the assessment endpoint payload', async () => {
     useAuthMock.mockReturnValue(
-      auth(['installation:assess', 'installation:confirm_work'], ['INSTALLER'], 'installer-1'),
+      auth(['installation:assess'], ['HEAD'], 'head-1'),
     );
 
     render(

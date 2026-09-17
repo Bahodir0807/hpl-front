@@ -10,6 +10,7 @@ import {
   isInstallationNotFoundError,
 } from '../lib/installation-errors';
 import { showError, showSuccess } from '../lib/toast';
+import { useI18n } from '@/i18n/provider';
 import type { DealInstallation, InstallationStatus } from './use-deals';
 
 export const installationsQueryKey = ['installations'] as const;
@@ -282,6 +283,7 @@ function useInstallationMutation<TPayload extends { dealId: string }>(
 }
 
 export function useScheduleInstallation() {
+  const { t } = useI18n();
   return useInstallationMutation(
     async (payload: ScheduleInstallationPayload) => {
       const response = await apiClient.post<DealInstallation>(
@@ -293,11 +295,12 @@ export function useScheduleInstallation() {
       );
       return response.data;
     },
-    'Даты монтажа сохранены',
+    t('installations.toastDatesSaved'),
   );
 }
 
 export function useUpdateInstallationAssessment() {
+  const { t } = useI18n();
   return useInstallationMutation(
     async (payload: UpdateInstallationAssessmentPayload) => {
       const response = await apiClient.patch<DealInstallation>(
@@ -313,35 +316,12 @@ export function useUpdateInstallationAssessment() {
       );
       return response.data;
     },
-    'Оценка монтажа сохранена',
-  );
-}
-
-export function useStartInstallation() {
-  return useInstallationMutation(
-    async (payload: InstallationDealActionPayload) => {
-      const response = await apiClient.post<DealInstallation>(
-        `/deals/${payload.dealId}/installation/start`,
-      );
-      return response.data;
-    },
-    'Монтаж начат',
-  );
-}
-
-export function useConfirmInstallerInstallation() {
-  return useInstallationMutation(
-    async (payload: InstallationDealActionPayload) => {
-      const response = await apiClient.post<DealInstallation>(
-        `/deals/${payload.dealId}/installation/confirm-installer`,
-      );
-      return response.data;
-    },
-    'Монтажник подтвердил выполнение работ',
+    t('installations.toastAssessmentSaved'),
   );
 }
 
 export function useConfirmSupervisorInstallation() {
+  const { t } = useI18n();
   return useInstallationMutation(
     async (payload: InstallationDealActionPayload) => {
       const response = await apiClient.post<DealInstallation>(
@@ -349,6 +329,6 @@ export function useConfirmSupervisorInstallation() {
       );
       return response.data;
     },
-    'Руководитель подтвердил завершение монтажа',
+    t('installations.toastSupervisorConfirmed'),
   );
 }

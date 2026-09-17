@@ -1,3 +1,9 @@
+import { getActiveMessages } from '@/i18n/active-messages';
+import { localizeSystemText } from '@/i18n/system-labels';
+import { ru } from '@/i18n/ru';
+import type { Messages } from '@/i18n/types';
+import { interpolate } from '@/i18n/translate';
+
 export const CANONICAL_HPL_APPLICATIONS = [
   'INTERIOR',
   'EXTERIOR_WITH_UV',
@@ -22,10 +28,7 @@ export const PANEL_TYPE_CODES = [
 export type PanelTypeCode = (typeof PANEL_TYPE_CODES)[number];
 
 export const HPL_APPLICATION_LABELS: Record<HplApplication, string> = {
-  INTERIOR: 'Интерьерный',
-  EXTERIOR_WITH_UV: 'Exterior с УФ',
-  LABORATORY: 'Лабораторный',
-  FURNITURE: 'Мебельный',
+  ...ru.hpl.applications,
 };
 
 export const STANDARD_DISCRETE_THICKNESSES_MM = [
@@ -36,8 +39,7 @@ export const FURNITURE_THICKNESS_MIN_MM = 0.5;
 export const FURNITURE_THICKNESS_MAX_MM = 2.9;
 export const FURNITURE_THICKNESS_STEP = 0.1;
 
-export const CUSTOM_SIZE_PRICING_NOTE =
-  'Для нестандартного размера автоматический расчёт цены пока не настроен. Нестандартные размеры могут потребовать ручной коммерческой обработки.';
+export const CUSTOM_SIZE_PRICING_NOTE = ru.hpl.customSizePricingNote;
 
 export type SizeMode = 'STANDARD' | 'CUSTOM';
 
@@ -119,31 +121,35 @@ export function panelTypeCodeFromApplication(
 
 export function hplApplicationLabel(
   value: string | null | undefined,
+  messages: Messages = getActiveMessages(),
 ): string {
   const canonical = toCanonicalHplApplication(value);
   if (canonical) {
-    return HPL_APPLICATION_LABELS[canonical];
+    return messages.hpl.applications[canonical];
   }
 
-  return value?.trim() || '—';
+  return value?.trim() || messages.common.dash;
 }
 
-export function panelTypeLabel(type?: {
-  code?: string | null;
-  displayNameRu?: string | null;
-  name?: string | null;
-} | null): string {
-  const displayName = type?.displayNameRu?.trim();
-  if (displayName) {
-    return displayName;
-  }
-
+export function panelTypeLabel(
+  type?: {
+    code?: string | null;
+    displayNameRu?: string | null;
+    name?: string | null;
+  } | null,
+  messages: Messages = getActiveMessages(),
+): string {
   const fromCode = applicationFromPanelTypeCode(type?.code);
   if (fromCode) {
-    return HPL_APPLICATION_LABELS[fromCode];
+    return messages.hpl.applications[fromCode];
   }
 
-  return type?.name?.trim() || type?.code?.trim() || '—';
+  const named = type?.displayNameRu?.trim() || type?.name?.trim();
+  if (named) {
+    return localizeSystemText(named, messages);
+  }
+
+  return type?.code?.trim() || messages.common.dash;
 }
 
 export type PanelSizeLike = {
@@ -157,7 +163,10 @@ export type PanelSizeLike = {
   label?: string | null;
 };
 
-export function panelSizeLabel(size?: PanelSizeLike | null): string {
+export function panelSizeLabel(
+  size?: PanelSizeLike | null,
+  messages: Messages = getActiveMessages(),
+): string {
   const displayName = size?.displayName?.trim();
   if (displayName) {
     return displayName;
@@ -166,10 +175,10 @@ export function panelSizeLabel(size?: PanelSizeLike | null): string {
   const width = toDecimalNumber(size?.widthMm ?? size?.width);
   const height = toDecimalNumber(size?.heightMm ?? size?.length);
   if (width && height) {
-    return `${width} × ${height} мм`;
+    return interpolate(messages.hpl.sizeMm, { width, height });
   }
 
-  return size?.label?.trim() || '—';
+  return size?.label?.trim() || messages.common.dash;
 }
 
 export function resolveSheetAreaM2(size?: PanelSizeLike | null): number | null {
@@ -226,32 +235,39 @@ export function toDecimalNumber(value: unknown): number | null {
 
 export function formatDecimalDisplay(
   value: unknown,
-  fallback = '—',
+  fallback?: string,
+  messages: Messages = getActiveMessages(),
 ): string {
   const parsed = toDecimalNumber(value);
   if (parsed === null) {
-    return fallback;
+    return fallback ?? messages.common.dash;
   }
 
   return String(parsed);
 }
 
-export function formatThicknessMm(value: unknown): string {
+export function formatThicknessMm(
+  value: unknown,
+  messages: Messages = getActiveMessages(),
+): string {
   const parsed = toDecimalNumber(value);
   if (parsed === null) {
-    return '—';
+    return messages.common.dash;
   }
 
-  return `${parsed} мм`;
+  return interpolate(messages.common.mm, { value: parsed });
 }
 
-export function formatAreaM2(value: unknown): string {
+export function formatAreaM2(
+  value: unknown,
+  messages: Messages = getActiveMessages(),
+): string {
   const parsed = toDecimalNumber(value);
   if (parsed === null) {
-    return '—';
+    return messages.common.dash;
   }
 
-  return `${parsed} м²`;
+  return interpolate(messages.common.m2, { value: parsed });
 }
 
 export function isFurnitureApplication(
@@ -306,49 +322,59 @@ export function isValidThicknessForApplication(
 export function thicknessValidationMessage(
   application: string | null | undefined,
   value: unknown,
+  messages: Messages = getActiveMessages(),
 ): string | null {
   const thickness = toDecimalNumber(value);
   if (thickness === null || thickness <= 0) {
-    return 'Укажите толщину';
+    return messages.validation.thicknessRequired;
   }
 
   if (isFurnitureApplication(application)) {
     return isValidFurnitureThickness(thickness)
       ? null
-      : 'Для мебельного HPL толщина должна быть от 0.5 до 2.9 мм';
+      : messages.validation.furnitureThickness;
   }
 
   if (usesDiscreteThickness(application) && !isDiscreteThicknessValue(thickness)) {
-    return 'Выберите толщину из списка';
+    return messages.validation.thicknessFromList;
   }
 
   return null;
 }
 
-export function formatColorLabel(color?: {
-  colorCode?: string | null;
-  colorName?: string | null;
-} | null): string {
+export function formatColorLabel(
+  color?: {
+    colorCode?: string | null;
+    colorName?: string | null;
+  } | null,
+  messages: Messages = getActiveMessages(),
+): string {
   const parts = [color?.colorCode, color?.colorName]
     .map((item) => item?.trim())
     .filter((item): item is string => Boolean(item));
 
-  return parts.length > 0 ? parts.join(' · ') : '—';
+  return parts.length > 0 ? parts.join(' · ') : messages.common.dash;
 }
 
-export function formatQualificationSize(qualification?: {
-  panelSizeId?: string | null;
-  customWidthMm?: number | string | null;
-  customHeightMm?: number | string | null;
-  panelSize?: PanelSizeLike | null;
-} | null): string {
+export function formatQualificationSize(
+  qualification?: {
+    panelSizeId?: string | null;
+    customWidthMm?: number | string | null;
+    customHeightMm?: number | string | null;
+    panelSize?: PanelSizeLike | null;
+  } | null,
+  messages: Messages = getActiveMessages(),
+): string {
   const customWidth = toDecimalNumber(qualification?.customWidthMm);
   const customHeight = toDecimalNumber(qualification?.customHeightMm);
   if (customWidth !== null && customHeight !== null && customWidth > 0 && customHeight > 0) {
-    return `Нестандартный: ${customWidth} × ${customHeight} мм`;
+    return interpolate(messages.hpl.customSizeLabel, {
+      width: customWidth,
+      height: customHeight,
+    });
   }
 
-  return panelSizeLabel(qualification?.panelSize);
+  return panelSizeLabel(qualification?.panelSize, messages);
 }
 
 export function resolveSizeMode(qualification?: {

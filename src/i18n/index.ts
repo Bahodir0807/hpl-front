@@ -1,0 +1,11 @@
+export { LOCALES, DEFAULT_LOCALE, INTL_LOCALES, parseLocale, parseTheme, type Locale, type ThemeName } from './config';
+export { dictionaries } from './dictionaries';
+export { I18nProvider, useI18n } from './provider';
+export { useLabelMaps } from './use-label-maps';
+export { createTranslator, collectMessageKeys, interpolate } from './translate';
+export { createLabelMaps, type LabelMaps } from './label-maps';
+export { ru } from './ru';
+export { uz } from './uz';
+export { en } from './en';
+export type { Messages } from './types';
+export type { TranslateFn } from './translate';

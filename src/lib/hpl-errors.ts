@@ -1,61 +1,62 @@
 import { AxiosError } from 'axios';
+import { ru } from '@/i18n/ru';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
 
-export const PRICING_NOT_CONFIGURED_MESSAGE =
-  'Для выбранной толщины пока не настроена закупочная цена.';
+export const PRICING_NOT_CONFIGURED_MESSAGE = ru.errors.pricingNotConfigured;
 
 export const CUSTOM_SIZE_PRICING_NOT_CONFIGURED_MESSAGE =
-  'Для нестандартного размера автоматический расчёт цены пока не настроен.';
+  ru.errors.customSizePricingNotConfigured;
 
-export const CURRENCY_RATE_MISSING_MESSAGE =
-  'Не установлен актуальный курс CNY → USD. Обратитесь к директору.';
+export const CURRENCY_RATE_MISSING_MESSAGE = ru.errors.currencyRateMissing;
 
 export const QUOTE_APPROVAL_FORBIDDEN_MESSAGE =
-  'Недостаточно прав: утверждение КП доступно только руководителю.';
+  ru.errors.quoteApprovalForbidden;
 
-export const QUOTE_PRICE_NOT_APPROVED_MESSAGE =
-  'Сначала явно утвердите цену и валюту по каждой позиции.';
+export const QUOTE_PRICE_NOT_APPROVED_MESSAGE = ru.errors.quotePriceNotApproved;
 
-export const QUOTE_TERMS_LOCKED_MESSAGE =
-  'КП уже финализировано и недоступно для изменений.';
+export const QUOTE_TERMS_LOCKED_MESSAGE = ru.errors.quoteTermsLocked;
 
 export const QUOTE_APPROVAL_FORBIDDEN = 'QUOTE_APPROVAL_FORBIDDEN';
 export const QUOTE_PRICE_NOT_APPROVED = 'QUOTE_PRICE_NOT_APPROVED';
 export const QUOTE_TERMS_LOCKED = 'QUOTE_TERMS_LOCKED';
 export const QUOTE_ALREADY_EXISTS = 'QUOTE_ALREADY_EXISTS';
 export const QUOTE_SUPPLIER_REQUIRED = 'QUOTE_SUPPLIER_REQUIRED';
-export const QUOTE_SUPPLIER_REQUIRED_MESSAGE =
-  'У каждой позиции должен быть выбран поставщик';
+export const QUOTE_SUPPLIER_REQUIRED_MESSAGE = ru.errors.quoteSupplierRequired;
 
-const CODED_HPL_ERRORS: Record<string, string> = {
-  PRICING_NOT_CONFIGURED: PRICING_NOT_CONFIGURED_MESSAGE,
-  CUSTOM_SIZE_PRICING_NOT_CONFIGURED: CUSTOM_SIZE_PRICING_NOT_CONFIGURED_MESSAGE,
-  PURCHASE_PRICE_REQUIRED: 'Укажите закупочную цену, CNY/м²',
-  MANUAL_PURCHASE_PRICE_FORBIDDEN:
-    'Ручной ввод закупочной цены доступен только руководителю',
-  INVALID_SUPPLIER_PRICE: 'Закупочная цена должна быть больше 0',
-  CURRENCY_RATE_MISSING: CURRENCY_RATE_MISSING_MESSAGE,
-  CURRENCY_RATE_NOT_CONFIGURED: CURRENCY_RATE_MISSING_MESSAGE,
-  CURRENCY_RATE_NOT_FOUND: CURRENCY_RATE_MISSING_MESSAGE,
-  NO_ACTIVE_CURRENCY_RATE: CURRENCY_RATE_MISSING_MESSAGE,
-  FX_RATE_MISSING: CURRENCY_RATE_MISSING_MESSAGE,
-  FX_RATE_NOT_CONFIGURED: CURRENCY_RATE_MISSING_MESSAGE,
-  CNY_USD_RATE_MISSING: CURRENCY_RATE_MISSING_MESSAGE,
-  INVALID_CURRENCY_RATE: 'Курс CNY → USD должен быть больше 0',
-  [QUOTE_APPROVAL_FORBIDDEN]: QUOTE_APPROVAL_FORBIDDEN_MESSAGE,
-  [QUOTE_PRICE_NOT_APPROVED]: QUOTE_PRICE_NOT_APPROVED_MESSAGE,
-  [QUOTE_TERMS_LOCKED]: QUOTE_TERMS_LOCKED_MESSAGE,
-  CALCULATION_REQUEST_LOCKED:
-    'Запрос отправлен руководителю, его нельзя менять',
-  [QUOTE_ALREADY_EXISTS]: 'Для этого запроса КП уже создано',
-  [QUOTE_SUPPLIER_REQUIRED]: QUOTE_SUPPLIER_REQUIRED_MESSAGE,
-  QUOTE_PDF_NOT_FINALIZED:
-    'Финальный PDF КП формирует руководитель. Дождитесь готового документа',
-  INVALID_QUANTITY: 'Количество листов должно быть больше 0',
-};
+export function getCodedHplErrors(messages: Messages = getActiveMessages()): Record<string, string> {
+  return {
+    PRICING_NOT_CONFIGURED: messages.errors.pricingNotConfigured,
+    CUSTOM_SIZE_PRICING_NOT_CONFIGURED:
+      messages.errors.customSizePricingNotConfigured,
+    PURCHASE_PRICE_REQUIRED: messages.errors.purchasePriceRequired,
+    MANUAL_PURCHASE_PRICE_FORBIDDEN:
+      messages.errors.manualPurchasePriceForbidden,
+    INVALID_SUPPLIER_PRICE: messages.errors.invalidSupplierPrice,
+    CURRENCY_RATE_MISSING: messages.errors.currencyRateMissing,
+    CURRENCY_RATE_NOT_CONFIGURED: messages.errors.currencyRateMissing,
+    CURRENCY_RATE_NOT_FOUND: messages.errors.currencyRateMissing,
+    NO_ACTIVE_CURRENCY_RATE: messages.errors.currencyRateMissing,
+    FX_RATE_MISSING: messages.errors.currencyRateMissing,
+    FX_RATE_NOT_CONFIGURED: messages.errors.currencyRateMissing,
+    CNY_USD_RATE_MISSING: messages.errors.currencyRateMissing,
+    INVALID_CURRENCY_RATE: messages.errors.invalidCurrencyRate,
+    [QUOTE_APPROVAL_FORBIDDEN]: messages.errors.quoteApprovalForbidden,
+    [QUOTE_PRICE_NOT_APPROVED]: messages.errors.quotePriceNotApproved,
+    [QUOTE_TERMS_LOCKED]: messages.errors.quoteTermsLocked,
+    CALCULATION_REQUEST_LOCKED: messages.errors.calculationRequestLocked,
+    [QUOTE_ALREADY_EXISTS]: messages.errors.quoteAlreadyExists,
+    [QUOTE_SUPPLIER_REQUIRED]: messages.errors.quoteSupplierRequired,
+    QUOTE_PDF_NOT_FINALIZED: messages.errors.quotePdfNotFinalized,
+    INVALID_QUANTITY: messages.errors.invalidQuantity,
+  };
+}
+
+const CODED_HPL_ERRORS = getCodedHplErrors();
 
 export function createApiErrorFromPayload(
   payload: unknown,
-  fallback = 'Ошибка сервера',
+  fallback = getActiveMessages().errors.server,
 ): AxiosError {
   const data =
     payload && typeof payload === 'object'
@@ -147,14 +148,17 @@ function collectErrorTokens(error: unknown): string[] {
   return tokens;
 }
 
-function lookupCodedMessage(token: string): string | null {
+function lookupCodedMessage(
+  token: string,
+  codedErrors: Record<string, string> = CODED_HPL_ERRORS,
+): string | null {
   const compact = token.trim();
-  if (CODED_HPL_ERRORS[compact]) {
-    return CODED_HPL_ERRORS[compact];
+  if (codedErrors[compact]) {
+    return codedErrors[compact];
   }
 
   const upper = compact.toUpperCase().replace(/[\s-]+/g, '_');
-  for (const [code, message] of Object.entries(CODED_HPL_ERRORS)) {
+  for (const [code, message] of Object.entries(codedErrors)) {
     if (upper === code || upper.includes(code)) {
       return message;
     }
@@ -204,10 +208,14 @@ export function getApiErrorCode(error: unknown): string | null {
   return null;
 }
 
-export function localizeHplBusinessError(error: unknown): string | null {
+export function localizeHplBusinessError(
+  error: unknown,
+  messages: Messages = getActiveMessages(),
+): string | null {
+  const codedErrors = getCodedHplErrors(messages);
   const tokens = collectErrorTokens(error);
   for (const token of tokens) {
-    const coded = lookupCodedMessage(token);
+    const coded = lookupCodedMessage(token, codedErrors);
     if (coded) {
       return coded;
     }
@@ -215,7 +223,7 @@ export function localizeHplBusinessError(error: unknown): string | null {
 
   const joined = tokens.join(' ');
   if (looksLikeMissingFx(joined)) {
-    return CURRENCY_RATE_MISSING_MESSAGE;
+    return messages.errors.currencyRateMissing;
   }
   if (
     joined.toLowerCase().includes('currency rate') &&
@@ -223,16 +231,16 @@ export function localizeHplBusinessError(error: unknown): string | null {
       joined.toLowerCase().includes('positive') ||
       joined.includes('должен быть больше'))
   ) {
-    return 'Курс CNY → USD должен быть больше 0';
+    return messages.errors.invalidCurrencyRate;
   }
   if (
     joined.toLowerCase().includes('comment is required for other') ||
     joined.toLowerCase().includes('other loss reason')
   ) {
-    return 'Для причины «Другое» нужен комментарий.';
+    return messages.errors.otherLossComment;
   }
   if (joined.toLowerCase().includes('received quantity exceeds expected')) {
-    return 'Принятое количество больше ожидаемого.';
+    return messages.errors.receivedExceedsExpected;
   }
 
   return null;

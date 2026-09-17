@@ -17,12 +17,9 @@ import { useDebouncedValue } from "../../../hooks/use-debounced-value";
 import { useUsersList } from "../../../hooks/use-users";
 import { formatDate } from "../../../lib/format";
 import { resolveUserName } from "../../../lib/display-names";
-import {
-  clientSegmentLabels,
-  clientStatusLabels,
-  clientTypeLabels,
-  enumLabel,
-} from "../../../lib/labels";
+import { enumLabel } from "../../../lib/labels";
+import { useI18n } from "@/i18n/provider";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 const ClientDetailsModal = dynamic(
   () =>
@@ -35,24 +32,9 @@ const ClientDetailsModal = dynamic(
 type TypeFilter = "ALL" | ClientType;
 type SegmentFilter = "ALL" | ClientSegment;
 
-const typeOptions: { value: TypeFilter; label: string }[] = [
-  { value: "ALL", label: "Все типы" },
-  { value: "COMPANY", label: clientTypeLabels.COMPANY },
-  { value: "INDIVIDUAL", label: clientTypeLabels.INDIVIDUAL },
-];
-
-const segmentOptions: { value: SegmentFilter; label: string }[] = [
-  { value: "ALL", label: "Все сегменты" },
-  { value: "DEALER", label: clientSegmentLabels.DEALER },
-  { value: "ARCHITECT", label: clientSegmentLabels.ARCHITECT },
-  { value: "CONTRACTOR", label: clientSegmentLabels.CONTRACTOR },
-  { value: "END_CUSTOMER", label: clientSegmentLabels.END_CUSTOMER },
-  { value: "OTHER", label: clientSegmentLabels.OTHER },
-];
-
-function getActiveObjectsCount(client: Client): string {
+function getActiveObjectsCount(client: Client, dash: string): string {
   if (!client.projectObjects) {
-    return "-";
+    return dash;
   }
 
   return String(
@@ -62,6 +44,8 @@ function getActiveObjectsCount(client: Client): string {
 }
 
 export default function ClientsPage() {
+  const { t, locale } = useI18n();
+  const labels = useLabelMaps();
   const { user } = useAuth();
   const canFilterOwners = Boolean(
     user?.permissions.includes("users:read") &&
@@ -88,6 +72,25 @@ export default function ClientsPage() {
   );
   const clientsQuery = useClients(apiFilters);
   const { users, usersById } = useUsersList(canFilterOwners);
+  const typeOptions = useMemo(
+    (): { value: TypeFilter; label: string }[] => [
+      { value: "ALL", label: t("common.allTypes") },
+      { value: "COMPANY", label: labels.clientTypeLabels.COMPANY },
+      { value: "INDIVIDUAL", label: labels.clientTypeLabels.INDIVIDUAL },
+    ],
+    [labels.clientTypeLabels, t],
+  );
+  const segmentOptions = useMemo(
+    (): { value: SegmentFilter; label: string }[] => [
+      { value: "ALL", label: t("common.allSegments") },
+      { value: "DEALER", label: labels.clientSegmentLabels.DEALER },
+      { value: "ARCHITECT", label: labels.clientSegmentLabels.ARCHITECT },
+      { value: "CONTRACTOR", label: labels.clientSegmentLabels.CONTRACTOR },
+      { value: "END_CUSTOMER", label: labels.clientSegmentLabels.END_CUSTOMER },
+      { value: "OTHER", label: labels.clientSegmentLabels.OTHER },
+    ],
+    [labels.clientSegmentLabels, t],
+  );
   const managerOptions = useMemo(
     () =>
       users.map((user) => ({
@@ -113,10 +116,10 @@ export default function ClientsPage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-slate-950">
-              Клиенты и контакты
+              {t("clients.title")}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Реестр клиентов, контактов и объектов строительства.
+              {t("clients.subtitle")}
             </p>
           </div>
 
@@ -125,14 +128,14 @@ export default function ClientsPage() {
             onClick={() => setIsCreateModalOpen(true)}
             className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
           >
-            Добавить клиента
+            {t("clients.add")}
           </button>
         </div>
 
         <div className="grid grid-cols-1 gap-3 rounded border border-slate-200 bg-white px-3 py-3 lg:grid-cols-[minmax(220px,1fr)_180px_190px_260px]">
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Поиск
+              {t("common.search")}
             </span>
             <input
               value={search}
@@ -140,14 +143,14 @@ export default function ClientsPage() {
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Название, ИНН, телефон"
+              placeholder={t("clients.searchPlaceholder")}
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
             />
           </label>
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Тип
+              {t("clients.type")}
             </span>
             <select
               value={type}
@@ -164,7 +167,7 @@ export default function ClientsPage() {
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Сегмент
+              {t("clients.segment")}
             </span>
             <select
               value={segment}
@@ -185,7 +188,7 @@ export default function ClientsPage() {
           {canFilterOwners ? (
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Менеджер
+                {t("clients.manager")}
               </span>
               <SearchCombobox
                 value={ownerId}
@@ -194,9 +197,9 @@ export default function ClientsPage() {
                   setPage(1);
                 }}
                 options={managerOptions}
-                placeholder="Все менеджеры"
-                searchPlaceholder="Поиск сотрудника"
-                emptyLabel="Сотрудники не найдены"
+                placeholder={t("common.allManagers")}
+                searchPlaceholder={t("clients.searchEmployee")}
+                emptyLabel={t("clients.employeesEmpty")}
               />
             </label>
           ) : null}
@@ -204,13 +207,13 @@ export default function ClientsPage() {
 
         {clientsQuery.isLoading ? (
           <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
-            Загрузка клиентов...
+            {t("clients.loading")}
           </div>
         ) : null}
 
         {clientsQuery.isError ? (
           <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-            Не удалось загрузить клиентов.
+            {t("clients.loadFailed")}
           </div>
         ) : null}
 
@@ -220,28 +223,28 @@ export default function ClientsPage() {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Название
+                    {t("clients.name")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    ИНН
+                    {t("clients.inn")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Сегмент
+                    {t("clients.segment")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Регион
+                    {t("clients.region")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Ответственный
+                    {t("clients.owner")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Активные объекты
+                    {t("clients.activeObjects")}
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Создан
+                    {t("common.created")}
                   </th>
                   <th className="px-3 py-2 text-right font-semibold text-slate-700">
-                    Действия
+                    {t("common.actions")}
                   </th>
                 </tr>
               </thead>
@@ -256,29 +259,29 @@ export default function ClientsPage() {
                         {client.name}
                       </Link>
                       <div className="mt-0.5 text-xs text-slate-600">
-                        {enumLabel(clientTypeLabels, client.type)} ·{" "}
-                        {enumLabel(clientStatusLabels, client.status)}
+                        {enumLabel(labels.clientTypeLabels, client.type)} ·{" "}
+                        {enumLabel(labels.clientStatusLabels, client.status)}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {client.inn ?? "-"}
+                      {client.inn ?? t("common.dash")}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
                       {client.segment
-                        ? enumLabel(clientSegmentLabels, client.segment)
-                        : "—"}
+                        ? enumLabel(labels.clientSegmentLabels, client.segment)
+                        : t("common.dash")}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {client.region ?? "-"}
+                      {client.region ?? t("common.dash")}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
                       {resolveUserName(client.owner, client.ownerId, usersById)}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {getActiveObjectsCount(client)}
+                      {getActiveObjectsCount(client, t("common.dash"))}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {formatDate(client.createdAt)}
+                      {formatDate(client.createdAt, locale)}
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex justify-end">
@@ -287,7 +290,7 @@ export default function ClientsPage() {
                           onClick={() => setSelectedClientId(client.id)}
                           className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                         >
-                          Открыть
+                          {t("common.open")}
                         </button>
                       </div>
                     </td>
@@ -298,7 +301,7 @@ export default function ClientsPage() {
 
             {clients.length === 0 ? (
               <div className="p-8 text-center text-sm text-slate-600">
-                Клиенты не найдены.
+                {t("clients.empty")}
               </div>
             ) : null}
           </div>

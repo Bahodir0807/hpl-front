@@ -8,6 +8,7 @@ import {
   isFurnitureApplication,
   toDecimalNumber,
 } from '@/lib/hpl-domain';
+import { useI18n } from '@/i18n/provider';
 
 type HplThicknessFieldProps = {
   application?: string | null;
@@ -26,10 +27,12 @@ export function HplThicknessField({
   onChange,
   error,
   name = 'thicknessMm',
-  label = 'Толщина, мм',
+  label,
   compact = false,
   disabled = false,
 }: HplThicknessFieldProps) {
+  const { t } = useI18n();
+  const fieldLabel = label ?? t('hpl.thicknessMm');
   const furniture = isFurnitureApplication(application);
   const displayValue =
     value === null || value === undefined ? '' : String(value);
@@ -40,7 +43,7 @@ export function HplThicknessField({
     <label>
       {compact ? null : (
         <span className="mb-1 block text-sm font-medium text-slate-700">
-          {label}
+          {fieldLabel}
         </span>
       )}
       {furniture ? (
@@ -52,7 +55,7 @@ export function HplThicknessField({
           max={FURNITURE_THICKNESS_MAX_MM}
           step={FURNITURE_THICKNESS_STEP}
           disabled={disabled}
-          aria-label={label}
+          aria-label={fieldLabel}
           aria-describedby={error ? errorId : undefined}
           value={displayValue}
           onChange={(event) => onChange(event.target.value)}
@@ -62,16 +65,16 @@ export function HplThicknessField({
         <select
           name={name}
           disabled={disabled}
-          aria-label={label}
+          aria-label={fieldLabel}
           aria-describedby={error ? errorId : undefined}
           value={selectedDiscrete != null ? String(selectedDiscrete) : ''}
           onChange={(event) => onChange(event.target.value)}
           className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
         >
-          <option value="">Выберите толщину</option>
+          <option value="">{t('hpl.selectThickness')}</option>
           {STANDARD_DISCRETE_THICKNESSES_MM.map((thickness) => (
             <option key={thickness} value={thickness}>
-              {thickness} мм
+              {t('common.mm', { value: thickness })}
             </option>
           ))}
         </select>

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileRelatedType, useUploadFile } from '@/hooks/use-upload';
+import { useI18n } from '@/i18n/provider';
 
 interface FileUploadProps {
   relatedType: FileRelatedType;
@@ -18,6 +19,7 @@ export function FileUpload({
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const upload = useUploadFile();
+  const { t } = useI18n();
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -59,7 +61,7 @@ export function FileUpload({
         onClick={() => inputRef.current?.click()}
         disabled={upload.isPending}
       >
-        {upload.isPending ? 'Загрузка…' : 'Прикрепить файл'}
+        {upload.isPending ? t('files.uploading') : t('files.attach')}
       </Button>
       {fileName ? (
         <span className="max-w-48 truncate text-sm text-slate-600">

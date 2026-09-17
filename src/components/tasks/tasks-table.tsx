@@ -6,35 +6,18 @@ import {
   Task,
   TaskComputedStatus,
   TaskPriority,
-  TaskType,
 } from '../../hooks/use-tasks';
 import { getRelatedEntityHref } from '../../lib/entity-routes';
 import { formatDateTime } from '../../lib/format';
-import {
-  enumLabel,
-  relatedTypeLabels,
-  taskComputedStatusLabels,
-  taskPriorityLabels,
-} from '../../lib/labels';
+import { enumLabel } from '../../lib/labels';
+import { useI18n } from '@/i18n/provider';
+import { localizeSystemText } from '@/i18n/system-labels';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 import { CompleteTaskModal } from './complete-task-modal';
 import { RescheduleTaskModal } from './reschedule-task-modal';
 
 type TasksTableProps = {
   tasks: Task[];
-};
-
-const taskTypeLabels: Record<TaskType, string> = {
-  FIRST_CONTACT: 'Первый контакт',
-  CALL: 'Звонок',
-  MESSAGE: 'Сообщение',
-  EMAIL: 'Email',
-  MEETING: 'Встреча',
-  SAMPLE_SEND: 'Образцы',
-  CALCULATION: 'Расчет',
-  OFFER: 'КП',
-  PAYMENT_CHECK: 'Оплата',
-  SHIPMENT_CHECK: 'Отгрузка',
-  OTHER: 'Другое',
 };
 
 const priorityClassNames: Record<TaskPriority, string> = {
@@ -54,6 +37,13 @@ const computedStatusClassNames: Record<TaskComputedStatus, string> = {
 };
 
 export function TasksTable({ tasks }: TasksTableProps) {
+  const { t } = useI18n();
+  const {
+    taskTypeLabels,
+    taskComputedStatusLabels,
+    taskPriorityLabels,
+    relatedTypeLabels,
+  } = useLabelMaps();
   const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
   const [taskToReschedule, setTaskToReschedule] = useState<Task | null>(null);
   const sortedTasks = useMemo(
@@ -65,6 +55,20 @@ export function TasksTable({ tasks }: TasksTableProps) {
     [tasks],
   );
 
+  const relatedLabel = (task: Task): string => {
+    if (task.relatedType === 'LeadRecovery') {
+      return task.relatedEntity?.title
+        ? t('tasks.leadWithTitle', { title: task.relatedEntity.title })
+        : t('tasks.openLead');
+    }
+    if (task.relatedType === 'DealRecovery') {
+      return task.relatedEntity?.title
+        ? t('tasks.dealWithTitle', { title: task.relatedEntity.title })
+        : t('tasks.openDeal');
+    }
+    return task.relatedEntity?.title ?? task.relatedId;
+  };
+
   return (
     <>
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
@@ -72,22 +76,22 @@ export function TasksTable({ tasks }: TasksTableProps) {
           <thead className="bg-slate-50">
             <tr>
               <th className="w-56 px-3 py-2 text-left font-semibold text-slate-700">
-                Срок
+                {t('tasks.due')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Задача / Тип
+                {t('tasks.taskAndType')}
               </th>
               <th className="w-64 px-3 py-2 text-left font-semibold text-slate-700">
-                Связанный объект
+                {t('tasks.relatedObject')}
               </th>
               <th className="w-28 px-3 py-2 text-left font-semibold text-slate-700">
-                Приоритет
+                {t('tasks.priority')}
               </th>
               <th className="w-24 px-3 py-2 text-left font-semibold text-slate-700">
-                Переносы
+                {t('tasks.reschedules')}
               </th>
               <th className="w-52 px-3 py-2 text-right font-semibold text-slate-700">
-                Действия
+                {t('common.actions')}
               </th>
             </tr>
           </thead>
@@ -105,14 +109,16 @@ export function TasksTable({ tasks }: TasksTableProps) {
                     </span>
                 </td>
                 <td className="px-3 py-3">
-                  <div className="font-medium text-slate-950">{task.title}</div>
+                  <div className="font-medium text-slate-950">
+                    {localizeSystemText(task.title)}
+                  </div>
                   {task.description ? (
                     <div className="mt-1 text-xs text-slate-600">
-                      {task.description}
+                      {localizeSystemText(task.description)}
                     </div>
                   ) : null}
                   <div className="mt-1 inline-flex rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">
-                    {taskTypeLabels[task.type]}
+                    {enumLabel(taskTypeLabels, task.type)}
                   </div>
                 </td>
                 <td className="px-3 py-3">
@@ -124,11 +130,11 @@ export function TasksTable({ tasks }: TasksTableProps) {
                       href={getRelatedHref(task.relatedType, task.relatedId)}
                       className="text-sm text-blue-700 hover:underline"
                     >
-                      {getRelatedLabel(task)}
+                      {relatedLabel(task)}
                     </Link>
                   ) : (
                     <div className="text-sm text-slate-700">
-                      {getRelatedLabel(task)}
+                      {relatedLabel(task)}
                     </div>
                   )}
                 </td>
@@ -143,7 +149,9 @@ export function TasksTable({ tasks }: TasksTableProps) {
                       type="button"
                       className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
                     >
-                      {task.rescheduleCount} история
+                      {t('tasks.rescheduleHistory', {
+                        count: task.rescheduleCount,
+                      })}
                     </button>
                   ) : (
                     <span className="text-slate-500">0</span>
@@ -156,14 +164,14 @@ export function TasksTable({ tasks }: TasksTableProps) {
                       onClick={() => setTaskToComplete(task)}
                       className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      Завершить
+                      {t('tasks.complete')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setTaskToReschedule(task)}
                       className="rounded bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white"
                     >
-                      Перенести
+                      {t('tasks.reschedule')}
                     </button>
                   </div>
                 </td>
@@ -185,20 +193,6 @@ export function TasksTable({ tasks }: TasksTableProps) {
       />
     </>
   );
-}
-
-function getRelatedLabel(task: Task): string {
-  if (task.relatedType === 'LeadRecovery') {
-    return task.relatedEntity?.title
-      ? `Лид · ${task.relatedEntity.title}`
-      : 'Открыть лид';
-  }
-  if (task.relatedType === 'DealRecovery') {
-    return task.relatedEntity?.title
-      ? `Сделка · ${task.relatedEntity.title}`
-      : 'Открыть сделку';
-  }
-  return task.relatedEntity?.title ?? task.relatedId;
 }
 
 function getRelatedHref(relatedType: string, relatedId: string): string {

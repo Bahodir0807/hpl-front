@@ -108,9 +108,9 @@ describe('InstallationJobsPage', () => {
     search = new URLSearchParams();
     useAuthMock.mockReturnValue({
       user: {
-        id: 'installer-1',
-        roles: ['INSTALLER'],
-        permissions: ['deals:read', 'installation:confirm_work', 'installation:assess'],
+        id: 'head-1',
+        roles: ['HEAD'],
+        permissions: ['installation:assess'],
       },
       logout: vi.fn(),
     });

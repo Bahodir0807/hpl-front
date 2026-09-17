@@ -18,11 +18,11 @@ import {
 import { formatDate, formatNumber } from "../../lib/format";
 import { formatMoney, MoneyCurrency } from "../../lib/currency";
 import {
-  deliveryStatusLabels,
   enumLabel,
-  orderStatusLabels,
-  paymentRecordStatusLabels,
 } from "../../lib/labels";
+import { useI18n } from "@/i18n/provider";
+import type { Messages } from "@/i18n/types";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 type OrderDetailsModalProps = {
   orderId: string | null;
@@ -31,14 +31,16 @@ type OrderDetailsModalProps = {
 
 type TabId = "payments" | "deliveries";
 
-const paymentSchema = z.object({
-  amount: z.coerce.number().positive("Сумма должна быть больше 0"),
-  currency: z.enum(["USD", "UZS"]),
-  comment: z.string().trim().optional(),
-});
+function createPaymentSchema(messages: Messages) {
+  return z.object({
+    amount: z.coerce.number().positive(messages.validation.amountPositive),
+    currency: z.enum(["USD", "UZS"]),
+    comment: z.string().trim().optional(),
+  });
+}
 
-type PaymentFormInput = z.input<typeof paymentSchema>;
-type PaymentFormValues = z.infer<typeof paymentSchema>;
+type PaymentFormInput = z.input<ReturnType<typeof createPaymentSchema>>;
+type PaymentFormValues = z.infer<ReturnType<typeof createPaymentSchema>>;
 
 function isOrderLocked(status: OrderStatus): boolean {
   return status === "SHIPPED" || status === "CANCELLED";
@@ -64,6 +66,8 @@ function PaymentRow({
   pendingStatus?: "CONFIRMED" | "REJECTED";
   onConfirm: (paymentId: string, status: "CONFIRMED" | "REJECTED") => void;
 }) {
+  const { t } = useI18n();
+  const { paymentRecordStatusLabels } = useLabelMaps();
   const isConfirmingThis =
     isPending && pendingStatus === "CONFIRMED";
   const isRejectingThis = isPending && pendingStatus === "REJECTED";
@@ -79,7 +83,7 @@ function PaymentRow({
       <td className="px-3 py-2 text-slate-700">
         {enumLabel(paymentRecordStatusLabels, payment.status)}
       </td>
-      <td className="px-3 py-2 text-slate-700">{payment.comment ?? "-"}</td>
+      <td className="px-3 py-2 text-slate-700">{payment.comment ?? t("common.dash")}</td>
       <td className="px-3 py-2 text-right">
         {canConfirm && payment.status === "PENDING" ? (
           <div className="flex justify-end gap-2">
@@ -92,7 +96,7 @@ function PaymentRow({
               {isConfirmingThis ? (
                 <span className="h-3 w-3 animate-spin rounded-full border border-emerald-300 border-t-emerald-700" />
               ) : null}
-              Подтвердить
+              {t("common.confirm")}
             </button>
             <button
               type="button"
@@ -103,7 +107,7 @@ function PaymentRow({
               {isRejectingThis ? (
                 <span className="h-3 w-3 animate-spin rounded-full border border-red-300 border-t-red-700" />
               ) : null}
-              Отклонить
+              {t("quotes.reject")}
             </button>
           </div>
         ) : null}
@@ -116,6 +120,8 @@ export function OrderDetailsModal({
   orderId,
   onClose,
 }: OrderDetailsModalProps) {
+  const { t, messages } = useI18n();
+  const { orderStatusLabels, deliveryStatusLabels } = useLabelMaps();
   const orderQuery = useOrder(orderId);
   const addPayment = useAddPayment();
   const confirmPayment = useConfirmPayment();
@@ -128,6 +134,10 @@ export function OrderDetailsModal({
   const [deliveryQuantities, setDeliveryQuantities] = useState<
     Record<string, string>
   >({});
+  const paymentSchema = useMemo(
+    () => createPaymentSchema(messages),
+    [messages],
+  );
   const {
     register,
     handleSubmit,
@@ -210,11 +220,11 @@ export function OrderDetailsModal({
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-semibold text-slate-950">
-                Заказ {order?.orderNumber ?? ""}
+                {t("orders.orderLabel", { number: order?.orderNumber ?? "" })}
               </h2>
               <div className="mt-1 text-sm text-slate-600">
-                {order?.deal?.client?.name ?? order?.dealId ?? "-"} ·{" "}
-                {order ? enumLabel(orderStatusLabels, order.status) : "—"}
+                {order?.deal?.client?.name ?? order?.dealId ?? t("common.dash")} ·{" "}
+                {order ? enumLabel(orderStatusLabels, order.status) : t("common.dash")}
               </div>
             </div>
             <button
@@ -222,30 +232,34 @@ export function OrderDetailsModal({
               onClick={onClose}
               className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700"
             >
-              Закрыть
+              {t("common.close")}
             </button>
           </div>
 
           {order ? (
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
               <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                Итого: {formatMoney(order.totalAmount)}
+                {t("orders.totalLabel", { amount: formatMoney(order.totalAmount) })}
               </span>
               <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                Оплачено: {formatMoney(order.paidAmount)}
+                {t("orders.paidLabel", { amount: formatMoney(order.paidAmount) })}
               </span>
               <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                Осталось: {formatMoney(order.remainingAmount)}
+                {t("orders.remainingLabel", {
+                  amount: formatMoney(order.remainingAmount),
+                })}
               </span>
               <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                Поставлено: {formatNumber(deliveredTotal(order))}
+                {t("orders.deliveredLabel", {
+                  qty: formatNumber(deliveredTotal(order)),
+                })}
               </span>
             </div>
           ) : null}
 
           {isLocked ? (
             <div className="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Заказ заблокирован для изменений текущим статусом
+              {t("orders.locked")}
             </div>
           ) : null}
         </div>
@@ -261,7 +275,7 @@ export function OrderDetailsModal({
                   : "border-transparent text-slate-600"
               }`}
             >
-              Оплаты
+              {t("orders.payments")}
             </button>
             {canCreateDelivery ? (
               <button
@@ -273,7 +287,7 @@ export function OrderDetailsModal({
                     : "border-transparent text-slate-600"
                 }`}
               >
-                Отгрузки
+                {t("orders.shipments")}
               </button>
             ) : null}
           </div>
@@ -281,7 +295,7 @@ export function OrderDetailsModal({
 
         <div className="overflow-y-auto p-5">
           {orderQuery.isLoading ? (
-            <div className="text-sm text-slate-600">Загрузка заказа...</div>
+            <div className="text-sm text-slate-600">{t("orders.detailsLoading")}</div>
           ) : null}
 
           {order ? (
@@ -296,7 +310,7 @@ export function OrderDetailsModal({
                       className="rounded border border-slate-200 bg-slate-50 p-3"
                     >
                       <div className="mb-2 text-sm font-semibold text-slate-950">
-                        Зарегистрировать платеж
+                        {t("orders.registerPayment")}
                       </div>
                       <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(220px,1fr)_1fr_auto]">
                         <div>
@@ -320,7 +334,7 @@ export function OrderDetailsModal({
                                     }
                                     onValueChange={amountField.onChange}
                                     onCurrencyChange={currencyField.onChange}
-                                    placeholder="Сумма платежа"
+                                    placeholder={t("orders.paymentAmount")}
                                     inputClassName="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                                     selectClassName="rounded border border-slate-300 bg-white px-2 py-2 text-sm"
                                   />
@@ -337,7 +351,7 @@ export function OrderDetailsModal({
                         <div>
                           <input
                             {...register("comment")}
-                            placeholder="Комментарий"
+                            placeholder={t("common.comment")}
                             className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                           />
                         </div>
@@ -346,7 +360,7 @@ export function OrderDetailsModal({
                           disabled={addPayment.isPending || isSubmitting}
                           className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
                         >
-                          Добавить
+                          {t("common.add")}
                         </button>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -357,12 +371,12 @@ export function OrderDetailsModal({
                         />
                         {paymentFileId ? (
                           <span className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-                            Файл прикреплён к платежу
+                            {t("orders.fileAttachedToPayment")}
                             <button
                               type="button"
                               onClick={() => setPaymentFileId(null)}
                               className="ml-1 text-emerald-800 hover:text-emerald-950"
-                              title="Открепить файл"
+                              title={t("common.detachFile")}
                             >
                               ×
                             </button>
@@ -377,19 +391,19 @@ export function OrderDetailsModal({
                       <thead className="bg-slate-50">
                         <tr>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Дата
+                            {t("common.date")}
                           </th>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Сумма
+                            {t("common.amount")}
                           </th>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Статус
+                            {t("common.status")}
                           </th>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Комментарий
+                            {t("common.comment")}
                           </th>
                           <th className="px-3 py-2 text-right font-semibold text-slate-700">
-                            Действия
+                            {t("common.actions")}
                           </th>
                         </tr>
                       </thead>
@@ -426,7 +440,7 @@ export function OrderDetailsModal({
                 <div className="space-y-4">
                   <div className="rounded border border-slate-200 bg-slate-50 p-3">
                     <div className="mb-2 text-sm font-semibold text-slate-950">
-                      Создать отгрузку
+                      {t("orders.createShipment")}
                     </div>
                     <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                       <input
@@ -440,7 +454,7 @@ export function OrderDetailsModal({
                       <input
                         value={recipient}
                         onChange={(event) => setRecipient(event.target.value)}
-                        placeholder="Получатель"
+                        placeholder={t("orders.recipient")}
                         className="rounded border border-slate-300 px-3 py-2 text-sm"
                       />
                       <input
@@ -448,7 +462,7 @@ export function OrderDetailsModal({
                         onChange={(event) =>
                           setTrackingNumber(event.target.value)
                         }
-                        placeholder="Накладная / трек"
+                        placeholder={t("orders.waybill")}
                         className="rounded border border-slate-300 px-3 py-2 text-sm"
                       />
                     </div>
@@ -456,8 +470,10 @@ export function OrderDetailsModal({
                       {remainingByItem.map((item) => (
                         <label key={item.id} className="block">
                           <span className="mb-1 block text-xs font-medium text-slate-700">
-                            {item.label} · осталось{" "}
-                            {formatNumber(item.remaining)}
+                            {t("orders.remainingItem", {
+                              label: item.label,
+                              qty: formatNumber(item.remaining),
+                            })}
                           </span>
                           <input
                             type="number"
@@ -482,7 +498,7 @@ export function OrderDetailsModal({
                         disabled={createDelivery.isPending}
                         className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
                       >
-                        Создать отгрузку
+                        {t("orders.createShipment")}
                       </button>
                     </div>
                   </div>
@@ -498,8 +514,8 @@ export function OrderDetailsModal({
                           {enumLabel(deliveryStatusLabels, delivery.status)}
                         </div>
                         <div className="mt-1 text-xs text-slate-600">
-                          {delivery.recipient ?? "-"} ·{" "}
-                          {delivery.trackingNumber ?? "-"}
+                          {delivery.recipient ?? t("common.dash")} ·{" "}
+                          {delivery.trackingNumber ?? t("common.dash")}
                         </div>
                       </div>
                     ))}

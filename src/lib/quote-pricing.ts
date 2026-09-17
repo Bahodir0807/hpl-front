@@ -1,21 +1,23 @@
 import type { CommercialCurrencyCode, Quote, QuoteItem } from '@/types/hpl';
 import type { MoneyCurrency } from '@/lib/currency';
+import { ru } from '@/i18n/ru';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
 
 export const COMMERCIAL_CURRENCY_CODES: CommercialCurrencyCode[] = [
   'USD',
   'UZS',
 ];
 
-export const REFERENCE_PRICE_LABEL = 'Закупочная цена, CNY/м²';
-export const APPROVED_PRICE_LABEL = 'Расчётная цена, USD/м²';
-export const PRICE_NOT_APPROVED_LABEL = 'Не утверждено';
-export const PRICE_APPROVED_LABEL = 'Утверждено';
-export const FINALIZE_QUOTE_LABEL = 'Сформировать КП';
-export const APPROVE_PRICES_LABEL = 'Подтвердить рассчитанные цены';
-export const CALCULATE_PRICES_LABEL = 'Рассчитать';
-export const QUOTE_FINALIZED_LABEL = 'КП финализировано';
-export const MIXED_CURRENCY_TOTAL_HINT =
-  'В КП разные валюты — общий итог не складывается';
+export const REFERENCE_PRICE_LABEL = ru.quotes.referencePrice;
+export const APPROVED_PRICE_LABEL = ru.quotes.approvedPrice;
+export const PRICE_NOT_APPROVED_LABEL = ru.quotes.priceNotApproved;
+export const PRICE_APPROVED_LABEL = ru.quotes.priceApproved;
+export const FINALIZE_QUOTE_LABEL = ru.quotes.finalize;
+export const APPROVE_PRICES_LABEL = ru.quotes.approvePrices;
+export const CALCULATE_PRICES_LABEL = ru.quotes.calculatePrices;
+export const QUOTE_FINALIZED_LABEL = ru.quotes.finalized;
+export const MIXED_CURRENCY_TOTAL_HINT = ru.quotes.mixedCurrencyHint;
 
 export type ApprovedPricingItemPayload = {
   id: string;
@@ -95,12 +97,15 @@ export function canFinalizeQuoteItems(quote: Pick<Quote, 'items'>): boolean {
   );
 }
 
-export function validateApprovedPricingItem(item: {
-  purchasePricePerM2Cny: string;
-}): string | null {
+export function validateApprovedPricingItem(
+  item: {
+    purchasePricePerM2Cny: string;
+  },
+  messages: Messages = getActiveMessages(),
+): string | null {
   const amount = item.purchasePricePerM2Cny.trim().replace(',', '.');
   if (!/^(?:\d+)(?:\.\d{1,4})?$/.test(amount) || Number(amount) <= 0) {
-    return 'Укажите закупочную цену CNY/м² больше 0';
+    return messages.validation.purchasePricePositive;
   }
 
   return null;

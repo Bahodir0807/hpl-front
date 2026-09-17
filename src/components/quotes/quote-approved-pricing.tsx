@@ -6,14 +6,6 @@ import { formatMoney } from '@/lib/currency';
 import { formatDateTime } from '@/lib/format';
 import { quoteItemGroupTitle, quoteItemTitle } from '@/lib/quote-presentation';
 import {
-  APPROVE_PRICES_LABEL,
-  CALCULATE_PRICES_LABEL,
-  FINALIZE_QUOTE_LABEL,
-  PRICE_APPROVED_LABEL,
-  PRICE_NOT_APPROVED_LABEL,
-  QUOTE_FINALIZED_LABEL,
-  REFERENCE_PRICE_LABEL,
-  APPROVED_PRICE_LABEL,
   buildApprovedPricingPayload,
   canFinalizeQuoteItems,
   isQuoteFinalized,
@@ -23,6 +15,7 @@ import {
 } from '@/lib/quote-pricing';
 import type { Quote, QuotePricingPreview } from '@/types/hpl';
 import type { ApprovedPricingItemPayload } from '@/lib/quote-pricing';
+import { useI18n } from '@/i18n/provider';
 
 type QuoteApprovedPricingProps = {
   quote: Quote;
@@ -63,6 +56,7 @@ export function QuoteApprovedPricing({
   onApprove,
   onFinalize,
 }: QuoteApprovedPricingProps) {
+  const { t, messages } = useI18n();
   const locked = isQuoteFinalized(quote);
   const quoteKey = `${quote.id}:${quote.updatedAt}:${quote.items
     .map((item) => `${item.id}:${item.supplierPricePerM2 ?? ''}:${item.priceApprovedAt ?? ''}`)
@@ -82,7 +76,7 @@ export function QuoteApprovedPricing({
   const validateAndBuild = (): ApprovedPricingItemPayload[] | null => {
     const nextErrors: Record<string, string> = {};
     for (const draft of drafts) {
-      const error = validateApprovedPricingItem(draft);
+      const error = validateApprovedPricingItem(draft, messages);
       if (error) nextErrors[draft.id] = error;
     }
     setRowErrors(nextErrors);
@@ -106,21 +100,22 @@ export function QuoteApprovedPricing({
   return (
     <section className="space-y-3 border-b border-slate-200 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold text-slate-900">Расчёт коммерческих цен</h4>
+        <h4 className="text-sm font-semibold text-slate-900">{t('quotes.commercialPricing')}</h4>
         {locked ? (
           <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-            {QUOTE_FINALIZED_LABEL}
+            {t('quotes.finalized')}
           </span>
         ) : null}
       </div>
       <p className="text-xs text-slate-500">
-        HEAD указывает закупочную цену в CNY/м². Backend рассчитывает цену в USD
-        по активному курсу CNY→USD и коэффициенту 2.0. Расчёт нужно подтвердить отдельно.
+        {t('quotes.commercialPricingHelp')}
       </p>
       {preview ? (
         <p className="text-xs text-slate-600">
-          Курс CNY→USD: {String(preview.cnyUsdRate)} · коэффициент:{' '}
-          {String(preview.sellingCoefficient)}
+          {t('quotes.rateAndCoefficient', {
+            rate: String(preview.cnyUsdRate),
+            coefficient: String(preview.sellingCoefficient),
+          })}
         </p>
       ) : null}
 
@@ -128,11 +123,11 @@ export function QuoteApprovedPricing({
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-600">
-              <th className="px-2 py-2">Позиция</th>
-              <th className="px-2 py-2">Поставщик</th>
-              <th className="px-2 py-2">{REFERENCE_PRICE_LABEL}</th>
-              <th className="px-2 py-2">{APPROVED_PRICE_LABEL}</th>
-              <th className="px-2 py-2">Статус</th>
+              <th className="px-2 py-2">{t('quotes.item')}</th>
+              <th className="px-2 py-2">{t('quotes.supplier')}</th>
+              <th className="px-2 py-2">{t('quotes.referencePrice')}</th>
+              <th className="px-2 py-2">{t('quotes.approvedPrice')}</th>
+              <th className="px-2 py-2">{t('common.status')}</th>
             </tr>
           </thead>
           <tbody>
@@ -166,12 +161,12 @@ export function QuoteApprovedPricing({
                     ) : null}
                   </td>
                   <td className="px-2 py-2 text-slate-700">
-                    {item.supplierName ?? item.supplierCode ?? '—'}
+                    {item.supplierName ?? item.supplierCode ?? t('common.dash')}
                   </td>
                   <td className="px-2 py-2">
                     {canApprove && !locked ? (
                       <input
-                        aria-label={`${REFERENCE_PRICE_LABEL} ${quoteItemTitle(item)}`}
+                        aria-label={`${t('quotes.referencePrice')} ${quoteItemTitle(item)}`}
                         className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
                         inputMode="decimal"
                         value={draft?.purchasePricePerM2Cny ?? ''}
@@ -187,9 +182,11 @@ export function QuoteApprovedPricing({
                         }}
                       />
                     ) : item.supplierPricePerM2 != null ? (
-                      `${String(item.supplierPricePerM2)} CNY/м²`
+                      t('quotes.supplierPrice', {
+                        price: String(item.supplierPricePerM2),
+                      })
                     ) : (
-                      '—'
+                      t('common.dash')
                     )}
                     {rowErrors[item.id] ? (
                       <p className="mt-1 text-xs text-red-600">{rowErrors[item.id]}</p>
@@ -198,18 +195,18 @@ export function QuoteApprovedPricing({
                   <td className="px-2 py-2 text-slate-700">
                     {calculatedPrice != null && calculatedPrice !== ''
                       ? formatMoney(calculatedPrice, calculatedCurrency)
-                      : 'Недоступна'}
+                      : t('common.unavailable')}
                   </td>
                   <td className="px-2 py-2">
                     {approved ? (
                       <span className="text-emerald-700">
-                        {PRICE_APPROVED_LABEL}
+                        {t('quotes.priceApproved')}
                         {item.priceApprovedAt
                           ? ` · ${formatDateTime(item.priceApprovedAt)}`
                           : ''}
                       </span>
                     ) : (
-                      <span className="text-amber-700">{PRICE_NOT_APPROVED_LABEL}</span>
+                      <span className="text-amber-700">{t('quotes.priceNotApproved')}</span>
                     )}
                   </td>
                 </tr>
@@ -227,7 +224,7 @@ export function QuoteApprovedPricing({
             disabled={previewPending || pricingPending || finalizePending}
             onClick={() => void calculate()}
           >
-            {previewPending ? 'Расчёт...' : CALCULATE_PRICES_LABEL}
+            {previewPending ? t('quotes.calculating') : t('quotes.calculatePrices')}
           </Button>
           <Button
             type="button"
@@ -235,7 +232,7 @@ export function QuoteApprovedPricing({
             disabled={!preview || previewPending || pricingPending || finalizePending}
             onClick={() => void approve()}
           >
-            {pricingPending ? 'Подтверждение...' : APPROVE_PRICES_LABEL}
+            {pricingPending ? t('quotes.confirming') : t('quotes.approvePrices')}
           </Button>
           {canFinalize ? (
             <Button
@@ -244,11 +241,11 @@ export function QuoteApprovedPricing({
               title={
                 finalizeGuarded
                   ? undefined
-                  : 'Сначала явно подтвердите рассчитанную цену по каждой позиции'
+                  : t('quotes.confirmCalculatedFirst')
               }
               onClick={() => void onFinalize()}
             >
-              {finalizePending ? 'Формирование...' : FINALIZE_QUOTE_LABEL}
+              {finalizePending ? t('quotes.forming') : t('quotes.finalize')}
             </Button>
           ) : null}
         </div>

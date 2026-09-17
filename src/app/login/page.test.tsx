@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginPage from './page';
+import { AppThemeProvider } from '@/theme/app-theme-provider';
 
 const replace = vi.fn();
 const push = vi.fn();
@@ -26,6 +27,14 @@ vi.mock('../../context/auth-context', () => ({
   useAuth: () => authState,
 }));
 
+function renderLogin() {
+  return render(
+    <AppThemeProvider>
+      <LoginPage />
+    </AppThemeProvider>,
+  );
+}
+
 describe('LoginPage auth navigation', () => {
   beforeEach(() => {
     replace.mockClear();
@@ -48,7 +57,7 @@ describe('LoginPage auth navigation', () => {
     };
     authState.login = vi.fn().mockResolvedValue(authenticatedUser);
 
-    const { container } = render(<LoginPage />);
+    const { container } = renderLogin();
     const [emailInput] = screen.getAllByRole('textbox');
     const passwordInput = container.querySelector('input[type="password"]');
 
@@ -73,7 +82,7 @@ describe('LoginPage auth navigation', () => {
       permissions: ['auth:me', 'orders:read'],
     };
 
-    render(<LoginPage />);
+    renderLogin();
 
     await waitFor(() => {
       expect(replace).toHaveBeenCalledTimes(1);
@@ -85,7 +94,7 @@ describe('LoginPage auth navigation', () => {
   it('does not redirect while auth initialization is pending', () => {
     authState.isInitialized = false;
 
-    render(<LoginPage />);
+    renderLogin();
 
     expect(replace).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();

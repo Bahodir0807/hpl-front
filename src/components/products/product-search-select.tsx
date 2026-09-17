@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { SearchCombobox } from '@/components/ui/search-combobox';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useProducts } from '@/hooks/use-inventory';
+import { useI18n } from '@/i18n/provider';
 
 type ProductSearchSelectProps = {
   value: string;
@@ -16,6 +17,7 @@ export function ProductSearchSelect({
   onChange,
   disabled = false,
 }: ProductSearchSelectProps) {
+  const { t } = useI18n();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const productsQuery = useProducts({
@@ -41,9 +43,9 @@ export function ProductSearchSelect({
       value={value}
       onChange={onChange}
       options={options}
-      placeholder="Выберите товар"
-      searchPlaceholder="Название, SKU или бренд"
-      emptyLabel="Товары не найдены"
+      placeholder={t('inventory.selectProduct')}
+      searchPlaceholder={t('inventory.searchProduct')}
+      emptyLabel={t('inventory.productsEmpty')}
       disabled={disabled}
       loading={productsQuery.isLoading}
       onSearchChange={setSearch}

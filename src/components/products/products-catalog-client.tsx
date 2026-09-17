@@ -16,6 +16,7 @@ import {
 } from "@/hooks/use-inventory";
 import { formatNumber } from "@/lib/format";
 import { formatMoney, normalizeCurrency } from "@/lib/currency";
+import { useI18n } from "@/i18n/provider";
 
 const PAGE_SIZE = 20;
 
@@ -94,6 +95,7 @@ function FilterChip({
 }
 
 function CatalogSearchField({ search }: { search: string }) {
+  const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [value, setValue] = useState(search);
@@ -116,12 +118,12 @@ function CatalogSearchField({ search }: { search: string }) {
   return (
     <label className="block max-w-md">
       <span className="mb-1 block text-sm font-medium text-slate-700">
-        Поиск
+        {t("inventory.search")}
       </span>
       <input
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        placeholder="Артикул, декор, название"
+        placeholder={t("inventory.searchPlaceholder")}
         className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
       />
     </label>
@@ -129,6 +131,7 @@ function CatalogSearchField({ search }: { search: string }) {
 }
 
 export function ProductsCatalogClient() {
+  const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasPermission } = useAuth();
@@ -196,10 +199,10 @@ export function ProductsCatalogClient() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold text-slate-950">
-            Склад
+            {t("inventory.stockTitle")}
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Остатки и складской каталог. Расчёт панелей — в карточке лида.
+            {t("inventory.stockSubtitle")}
           </p>
         </div>
       </div>
@@ -208,25 +211,25 @@ export function ProductsCatalogClient() {
         <CatalogSearchField key={filters.search} search={filters.search} />
 
         {facetsQuery.isLoading ? (
-          <div className="text-sm text-slate-500">Загрузка фильтров...</div>
+          <div className="text-sm text-slate-500">{t("inventory.loadingFilters")}</div>
         ) : null}
 
         {facets ? (
           <div className="space-y-3">
             <div>
               <div className="mb-2 text-xs font-semibold uppercase text-slate-500">
-                Толщина
+                {t("inventory.thickness")}
               </div>
               <div className="flex flex-wrap gap-2">
                 <FilterChip
-                  label="Все"
+                  label={t("common.all")}
                   active={filters.thickness === undefined}
                   onClick={() => replaceFilters({ thickness: null })}
                 />
                 {facets.thicknesses.map((item) => (
                   <FilterChip
                     key={item.value}
-                    label={`${formatNumber(item.value)} мм (${item.count})`}
+                    label={`${t("common.mm", { value: formatNumber(item.value) })} (${item.count})`}
                     active={filters.thickness === item.value}
                     onClick={() =>
                       replaceFilters({
@@ -241,11 +244,11 @@ export function ProductsCatalogClient() {
 
             <div>
               <div className="mb-2 text-xs font-semibold uppercase text-slate-500">
-                Поверхность
+                {t("inventory.surface")}
               </div>
               <div className="flex flex-wrap gap-2">
                 <FilterChip
-                  label="Все"
+                  label={t("common.all")}
                   active={!filters.surface}
                   onClick={() => replaceFilters({ surface: null })}
                 />
@@ -268,7 +271,7 @@ export function ProductsCatalogClient() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-slate-700">
-                  Коллекция
+                  {t("inventory.collection")}
                 </span>
                 <select
                   value={filters.collectionId ?? ""}
@@ -279,7 +282,7 @@ export function ProductsCatalogClient() {
                   }
                   className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
                 >
-                  <option value="">Все коллекции</option>
+                  <option value="">{t("inventory.allCollections")}</option>
                   {facets.collections.map((collection) => (
                     <option key={collection.id} value={collection.id}>
                       {collection.name} ({collection.count})
@@ -290,7 +293,7 @@ export function ProductsCatalogClient() {
 
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-slate-700">
-                  Бренд
+                  {t("inventory.brand")}
                 </span>
                 <select
                   value={filters.brandId ?? ""}
@@ -301,7 +304,7 @@ export function ProductsCatalogClient() {
                   }
                   className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
                 >
-                  <option value="">Все бренды</option>
+                  <option value="">{t("inventory.allBrands")}</option>
                   {facets.brands.map((brand) => (
                     <option key={brand.id} value={brand.id}>
                       {brand.name} ({brand.count})
@@ -321,20 +324,20 @@ export function ProductsCatalogClient() {
             }}
             className="text-sm font-medium text-slate-600 hover:text-slate-950"
           >
-            Сбросить фильтры
+            {t("inventory.resetFilters")}
           </button>
         ) : null}
       </div>
 
       {productsQuery.isLoading || (canReadInventory && balancesQuery.isLoading) ? (
         <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
-          Загрузка каталога...
+          {t("inventory.loadingCatalog")}
         </div>
       ) : null}
 
       {productsQuery.isError ? (
         <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          Не удалось загрузить каталог.
+          {t("inventory.loadFailed")}
         </div>
       ) : null}
 
@@ -344,37 +347,37 @@ export function ProductsCatalogClient() {
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Артикул / Декор
+                  {t("inventory.skuDecor")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Толщина
+                  {t("inventory.thickness")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Длина
+                  {t("inventory.length")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Ширина
+                  {t("inventory.width")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  м²/лист
+                  {t("inventory.m2PerSheet")}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Базовая цена
+                  {t("inventory.basePrice")}
                 </th>
                 {canSeePurchasePrice ? (
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                    Закупочная цена
+                    {t("inventory.purchasePrice")}
                   </th>
                 ) : null}
                 {canReadInventory ? (
                   <>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Факт</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Резерв</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Доступно</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t("inventory.onHand")}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t("inventory.reserved")}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t("inventory.available")}</th>
                   </>
                 ) : null}
                 <th className="px-3 py-2 text-right font-semibold text-slate-700">
-                  Расчёт
+                  {t("inventory.calculation")}
                 </th>
               </tr>
             </thead>
@@ -425,7 +428,7 @@ export function ProductsCatalogClient() {
                         onClick={() => setCalculatorProduct(product)}
                         className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                       >
-                        м² → листы
+                        {t("inventory.m2ToSheets")}
                       </button>
                     </td>
                   </tr>
@@ -436,7 +439,7 @@ export function ProductsCatalogClient() {
 
           {products.length === 0 ? (
             <div className="p-8 text-center text-sm text-slate-600">
-              Товары не найдены.
+              {t("inventory.empty")}
             </div>
           ) : null}
         </div>

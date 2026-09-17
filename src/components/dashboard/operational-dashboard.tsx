@@ -33,23 +33,21 @@ import {
 } from '@/lib/dashboard';
 import { formatPersonName, resolveEntityName } from '@/lib/display-names';
 import { formatDateTime } from '@/lib/format';
-import {
-  dealStageLabels,
-  enumLabel,
-  taskComputedStatusLabels,
-  taskTypeLabels,
-} from '@/lib/labels';
+import { enumLabel } from '@/lib/labels';
+import { localizeSystemText } from '@/i18n/system-labels';
 import {
   compactQuoteId,
   quoteStatusClassNames,
-  quoteStatusLabels,
 } from '@/lib/quote-presentation';
-import { MIXED_CURRENCY_TOTAL_HINT, quoteUsesMixedCurrencies } from '@/lib/quote-pricing';
+import { quoteUsesMixedCurrencies } from '@/lib/quote-pricing';
 import type { Quote } from '@/types/hpl';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 
 const KPI_ICON_CLASS = 'h-4 w-4';
 
 export function OperationalDashboard() {
+  const { t } = useI18n();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [loadedAt] = useState(() => new Date());
@@ -155,9 +153,9 @@ export function OperationalDashboard() {
     <div className="mx-auto max-w-[1500px] space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-950">Рабочий обзор</h2>
+          <h2 className="text-xl font-semibold text-slate-950">{t('dashboard.title')}</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Приоритеты и текущая коммерческая работа в доступной вам области.
+            {t('dashboard.subtitle')}
           </p>
         </div>
         <Button
@@ -168,22 +166,22 @@ export function OperationalDashboard() {
           onClick={refresh}
         >
           <RefreshCw className={isRefreshing ? 'animate-spin' : ''} aria-hidden="true" />
-          Обновить
+          {t('common.refresh')}
         </Button>
       </div>
 
       {!hasOperationalAccess ? (
         <div className="border border-slate-200 bg-white p-6 text-sm text-slate-600">
-          Для вашей учётной записи нет доступных операционных разделов dashboard.
+          {t('dashboard.noSections')}
         </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {visibility.leads ? (
           <KpiCard
-            label="Новые лиды"
+            label={t('dashboard.newLeads')}
             value={queryValue(newLeadsQuery.data?.total, newLeadsQuery.isError)}
-            scope={visibility.broadLeads ? 'Доступны по всей команде' : 'Только ваши лиды'}
+            scope={visibility.broadLeads ? t('dashboard.teamWide') : t('dashboard.onlyYourLeads')}
             href="/leads"
             icon={<UsersRound className={KPI_ICON_CLASS} />}
             tone="blue"
@@ -191,9 +189,9 @@ export function OperationalDashboard() {
         ) : null}
         {visibility.commercialAttention && commercialAttentionCount !== null ? (
           <KpiCard
-            label="Ждут коммерческого решения"
+            label={t('dashboard.waitingCommercial')}
             value={String(commercialAttentionCount)}
-            scope="Точный счётчик полного списка"
+            scope={t('dashboard.exactFullList')}
             href="/leads"
             icon={<AlertTriangle className={KPI_ICON_CLASS} />}
             tone="amber"
@@ -201,12 +199,12 @@ export function OperationalDashboard() {
         ) : null}
         {visibility.tasks ? (
           <KpiCard
-            label="Просроченные задачи"
+            label={t('dashboard.overdueTasks')}
             value={queryValue(
               overdueTotal,
               criticalTasksQuery.isError || overdueTasksQuery.isError,
             )}
-            scope={visibility.broadTasks ? 'В доступной команде' : 'Только ваши задачи'}
+            scope={visibility.broadTasks ? t('dashboard.teamScope') : t('dashboard.onlyYourTasks')}
             href="/tasks"
             icon={<Clock3 className={KPI_ICON_CLASS} />}
             tone="red"
@@ -214,9 +212,9 @@ export function OperationalDashboard() {
         ) : null}
         {visibility.tasks ? (
           <KpiCard
-            label="Предстоящие задачи"
+            label={t('dashboard.upcomingTasks')}
             value={queryValue(upcomingTasksQuery.data?.total, upcomingTasksQuery.isError)}
-            scope="Ожидающие со сроком впереди"
+            scope={t('dashboard.pendingUpcoming')}
             href="/tasks"
             icon={<CheckCircle2 className={KPI_ICON_CLASS} />}
             tone="green"
@@ -224,17 +222,21 @@ export function OperationalDashboard() {
         ) : null}
         {visibility.deals ? (
           <KpiCard
-            label={dealPipeline.activeTotal === null ? 'Сделки в доступе' : 'Активные сделки'}
+            label={
+              dealPipeline.activeTotal === null
+                ? t('dashboard.dealsInAccess')
+                : t('dashboard.activeDeals')
+            }
             value={queryValue(
               dealPipeline.activeTotal ?? dealsQuery.data?.total,
               dealsQuery.isError,
             )}
             scope={
               dealPipeline.activeTotal === null
-                ? 'Backend total без неполной разбивки'
+                ? t('dashboard.dealsTotalUnscoped')
                 : visibility.broadDeals
-                  ? 'По доступной команде'
-                  : 'Только ваши сделки'
+                  ? t('dashboard.byAccessibleTeam')
+                  : t('dashboard.onlyYourDeals')
             }
             href="/deals"
             icon={<BriefcaseBusiness className={KPI_ICON_CLASS} />}
@@ -352,15 +354,16 @@ function LeadAttentionSection({
   commercialListComplete: boolean;
   commercialEnabled: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <section className="border-t border-slate-300 pt-4">
-      <SectionHeader title="Требуют внимания" href="/leads" linkLabel="Все лиды" />
+      <SectionHeader title={t('dashboard.needsAttention')} href="/leads" linkLabel={t('dashboard.allLeads')} />
       {commercialEnabled && !commercialListComplete ? (
         <p className="mt-2 text-xs text-amber-700">
-          Коммерческий список превышает 100 записей: показаны только последние без общего счётчика.
+          {t('dashboard.commercialTruncated')}
         </p>
       ) : null}
-      {isError ? <SectionError text="Часть данных по лидам недоступна." /> : null}
+      {isError ? <SectionError text={t('dashboard.leadsPartialError')} /> : null}
       <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
         {items.map(({ lead, reason }) => (
           <Link
@@ -381,24 +384,26 @@ function LeadAttentionSection({
                   : 'border-blue-200 bg-blue-50 text-blue-700'
               }`}
             >
-              {reason === 'commercial' ? 'Коммерческое решение' : 'Новый лид'}
+              {reason === 'commercial' ? t('dashboard.commercialDecision') : t('dashboard.newLead')}
             </span>
           </Link>
         ))}
-        {!isError && items.length === 0 ? <SectionEmpty text="Нет лидов, требующих внимания." /> : null}
+        {!isError && items.length === 0 ? <SectionEmpty text={t('dashboard.noAttentionLeads')} /> : null}
       </div>
     </section>
   );
 }
 
 function TaskSection({ tasks, broadScope, isError }: { tasks: Task[]; broadScope: boolean; isError: boolean }) {
+  const { t } = useI18n();
+  const { taskTypeLabels, relatedTypeLabels } = useLabelMaps();
   return (
     <section className="border-t border-slate-300 pt-4">
-      <SectionHeader title="Задачи в фокусе" href="/tasks" linkLabel="Все задачи" />
+      <SectionHeader title={t('dashboard.tasksFocus')} href="/tasks" linkLabel={t('dashboard.allTasks')} />
       <p className="mt-1 text-xs text-slate-500">
-        {broadScope ? 'Доступные командные задачи' : 'Ваши задачи'}: просроченные выше предстоящих.
+        {broadScope ? t('dashboard.teamTasks') : t('dashboard.yourTasks')}: {t('dashboard.tasksOrderHint')}
       </p>
-      {isError ? <SectionError text="Часть данных по задачам недоступна." /> : null}
+      {isError ? <SectionError text={t('dashboard.tasksPartialError')} /> : null}
       <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
         {tasks.map((task) => (
           <Link
@@ -408,9 +413,13 @@ function TaskSection({ tasks, broadScope, isError }: { tasks: Task[]; broadScope
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-slate-950">{task.title}</div>
+                <div className="truncate text-sm font-medium text-slate-950">
+                  {localizeSystemText(task.title)}
+                </div>
                 <div className="mt-0.5 truncate text-xs text-slate-500">
-                  {enumLabel(taskTypeLabels, task.type)} · {task.relatedEntity?.title ?? task.relatedType}
+                  {enumLabel(taskTypeLabels, task.type)} ·{' '}
+                  {task.relatedEntity?.title ??
+                    enumLabel(relatedTypeLabels, task.relatedType)}
                 </div>
               </div>
               <TaskTiming task={task} />
@@ -428,13 +437,14 @@ function TaskSection({ tasks, broadScope, isError }: { tasks: Task[]; broadScope
             </div>
           </Link>
         ))}
-        {!isError && tasks.length === 0 ? <SectionEmpty text="Срочных и ближайших задач нет." /> : null}
+        {!isError && tasks.length === 0 ? <SectionEmpty text={t('dashboard.noUrgentTasks')} /> : null}
       </div>
     </section>
   );
 }
 
 function TaskTiming({ task }: { task: Task }) {
+  const { taskComputedStatusLabels } = useLabelMaps();
   const urgent = task.computedStatus === 'OVERDUE' || task.computedStatus === 'CRITICAL_OVERDUE';
   return (
     <span
@@ -464,17 +474,19 @@ function PipelineSection({
   isComplete: boolean;
   isError: boolean;
 }) {
+  const { t } = useI18n();
+  const { dealStageLabels } = useLabelMaps();
   const maxStage = byStage
     ? Math.max(1, ...activeDealStages.map((stage) => byStage[stage]))
     : 1;
 
   return (
     <section className="border-t border-slate-300 pt-4">
-      <SectionHeader title="Сделки и текущий pipeline" href="/deals" linkLabel="Открыть сделки" />
-      {isError ? <SectionError text="Данные по сделкам недоступны." /> : null}
+      <SectionHeader title={t('dashboard.dealsPipeline')} href="/deals" linkLabel={t('dashboard.openDeals')} />
+      {isError ? <SectionError text={t('dashboard.dealsUnavailable')} /> : null}
       {!isError && !isComplete ? (
         <p className="mt-2 text-xs text-amber-700">
-          В доступе {total} сделок. Точная разбивка по стадиям скрыта, потому что endpoint вернул только первые 100.
+          {t('dashboard.dealsTruncated', { total })}
         </p>
       ) : null}
       {byStage ? (
@@ -508,7 +520,7 @@ function PipelineSection({
             </div>
           </Link>
         ))}
-        {!isError && deals.length === 0 ? <SectionEmpty text="Активных сделок нет." /> : null}
+        {!isError && deals.length === 0 ? <SectionEmpty text={t('dashboard.noActiveDeals')} /> : null}
       </div>
     </section>
   );
@@ -523,13 +535,15 @@ function QuoteActivitySection({
   broadScope: boolean;
   isError: boolean;
 }) {
+  const { t } = useI18n();
+  const { quoteStatusLabels } = useLabelMaps();
   return (
     <section className="border-t border-slate-300 pt-4">
-      <SectionHeader title="Последние коммерческие предложения" href="/leads" linkLabel="Перейти к лидам" />
+      <SectionHeader title={t('dashboard.recentQuotes')} href="/leads" linkLabel={t('dashboard.toLeads')} />
       <p className="mt-1 text-xs text-slate-500">
-        {broadScope ? 'Последние КП в доступной области' : 'Последние созданные вами КП'}.
+        {broadScope ? t('dashboard.recentQuotesScope') : t('dashboard.recentQuotesYours')}.
       </p>
-      {isError ? <SectionError text="Последние КП недоступны." /> : null}
+      {isError ? <SectionError text={t('dashboard.quotesUnavailable')} /> : null}
       <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         {quotes.map((quote) => (
           <Link
@@ -539,11 +553,15 @@ function QuoteActivitySection({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-slate-950">КП · {compactQuoteId(quote.id)}</div>
+                <div className="text-sm font-semibold text-slate-950">
+                  {t('dashboard.quoteLabel', { id: compactQuoteId(quote.id) })}
+                </div>
                 <div className="mt-1 text-xs text-slate-500">
                   {quote.leadId
-                    ? `Лид · ${quote.leadId.slice(0, 8).toUpperCase()}`
-                    : 'КП'}
+                    ? t('dashboard.quoteLead', {
+                        id: quote.leadId.slice(0, 8).toUpperCase(),
+                      })
+                    : t('dashboard.quoteFallback')}
                 </div>
               </div>
               <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${quoteStatusClassNames[quote.status]}`}>
@@ -554,13 +572,13 @@ function QuoteActivitySection({
               <span className="text-xs text-slate-500">{formatDateTime(quote.createdAt)}</span>
               <span className="text-sm font-semibold text-slate-950">
                 {quoteUsesMixedCurrencies(quote)
-                  ? MIXED_CURRENCY_TOTAL_HINT
+                  ? t('quotes.mixedCurrencyHint')
                   : formatMoney(quote.totalAmount, normalizeCurrency(quote.displayCurrency))}
               </span>
             </div>
           </Link>
         ))}
-        {!isError && quotes.length === 0 ? <SectionEmpty text="Коммерческих предложений пока нет." /> : null}
+        {!isError && quotes.length === 0 ? <SectionEmpty text={t('dashboard.noQuotes')} /> : null}
       </div>
     </section>
   );
@@ -575,8 +593,9 @@ function SectionEmpty({ text }: { text: string }) {
 }
 
 function DashboardLoading() {
+  const { t } = useI18n();
   return (
-    <div className="mx-auto max-w-[1500px] space-y-6" aria-label="Загрузка dashboard">
+    <div className="mx-auto max-w-[1500px] space-y-6" aria-label={t('dashboard.loadingAria')}>
       <div className="h-12 w-72 animate-pulse bg-slate-200" />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {Array.from({ length: 5 }, (_, index) => (

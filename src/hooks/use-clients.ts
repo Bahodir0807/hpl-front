@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/errors";
 import { showError, showSuccess } from "../lib/toast";
+import { useI18n } from "@/i18n/provider";
 import { Deal, DealStage } from "./use-deals";
 
 export type ClientType = "COMPANY" | "INDIVIDUAL";
@@ -236,6 +237,7 @@ export function useCheckClientDuplicates(input: {
 
 export function useCreateClient() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreateClientPayload): Promise<Client> => {
@@ -244,7 +246,7 @@ export function useCreateClient() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess("Клиент создан");
+      showSuccess(t("clients.toastCreated"));
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
       void queryClient.invalidateQueries({ queryKey: ["lead-workspace"] });
@@ -258,6 +260,7 @@ export function useCreateClient() {
 
 export function useUpdateClient() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: UpdateClientPayload): Promise<Client> => {
@@ -267,7 +270,7 @@ export function useUpdateClient() {
       return response.data;
     },
     onSuccess: (client) => {
-      showSuccess("Клиент обновлён");
+      showSuccess(t("clients.toastUpdated"));
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
       void queryClient.invalidateQueries({ queryKey: ["clients", client.id] });
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
@@ -282,6 +285,7 @@ export function useUpdateClient() {
 
 export function useAddContact() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: AddContactPayload): Promise<Contact> => {
@@ -294,7 +298,7 @@ export function useAddContact() {
       return response.data;
     },
     onSuccess: (_contact, payload) => {
-      showSuccess("Контакт добавлен");
+      showSuccess(t("clients.toastContactAdded"));
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
       void queryClient.invalidateQueries({
         queryKey: ["clients", payload.clientId],
@@ -310,6 +314,7 @@ export function useAddContact() {
 
 export function useAddProjectObject() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -324,7 +329,7 @@ export function useAddProjectObject() {
       return response.data;
     },
     onSuccess: (_object, payload) => {
-      showSuccess("Объект добавлен");
+      showSuccess(t("clients.toastObjectAdded"));
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
       void queryClient.invalidateQueries({
         queryKey: ["clients", payload.clientId],

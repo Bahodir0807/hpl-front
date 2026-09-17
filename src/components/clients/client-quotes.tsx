@@ -21,16 +21,19 @@ import {
 } from '@/hooks/use-quotes';
 import { getApiErrorCode, QUOTE_PRICE_NOT_APPROVED } from '@/lib/hpl-errors';
 import { formatDateTime } from '@/lib/format';
-import { compactQuoteId, quoteStatusLabels } from '@/lib/quote-presentation';
+import { compactQuoteId } from '@/lib/quote-presentation';
 import { isQuoteFinalized, quoteUsesMixedCurrencies, canDownloadQuoteDocument } from '@/lib/quote-pricing';
 import { formatPersonName } from '@/lib/display-names';
 import type { Quote } from '@/types/hpl';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 
 type ClientQuotesProps = {
   clientId: string;
 };
 
 export function ClientQuotes({ clientId }: ClientQuotesProps) {
+  const { t } = useI18n();
   const { user } = useAuth();
   const quotesQuery = useClientQuotes(clientId);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -80,25 +83,25 @@ export function ClientQuotes({ clientId }: ClientQuotesProps) {
   return (
     <div className="space-y-4">
       {quotesQuery.isLoading ? (
-        <p className="text-sm text-slate-600">Загрузка КП...</p>
+        <p className="text-sm text-slate-600">{t('clients.quotes.loading')}</p>
       ) : null}
       {quotesQuery.isError ? (
         <div className="flex items-center justify-between gap-3 border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          <span>Не удалось загрузить коммерческие предложения.</span>
+          <span>{t('clients.quotes.loadFailed')}</span>
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => void quotesQuery.refetch()}
           >
-            Повторить
+            {t('common.retry')}
           </Button>
         </div>
       ) : null}
 
       {!quotesQuery.isLoading && !quotesQuery.isError && quotes.length === 0 ? (
         <div className="border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-          Коммерческих предложений пока нет.
+          {t('clients.quotes.empty')}
         </div>
       ) : null}
 
@@ -108,19 +111,19 @@ export function ClientQuotes({ clientId }: ClientQuotesProps) {
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  КП
+                  {t('clients.quotes.quote')}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Дата
+                  {t('common.date')}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Статус
+                  {t('common.status')}
                 </th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                  Менеджер
+                  {t('common.manager')}
                 </th>
                 <th className="px-3 py-2 text-right font-semibold text-slate-700">
-                  Действия
+                  {t('common.actions')}
                 </th>
               </tr>
             </thead>
@@ -157,10 +160,10 @@ export function ClientQuotes({ clientId }: ClientQuotesProps) {
       {openId ? (
         <div className="space-y-3">
           {quoteQuery.isLoading ? (
-            <p className="text-sm text-slate-600">Загрузка КП...</p>
+            <p className="text-sm text-slate-600">{t('clients.quotes.loading')}</p>
           ) : null}
           {quoteQuery.isError ? (
-            <p className="text-sm text-red-600">Не удалось открыть КП.</p>
+            <p className="text-sm text-red-600">{t('clients.quotes.openFailed')}</p>
           ) : null}
           {openQuote ? (
             <QuoteCard
@@ -254,6 +257,8 @@ function QuoteHistoryRow({
   pdfPending: boolean;
   docxPending: boolean;
 }) {
+  const { t } = useI18n();
+  const { quoteStatusLabels } = useLabelMaps();
   const mixed = quoteUsesMixedCurrencies(quote);
   return (
     <tr>
@@ -265,10 +270,10 @@ function QuoteHistoryRow({
       </td>
       <td className="px-3 py-2 text-slate-700">
         {quoteStatusLabels[quote.status]}
-        {isQuoteFinalized(quote) ? ' · финализировано' : ''}
+        {isQuoteFinalized(quote) ? t('clients.quotes.finalized') : ''}
         {quote.documentAvailability === 'LEGACY_MISSING' ||
         (quote.status === 'converted' && !quote.pdfFileId)
-          ? ' · Документ отсутствует (legacy)'
+          ? t('clients.quotes.legacyMissing')
           : ''}
       </td>
       <td className="px-3 py-2 text-slate-700">
@@ -280,7 +285,7 @@ function QuoteHistoryRow({
       <td className="px-3 py-2 text-right">
         <div className="flex justify-end gap-2">
           <Button type="button" size="sm" variant="outline" onClick={onOpen}>
-            Открыть
+            {t('common.open')}
           </Button>
           <Button
             type="button"
@@ -289,7 +294,7 @@ function QuoteHistoryRow({
             disabled={!canDownload || pdfPending}
             onClick={onPdf}
           >
-            {pdfPending ? 'Скачивание...' : 'PDF'}
+            {pdfPending ? t('common.downloading') : 'PDF'}
           </Button>
           <Button
             type="button"
@@ -298,7 +303,7 @@ function QuoteHistoryRow({
             disabled={!canDownload || docxPending}
             onClick={onDocx}
           >
-            {docxPending ? 'Скачивание...' : 'DOCX'}
+            {docxPending ? t('common.downloading') : 'DOCX'}
           </Button>
         </div>
       </td>

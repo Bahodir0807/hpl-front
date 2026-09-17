@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/errors";
 import { showError, showSuccess } from "../lib/toast";
+import { useI18n } from "@/i18n/provider";
 
 export type TaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
@@ -114,6 +115,7 @@ export function useTasks(filters: TasksFilter) {
 
 export function useCompleteTask() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CompleteTaskPayload): Promise<Task> => {
@@ -127,7 +129,7 @@ export function useCompleteTask() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess("Задача завершена");
+      showSuccess(t("tasks.toastCompleted"));
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
     onError: (error) => {
@@ -138,6 +140,7 @@ export function useCompleteTask() {
 
 export function useRescheduleTask() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: RescheduleTaskPayload): Promise<Task> => {
@@ -152,7 +155,7 @@ export function useRescheduleTask() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess("Срок задачи перенесён");
+      showSuccess(t("tasks.toastRescheduled"));
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
     onError: (error) => {
@@ -163,6 +166,7 @@ export function useRescheduleTask() {
 
 export function useCreateTask() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreateTaskPayload): Promise<Task> => {
@@ -171,7 +175,7 @@ export function useCreateTask() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess("Задача создана");
+      showSuccess(t("tasks.toastCreated"));
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
     onError: (error) => {

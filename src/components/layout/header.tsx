@@ -3,22 +3,12 @@
 import { Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../../context/auth-context';
-import { enumLabel, roleLabels } from '../../lib/labels';
+import { enumLabel } from '../../lib/labels';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 import { NotificationCenter } from '../notifications/notification-center';
-
-const sectionTitles: Record<string, string> = {
-  '/': 'Обзор',
-  '/tasks': 'Задачи',
-  '/leads': 'Лиды',
-  '/deals': 'Сделки',
-  '/clients': 'Клиенты и Контакты',
-  '/orders': 'Заказы',
-  '/products': 'Склад',
-  '/receipts': 'Ожидаемые приходы',
-  '/references': 'Справочники',
-  '/reports': 'Отчеты и KPI',
-  '/users': 'Команда и Доступы',
-};
+import { LocaleSwitcher } from './locale-switcher';
+import { ThemeToggle } from './theme-toggle';
 
 type HeaderProps = {
   onMenuOpen: () => void;
@@ -27,7 +17,9 @@ type HeaderProps = {
 export function Header({ onMenuOpen }: HeaderProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const title = getSectionTitle(pathname);
+  const { t } = useI18n();
+  const { roleLabels } = useLabelMaps();
+  const title = getSectionTitle(pathname, t);
 
   return (
     <header className="flex h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 lg:px-6">
@@ -36,20 +28,22 @@ export function Header({ onMenuOpen }: HeaderProps) {
           type="button"
           onClick={onMenuOpen}
           className="rounded p-1 text-slate-600 hover:bg-slate-100 lg:hidden"
-          title="Открыть меню"
+          title={t('common.openMenu')}
         >
           <Menu className="h-5 w-5" />
         </button>
         <div className="min-w-0">
-          <div className="text-xs text-slate-500">CRM HPL</div>
+          <div className="text-xs text-slate-500">{t('common.brandShort')}</div>
           <h1 className="truncate text-sm font-semibold text-slate-950">
             {title}
           </h1>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <NotificationCenter />
+        <LocaleSwitcher />
+        <ThemeToggle />
         {user ? (
           <div className="flex items-center gap-2">
             <div className="hidden text-right sm:block">
@@ -75,17 +69,35 @@ export function Header({ onMenuOpen }: HeaderProps) {
           onClick={logout}
           className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
-          Выйти
+          {t('header.logout')}
         </button>
       </div>
     </header>
   );
 }
 
-function getSectionTitle(pathname: string): string {
-  const matchedPath = Object.keys(sectionTitles)
+function getSectionTitle(
+  pathname: string,
+  t: (key: string) => string,
+): string {
+  const sectionKeys: Record<string, string> = {
+    '/': 'navigation.overview',
+    '/tasks': 'navigation.tasks',
+    '/leads': 'navigation.leads',
+    '/deals': 'navigation.deals',
+    '/installations': 'navigation.installation',
+    '/clients': 'navigation.clients',
+    '/orders': 'navigation.orders',
+    '/products': 'navigation.warehouse',
+    '/receipts': 'navigation.receipts',
+    '/references': 'navigation.references',
+    '/reports': 'navigation.reports',
+    '/users': 'navigation.users',
+  };
+
+  const matchedPath = Object.keys(sectionKeys)
     .sort((left, right) => right.length - left.length)
     .find((path) => pathname === path || pathname.startsWith(`${path}/`));
 
-  return matchedPath ? sectionTitles[matchedPath] : 'Рабочий раздел';
+  return matchedPath ? t(sectionKeys[matchedPath]) : t('common.workingSection');
 }

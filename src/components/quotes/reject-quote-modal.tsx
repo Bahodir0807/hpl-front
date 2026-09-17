@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/i18n/provider';
 import { normalizeRejectionReason } from '@/lib/quote-presentation';
 
 type RejectQuoteModalProps = {
@@ -17,13 +18,14 @@ export function RejectQuoteModal({
   onCancel,
   onSubmit,
 }: RejectQuoteModalProps) {
+  const { t } = useI18n();
   const [reason, setReason] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const submit = async (): Promise<void> => {
     const normalizedReason = normalizeRejectionReason(reason);
     if (!normalizedReason) {
-      setValidationError('Укажите причину отказа.');
+      setValidationError(t('validation.rejectionRequired'));
       return;
     }
 
@@ -44,13 +46,15 @@ export function RejectQuoteModal({
     >
       <div className="w-full max-w-lg rounded border border-slate-200 bg-white p-5 shadow-sm">
         <h2 id="reject-quote-title" className="text-base font-semibold text-slate-950">
-          Отклонить коммерческое предложение
+          {t('quotes.rejectTitle')}
         </h2>
-        <p className="mt-1 text-xs text-slate-500">Идентификатор: {quoteId}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          {t('quotes.identifier', { id: quoteId })}
+        </p>
 
         <label className="mt-4 block">
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Причина отказа
+            {t('quotes.rejectionReason')}
           </span>
           <textarea
             autoFocus
@@ -77,10 +81,10 @@ export function RejectQuoteModal({
 
         <div className="mt-5 flex justify-end gap-2">
           <Button type="button" variant="outline" disabled={isPending} onClick={onCancel}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button type="button" variant="destructive" disabled={isPending} onClick={() => void submit()}>
-            {isPending ? 'Отклонение...' : 'Отклонить'}
+            {isPending ? t('quotes.rejecting') : t('quotes.reject')}
           </Button>
         </div>
       </div>

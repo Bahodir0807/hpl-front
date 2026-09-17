@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/errors";
 import { showError, showSuccess } from "../lib/toast";
+import { useI18n } from "@/i18n/provider";
 
 export type ProductStatus = "ACTIVE" | "ARCHIVED" | "OUT_OF_STOCK";
 export type ProductPriceType = "BASE" | "PURCHASE" | "WHOLESALE" | "RETAIL";
@@ -194,6 +195,7 @@ export function useExpectedReceipts(enabled = true) {
 
 export function useCreateExpectedReceipt() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -207,7 +209,7 @@ export function useCreateExpectedReceipt() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess("Ожидаемый приход создан");
+      showSuccess(t("inventory.toastReceiptCreated"));
       void queryClient.invalidateQueries({ queryKey: ["expected-receipts"] });
       void queryClient.invalidateQueries({ queryKey: ["stock-balances"] });
     },
@@ -219,6 +221,7 @@ export function useCreateExpectedReceipt() {
 
 export function useReceiveExpectedReceipt() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -235,7 +238,7 @@ export function useReceiveExpectedReceipt() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess("Приёмка проведена");
+      showSuccess(t("inventory.toastReceived"));
       void queryClient.invalidateQueries({ queryKey: ["expected-receipts"] });
       void queryClient.invalidateQueries({ queryKey: ["stock-balances"] });
       void queryClient.invalidateQueries({ queryKey: ["products"] });

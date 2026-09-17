@@ -27,7 +27,6 @@ import { PRICING_NOT_CONFIGURED_MESSAGE } from '@/lib/hpl-errors';
 import {
   STANDARD_DISCRETE_THICKNESSES_MM,
   applicationFromPanelTypeCode,
-  CUSTOM_SIZE_PRICING_NOTE,
   findPanelTypeIdByApplication,
   formatAreaM2,
   formatColorLabel,
@@ -50,28 +49,22 @@ import {
   type CalculatorPrefillSource,
 } from '@/lib/hpl-calculator';
 import {
-  COMMERCIAL_CALCULATION_WAITING_COPY,
   HPL_SELLING_COEFFICIENT,
-  PURCHASE_PRICE_LABEL,
   canEnterManualPurchasePrice,
   canRunCommercialCalculation,
   formatCnyUsdRateLabel,
   validateManualPurchasePriceCny,
 } from '@/lib/calculation-presentation';
 import {
-  COMMERCIAL_TERMS_SECTION_LABEL,
-  CONVERT_TO_QUOTE_LABEL,
-  DOCUMENT_DATE_LABEL,
-  DELIVERY_PERIOD_LABEL,
-  PRODUCTION_PERIOD_LABEL,
-  VALID_UNTIL_LABEL,
   buildQuoteCommercialTermsPayload,
   defaultQuoteValidUntilInput,
   validateQuoteCommercialTerms,
 } from '@/lib/quote-commercial-terms';
 import { useCurrentCurrencyRate } from '@/hooks/use-currency-rates';
 import { formatSupplierName } from '@/lib/labels';
-import { QUALITY_LINES_EMPTY_MESSAGE, qualityLineLabel } from '@/lib/quality-line-presentation';
+import { qualityLineLabel } from '@/lib/quality-line-presentation';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 import {
   CalculationPreview,
   PanelColor,
@@ -92,15 +85,15 @@ type SavedCalculationRef = {
 
 const EMPTY_COLORS: PanelColor[] = [];
 
-const WIZARD_STEPS: { step: WizardStep; label: string }[] = [
-  { step: 1, label: 'Тип' },
-  { step: 2, label: 'Поставщик' },
-  { step: 3, label: 'Линейка' },
-  { step: 4, label: 'Толщина' },
-  { step: 5, label: 'Размер' },
-  { step: 6, label: 'Цвет' },
-  { step: 7, label: 'Площадь' },
-  { step: 8, label: 'Результат' },
+const WIZARD_STEPS: { step: WizardStep; labelKey: `calculator.${'stepType' | 'stepSupplier' | 'stepLine' | 'stepThickness' | 'stepSize' | 'stepColor' | 'stepArea' | 'stepResult'}` }[] = [
+  { step: 1, labelKey: 'calculator.stepType' },
+  { step: 2, labelKey: 'calculator.stepSupplier' },
+  { step: 3, labelKey: 'calculator.stepLine' },
+  { step: 4, labelKey: 'calculator.stepThickness' },
+  { step: 5, labelKey: 'calculator.stepSize' },
+  { step: 6, labelKey: 'calculator.stepColor' },
+  { step: 7, labelKey: 'calculator.stepArea' },
+  { step: 8, labelKey: 'calculator.stepResult' },
 ];
 
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -113,10 +106,6 @@ type HplCalculatorWizardProps = {
   onClose: () => void;
   onSuccess?: () => void;
 };
-
-function supplierLabel(supplier: Supplier): string {
-  return formatSupplierName(supplier.code, supplier.name);
-}
 
 function toSupplierCode(supplier?: Supplier | null): string {
   return supplier?.code?.trim().toLowerCase() ?? '';
@@ -193,6 +182,7 @@ function ColorInlineForm({
   supplierId: string;
   onCreated: (colorId: string) => void;
 }) {
+  const { t } = useI18n();
   const createColor = useCreatePanelColor();
   const [isOpen, setIsOpen] = useState(false);
   const [colorCode, setColorCode] = useState('');
@@ -219,7 +209,7 @@ function ColorInlineForm({
   if (!isOpen) {
     return (
       <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(true)}>
-        + Добавить цвет
+        {t('calculator.addColor')}
       </Button>
     );
   }
@@ -229,7 +219,7 @@ function ColorInlineForm({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Код цвета
+            {t('panels.colorCode')}
           </span>
           <input
             value={colorCode}
@@ -240,12 +230,12 @@ function ColorInlineForm({
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Название
+            {t('panels.colorName')}
           </span>
           <input
             value={colorName}
             onChange={(event) => setColorName(event.target.value)}
-            placeholder="Чёрный"
+            placeholder={t('panels.colorPlaceholder')}
             className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
           />
         </label>
@@ -259,7 +249,7 @@ function ColorInlineForm({
             void onSubmit();
           }}
         >
-          Сохранить
+          {t('common.save')}
         </Button>
         <Button
           type="button"
@@ -267,7 +257,7 @@ function ColorInlineForm({
           size="sm"
           onClick={() => setIsOpen(false)}
         >
-          Отмена
+          {t('common.cancel')}
         </Button>
       </div>
     </div>
@@ -282,6 +272,8 @@ export function HplCalculatorWizard({
   onClose,
   onSuccess,
 }: HplCalculatorWizardProps) {
+  const { t, messages } = useI18n();
+  const { supplierDisplayNames } = useLabelMaps();
   const { user } = useAuth();
   const permissions = user?.permissions ?? [];
   const canRunCalculation = canRunCommercialCalculation(permissions);
@@ -531,7 +523,7 @@ export function HplCalculatorWizard({
       applyPreviewResult(result);
       setStep(8);
     } catch (error) {
-      const message = getErrorMessage(error);
+      const message = getErrorMessage(error, undefined, messages);
       setPreview(null);
       setUnpricedEstimate(buildGeometryEstimate());
       setPreviewError(
@@ -598,7 +590,7 @@ export function HplCalculatorWizard({
       productionTerms,
       deliveryTerms,
       validUntil,
-    });
+    }, messages);
     if (termsError) {
       setCommercialTermsError(termsError);
       return;
@@ -684,14 +676,14 @@ export function HplCalculatorWizard({
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4">
         <div className="w-full max-w-lg rounded border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">
-            Калькулятор HPL-панелей
+            {t('calculator.title')}
           </h2>
           <p className="mt-3 text-sm text-slate-700">
-            {COMMERCIAL_CALCULATION_WAITING_COPY}
+            {t('calculations.waitingCopy')}
           </p>
           <div className="mt-4 flex justify-end">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
-              Закрыть
+              {t('common.close')}
             </Button>
           </div>
         </div>
@@ -705,14 +697,17 @@ export function HplCalculatorWizard({
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
           <div>
             <h2 className="text-base font-semibold text-slate-950">
-              Калькулятор HPL-панелей
+              {t('calculator.title')}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Расчёт для лида · шаг {currentVisibleIndex} из {visibleSteps.length}
+              {t('calculator.leadStep', {
+                step: currentVisibleIndex,
+                total: visibleSteps.length,
+              })}
             </p>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Закрыть
+            {t('common.close')}
           </Button>
         </div>
 
@@ -726,7 +721,7 @@ export function HplCalculatorWizard({
 
               return (
                 <button
-                  key={item.label}
+                  key={item.labelKey}
                   type="button"
                   disabled={!isDone}
                   onClick={() => {
@@ -742,7 +737,7 @@ export function HplCalculatorWizard({
                         : 'text-slate-400'
                   }`}
                 >
-                  {index + 1}. {item.label}
+                  {index + 1}. {t(item.labelKey)}
                 </button>
               );
             })}
@@ -753,13 +748,13 @@ export function HplCalculatorWizard({
           {currentStep === 1 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
-                Тип панели
+                {t('calculator.panelType')}
               </h3>
               {typesQuery.isLoading ? (
-                <p className="text-sm text-slate-600">Загрузка типов...</p>
+                <p className="text-sm text-slate-600">{t('calculator.loadingTypes')}</p>
               ) : null}
               {typesQuery.isError ? (
-                <p className="text-sm text-red-600">Не удалось загрузить типы панелей.</p>
+                <p className="text-sm text-red-600">{t('calculator.typesLoadFailed')}</p>
               ) : null}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {panelTypes.map((type) => (
@@ -795,22 +790,29 @@ export function HplCalculatorWizard({
           {currentStep === 2 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
-                Поставщик
+                {t('calculator.stepSupplier')}
               </h3>
               {suppliersQuery.isLoading ? (
-                <p className="text-sm text-slate-600">Загрузка поставщиков...</p>
+                <p className="text-sm text-slate-600">{t('calculator.loadingSuppliers')}</p>
               ) : null}
               {suppliersQuery.isError ? (
-                <p className="text-sm text-red-600">Не удалось загрузить поставщиков.</p>
+                <p className="text-sm text-red-600">{t('calculator.suppliersLoadFailed')}</p>
               ) : null}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {availableSuppliers.map((supplier) => (
                   <OptionCard
                     key={supplier.id}
-                    title={supplierLabel(supplier)}
+                    title={formatSupplierName(
+                      supplier.code,
+                      supplier.name,
+                      t('common.dash'),
+                      supplierDisplayNames,
+                    )}
                     description={
                       supplier.deliveryDays
-                        ? `Срок поставки: ${supplier.deliveryDays} дн.`
+                        ? t('calculator.deliveryDays', {
+                            days: String(supplier.deliveryDays),
+                          })
                         : undefined
                     }
                     selected={supplierId === supplier.id}
@@ -824,14 +826,14 @@ export function HplCalculatorWizard({
           {currentStep === 3 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
-                Линейка
+                {t('calculator.qualityLine')}
               </h3>
               {qualityQuery.isLoading || qualityQuery.isFetching ? (
-                <p className="text-sm text-slate-600">Загрузка линеек...</p>
+                <p className="text-sm text-slate-600">{t('calculator.loadingLines')}</p>
               ) : null}
               {qualityQuery.isError ? (
                 <p className="text-sm text-red-600">
-                  Не удалось загрузить классы качества.
+                  {t('calculator.qualityLoadFailed')}
                 </p>
               ) : null}
               {!qualityQuery.isLoading &&
@@ -839,7 +841,7 @@ export function HplCalculatorWizard({
               qualityQuery.isSuccess &&
               qualityClasses.length === 0 ? (
                 <p className="text-sm text-amber-700">
-                  {QUALITY_LINES_EMPTY_MESSAGE}
+                  {t('hpl.qualityLinesEmpty')}
                 </p>
               ) : null}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -847,7 +849,7 @@ export function HplCalculatorWizard({
                   return (
                     <OptionCard
                       key={item.id}
-                      title={qualityLineLabel(item)}
+                      title={qualityLineLabel(item, messages)}
                       selected={selectedQualityClassId === item.id}
                       onClick={() => {
                         setQualityClassId(item.id);
@@ -864,7 +866,7 @@ export function HplCalculatorWizard({
           {currentStep === 4 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
-                Толщина, мм
+                {t('calculator.thicknessMm')}
               </h3>
               {selectedApplication === 'FURNITURE' ? (
                 <>
@@ -886,7 +888,7 @@ export function HplCalculatorWizard({
                     }
                     onClick={() => setStep(5)}
                   >
-                    Далее
+                    {t('calculator.next')}
                   </Button>
                 </>
               ) : (
@@ -906,7 +908,7 @@ export function HplCalculatorWizard({
                           : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
                       }`}
                     >
-                      {value} мм
+                      {t('common.mm', { value })}
                     </button>
                   ))}
                 </div>
@@ -917,7 +919,7 @@ export function HplCalculatorWizard({
           {currentStep === 5 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-900">
-                Размер панели
+                {t('calculator.panelSize')}
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -934,7 +936,7 @@ export function HplCalculatorWizard({
                       : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
                   }`}
                 >
-                  Стандартный размер
+                  {t('calculator.standardSize')}
                 </button>
                 <button
                   type="button"
@@ -949,7 +951,7 @@ export function HplCalculatorWizard({
                       : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
                   }`}
                 >
-                  Нестандартный размер
+                  {t('calculator.customSize')}
                 </button>
               </div>
               {sizeMode === 'STANDARD' ? (
@@ -957,11 +959,11 @@ export function HplCalculatorWizard({
                   <input
                     value={sizeQuery}
                     onChange={(event) => setSizeQuery(event.target.value)}
-                    placeholder="Поиск: 1220×2440"
+                    placeholder={t('calculator.sizeSearch')}
                     className="w-full max-w-sm rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                   />
                   {sizesQuery.isLoading ? (
-                    <p className="text-sm text-slate-600">Загрузка размеров...</p>
+                    <p className="text-sm text-slate-600">{t('calculator.loadingSizes')}</p>
                   ) : null}
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {filteredSizes.map((size) => (
@@ -970,7 +972,9 @@ export function HplCalculatorWizard({
                         title={formatSize(size)}
                         description={
                           resolveSheetArea(size)
-                            ? `${formatNumber(resolveSheetArea(size))} м²`
+                            ? t('common.m2', {
+                                value: formatNumber(resolveSheetArea(size)),
+                              })
                             : undefined
                         }
                         selected={panelSizeId === size.id}
@@ -983,7 +987,7 @@ export function HplCalculatorWizard({
                     ))}
                   </div>
                   {!sizesQuery.isLoading && filteredSizes.length === 0 ? (
-                    <p className="text-sm text-slate-500">Размеры не найдены.</p>
+                    <p className="text-sm text-slate-500">{t('calculator.sizesEmpty')}</p>
                   ) : null}
                 </>
               ) : (
@@ -991,7 +995,7 @@ export function HplCalculatorWizard({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <label className="block">
                       <span className="mb-1 block text-sm font-medium text-slate-700">
-                        Ширина, мм
+                        {t('calculator.widthMm')}
                       </span>
                       <input
                         type="number"
@@ -1006,7 +1010,7 @@ export function HplCalculatorWizard({
                     </label>
                     <label className="block">
                       <span className="mb-1 block text-sm font-medium text-slate-700">
-                        Высота, мм
+                        {t('calculator.heightMm')}
                       </span>
                       <input
                         type="number"
@@ -1020,7 +1024,7 @@ export function HplCalculatorWizard({
                       />
                     </label>
                   </div>
-                  <p className="text-sm text-amber-700">{CUSTOM_SIZE_PRICING_NOTE}</p>
+                  <p className="text-sm text-amber-700">{t('hpl.customSizePricingNote')}</p>
                   <Button
                     type="button"
                     disabled={
@@ -1029,7 +1033,7 @@ export function HplCalculatorWizard({
                     }
                     onClick={() => setStep(6)}
                   >
-                    Далее
+                    {t('calculator.next')}
                   </Button>
                 </div>
               )}
@@ -1038,9 +1042,9 @@ export function HplCalculatorWizard({
 
           {currentStep === 6 ? (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">Цвет</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('calculator.color')}</h3>
               {colorsQuery.isLoading ? (
-                <p className="text-sm text-slate-600">Загрузка цветов...</p>
+                <p className="text-sm text-slate-600">{t('calculator.loadingColors')}</p>
               ) : null}
               <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
                 {colors.map((color) => (
@@ -1071,7 +1075,7 @@ export function HplCalculatorWizard({
                   disabled={!resolvedColorId}
                   onClick={() => setStep(7)}
                 >
-                  Далее
+                  {t('calculator.next')}
                 </Button>
               </div>
             </div>
@@ -1080,11 +1084,11 @@ export function HplCalculatorWizard({
           {currentStep === 7 ? (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">
-                Нужная площадь
+                {t('calculator.requiredArea')}
               </h3>
               <label className="block max-w-xs">
                 <span className="mb-1 block text-sm font-medium text-slate-700">
-                  Площадь, м²
+                  {t('calculator.areaM2')}
                 </span>
                 <input
                   type="number"
@@ -1095,7 +1099,7 @@ export function HplCalculatorWizard({
                     setRequiredAreaM2(event.target.value);
                     markDirty();
                   }}
-                  placeholder="Например, 48.5"
+                  placeholder={t('calculator.areaPlaceholder')}
                   className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
               </label>
@@ -1106,7 +1110,7 @@ export function HplCalculatorWizard({
                   void runPreview();
                 }}
               >
-                {previewMutation.isPending ? 'Расчёт...' : 'Рассчитать'}
+                {previewMutation.isPending ? t('calculator.calculating') : t('calculator.calculate')}
               </Button>
             </div>
           ) : null}
@@ -1114,7 +1118,7 @@ export function HplCalculatorWizard({
           {currentStep === 8 && (preview || unpricedEstimate || previewError || canEnterPurchasePrice) ? (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">
-                Результат расчёта
+                {t('calculator.resultTitle')}
               </h3>
               {previewError ? (
                 <p className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -1126,81 +1130,94 @@ export function HplCalculatorWizard({
               unpricedEstimate &&
               !canEnterPurchasePrice ? (
                 <p className="text-sm text-slate-600">
-                  Коммерческая цена недоступна: не заданы поставщик и класс
-                  качества. Показана оценка количества листов.
+                  {t('calculator.commercialUnavailable')}
                 </p>
               ) : null}
               <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm">
                 <PreviewRow
-                  label="Тип"
-                  value={selectedType ? panelTypeLabel(selectedType) : '—'}
+                  label={t('calculator.stepType')}
+                  value={selectedType ? panelTypeLabel(selectedType) : t('common.dash')}
                 />
                 <PreviewRow
-                  label="Поставщик"
-                  value={selectedSupplier ? supplierLabel(selectedSupplier) : '—'}
-                />
-                <PreviewRow
-                  label="Линейка"
+                  label={t('calculator.stepSupplier')}
                   value={
-                    selectedQuality ? qualityLineLabel(selectedQuality) : '—'
+                    selectedSupplier
+                      ? formatSupplierName(
+                          selectedSupplier.code,
+                          selectedSupplier.name,
+                          t('common.dash'),
+                          supplierDisplayNames,
+                        )
+                      : t('common.dash')
                   }
                 />
                 <PreviewRow
-                  label="Размер"
+                  label={t('calculator.qualityLine')}
+                  value={
+                    selectedQuality
+                      ? qualityLineLabel(selectedQuality, messages)
+                      : t('common.dash')
+                  }
+                />
+                <PreviewRow
+                  label={t('calculator.stepSize')}
                   value={
                     sizeMode === 'CUSTOM'
-                      ? `Нестандартный: ${customWidthMm} × ${customHeightMm} мм`
+                      ? t('hpl.customSizeLabel', {
+                          width: String(customWidthMm),
+                          height: String(customHeightMm),
+                        })
                       : selectedSize
                         ? formatSize(selectedSize)
-                        : '—'
+                        : t('common.dash')
                   }
                 />
                 <PreviewRow
-                  label="Толщина"
-                  value={`${thickness ?? '—'} мм`}
+                  label={t('calculator.stepThickness')}
+                  value={t('common.mm', { value: thickness ?? t('common.dash') })}
                 />
                 <PreviewRow
-                  label="Цвет"
+                  label={t('calculator.color')}
                   value={
                     selectedColor?.name ??
                     prefill.colorName ??
                     prefill.colorCode ??
-                    '—'
+                    t('common.dash')
                   }
                 />
                 <PreviewRow
-                  label="Запрошенная площадь"
-                  value={`${formatNumber(requiredAreaM2)} м²`}
+                  label={t('calculator.requestedArea')}
+                  value={t('common.m2', { value: formatNumber(requiredAreaM2) })}
                 />
                 <PreviewRow
-                  label="Количество листов"
+                  label={t('calculator.sheetsCount')}
                   value={formatNumber(resultSheetsCount)}
                 />
                 <PreviewRow
-                  label="Площадь одного листа"
-                  value={`${formatNumber(sheetArea)} м²`}
+                  label={t('calculator.sheetArea')}
+                  value={t('common.m2', { value: formatNumber(sheetArea) })}
                 />
                 <PreviewRow
-                  label="Покрываемая площадь"
-                  value={`${formatNumber(coveredAreaM2)} м²`}
+                  label={t('calculator.coveredArea')}
+                  value={t('common.m2', { value: formatNumber(coveredAreaM2) })}
                 />
               </div>
 
               {canEnterPurchasePrice ? (
                 <div className="space-y-3 rounded border border-slate-200 p-4">
                   <h4 className="text-sm font-semibold text-slate-900">
-                    {COMMERCIAL_TERMS_SECTION_LABEL}
+                    {t('quotes.commercialTerms')}
                   </h4>
                   <label className="block max-w-xs">
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      {PURCHASE_PRICE_LABEL}
+                      {t('calculations.purchasePrice')}
                     </span>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       value={purchasePriceCny}
-                      aria-label={PURCHASE_PRICE_LABEL}
+                      aria-label={t('calculations.purchasePrice')}
                       onChange={(event) => {
                         setPurchasePriceCny(event.target.value);
                         setPurchasePriceError(null);
@@ -1216,23 +1233,23 @@ export function HplCalculatorWizard({
                     ) : null}
                   </label>
                   <PreviewRow
-                    label="Курс"
+                    label={t('calculator.rate')}
                     value={formatCnyUsdRateLabel(activeFxRate)}
                   />
                   <PreviewRow
-                    label="Коэффициент"
+                    label={t('calculator.coefficient')}
                     value={Number(sellingCoefficient).toFixed(1)}
                   />
                   <label className="block">
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      {PRODUCTION_PERIOD_LABEL}
+                      {t('quotes.productionTerms')}
                     </span>
                     <textarea
                       value={productionTerms}
                       maxLength={500}
                       rows={2}
-                      aria-label={PRODUCTION_PERIOD_LABEL}
-                      placeholder="15–20 рабочих дней"
+                      aria-label={t('quotes.productionTerms')}
+                      placeholder={t('calculator.productionPlaceholder')}
                       onChange={(event) => {
                         setProductionTerms(event.target.value);
                         setCommercialTermsError(null);
@@ -1242,14 +1259,14 @@ export function HplCalculatorWizard({
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      {DELIVERY_PERIOD_LABEL}
+                      {t('quotes.deliveryTerms')}
                     </span>
                     <textarea
                       value={deliveryTerms}
                       maxLength={500}
                       rows={2}
-                      aria-label={DELIVERY_PERIOD_LABEL}
-                      placeholder="Ориентировочно 4 недели после утверждения декора"
+                      aria-label={t('quotes.deliveryTerms')}
+                      placeholder={t('calculator.deliveryPlaceholder')}
                       onChange={(event) => {
                         setDeliveryTerms(event.target.value);
                         setCommercialTermsError(null);
@@ -1259,12 +1276,12 @@ export function HplCalculatorWizard({
                   </label>
                   <label className="block max-w-xs">
                     <span className="mb-1 block text-sm font-medium text-slate-700">
-                      {VALID_UNTIL_LABEL}
+                      {t('quotes.validUntil')}
                     </span>
                     <input
                       type="date"
                       value={validUntil}
-                      aria-label={VALID_UNTIL_LABEL}
+                      aria-label={t('quotes.validUntil')}
                       onChange={(event) => {
                         setValidUntil(event.target.value);
                         setCommercialTermsError(null);
@@ -1273,7 +1290,7 @@ export function HplCalculatorWizard({
                     />
                   </label>
                   <PreviewRow
-                    label={DOCUMENT_DATE_LABEL}
+                    label={t('quotes.documentDate')}
                     value={formatDate(new Date())}
                   />
                   {commercialTermsError ? (
@@ -1287,8 +1304,8 @@ export function HplCalculatorWizard({
                     }}
                   >
                     {previewMutation.isPending
-                      ? 'Расчёт...'
-                      : 'Рассчитать стоимость'}
+                      ? t('calculator.calculating')
+                      : t('calculator.calculateCost')}
                   </Button>
                 </div>
               ) : null}
@@ -1296,26 +1313,30 @@ export function HplCalculatorWizard({
               {preview ? (
                 <div className="rounded border border-slate-200 bg-white p-4 text-sm">
                   <PreviewRow
-                    label="Цена после конвертации"
+                    label={t('calculator.priceAfterConversion')}
                     value={`${formatNumber(snapshotPurchaseCny)} × ${
                       activeFxRate ?? '—'
-                    } = ${formatNumber(snapshotConvertedUsd)} USD/м²`}
+                    } = ${t('calculator.usdPerM2', {
+                      value: formatNumber(snapshotConvertedUsd),
+                    })}`}
                   />
                   <PreviewRow
-                    label="Цена продажи"
+                    label={t('calculator.salePrice')}
                     value={`${formatNumber(snapshotConvertedUsd)} × ${Number(
                       sellingCoefficient,
-                    ).toFixed(1)} = ${formatNumber(snapshotClientUsd)} USD/м²`}
+                    ).toFixed(1)} = ${t('calculator.usdPerM2', {
+                      value: formatNumber(snapshotClientUsd),
+                    })}`}
                   />
                   <PreviewRow
-                    label="Итого"
+                    label={t('common.total')}
                     value={formatMoney(preview.total, 'USD')}
                   />
                 </div>
               ) : null}
 
               {savedCalculation ? (
-                <p className="text-sm text-emerald-700">Расчёт сохранён.</p>
+                <p className="text-sm text-emerald-700">{t('calculator.saved')}</p>
               ) : null}
 
               <div className="flex flex-wrap gap-2">
@@ -1324,7 +1345,7 @@ export function HplCalculatorWizard({
                   variant="outline"
                   onClick={() => setStep(7)}
                 >
-                  Пересчитать
+                  {t('calculator.recalculate')}
                 </Button>
                 <Button
                   type="button"
@@ -1335,8 +1356,8 @@ export function HplCalculatorWizard({
                   }}
                 >
                   {createCalculation.isPending
-                    ? 'Сохранение...'
-                    : 'Сохранить расчёт'}
+                    ? t('common.saving')
+                    : t('calculator.saveCalculation')}
                 </Button>
                 <Button
                   type="button"
@@ -1346,8 +1367,8 @@ export function HplCalculatorWizard({
                   }}
                 >
                   {finalizeCalculation.isPending || convertToQuote.isPending
-                    ? 'Создание КП...'
-                    : CONVERT_TO_QUOTE_LABEL}
+                    ? t('calculations.creatingQuote')
+                    : t('quotes.convertToQuote')}
                 </Button>
               </div>
             </div>
@@ -1357,7 +1378,7 @@ export function HplCalculatorWizard({
         {currentStep > 1 && currentStep < 8 ? (
           <div className="border-t border-slate-200 px-5 py-3">
             <Button type="button" variant="outline" size="sm" onClick={goBack}>
-              Назад
+              {t('common.back')}
             </Button>
           </div>
         ) : null}
@@ -1365,7 +1386,7 @@ export function HplCalculatorWizard({
         {currentStep === 8 ? (
           <div className="border-t border-slate-200 px-5 py-3">
             <Button type="button" variant="outline" size="sm" onClick={goBack}>
-              Назад
+              {t('common.back')}
             </Button>
           </div>
         ) : null}
@@ -1383,16 +1404,21 @@ function PreviewRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function installationRequiredLabel(value?: boolean | null): string {
+function installationRequiredLabel(
+  value: boolean | null | undefined,
+  yes: string,
+  no: string,
+  unspecified: string,
+): string {
   if (value === true) {
-    return 'Да';
+    return yes;
   }
 
   if (value === false) {
-    return 'Нет';
+    return no;
   }
 
-  return 'Не указано';
+  return unspecified;
 }
 
 function Stage1ReadOnlyContext({
@@ -1400,48 +1426,54 @@ function Stage1ReadOnlyContext({
 }: {
   qualification?: CalculatorPrefillSource | null;
 }) {
+  const { t } = useI18n();
   if (!qualification) {
     return null;
   }
 
   const fields = [
     {
-      label: 'Тип HPL',
+      label: t('calculator.typeHpl'),
       value: hplApplicationLabel(qualification.application),
     },
     {
-      label: 'Тип панели',
+      label: t('calculator.panelType'),
       value: panelTypeLabel(qualification.panelType),
     },
     {
-      label: 'Размер',
+      label: t('calculator.stepSize'),
       value: formatQualificationSize(qualification),
     },
     {
-      label: 'Толщина',
+      label: t('calculator.stepThickness'),
       value: formatThicknessMm(qualification.thicknessMm),
     },
     {
-      label: 'Цвет',
+      label: t('calculator.color'),
       value: formatColorLabel(qualification),
     },
     {
-      label: 'Площадь',
+      label: t('calculator.stepArea'),
       value: formatAreaM2(qualification.requiredAreaM2),
     },
     {
-      label: 'Монтаж',
-      value: installationRequiredLabel(qualification.installationRequired),
+      label: t('calculator.installation'),
+      value: installationRequiredLabel(
+        qualification.installationRequired,
+        t('common.yes'),
+        t('common.no'),
+        t('common.notSpecifiedNeuter'),
+      ),
     },
   ];
 
   return (
     <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
       <h3 className="text-sm font-semibold text-slate-900">
-        Контекст Stage 1
+        {t('calculator.stage1Title')}
       </h3>
       <p className="mt-1 text-xs text-slate-500">
-        Только для просмотра. Коммерческий выбор не меняет потребность клиента.
+        {t('calculator.stage1Hint')}
       </p>
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
         {fields.map((field) => (

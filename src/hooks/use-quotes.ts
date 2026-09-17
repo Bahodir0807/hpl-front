@@ -7,6 +7,7 @@ import { showError, showSuccess } from '../lib/toast';
 import { HplListResponse, PatchableQuoteStatus, Quote, QuotePricingPreview, unwrapHplList } from '../types/hpl';
 import type { ApprovedPricingItemPayload } from '../lib/quote-pricing';
 import { getApiErrorCode, QUOTE_TERMS_LOCKED, materializeAxiosError, createApiErrorFromPayload } from '../lib/hpl-errors';
+import { useI18n } from '@/i18n/provider';
 
 export type { PatchableQuoteStatus, Quote, QuoteItem, QuoteStatus } from '../types/hpl';
 
@@ -80,6 +81,7 @@ export function useQuote(id?: string | null) {
 
 export function useConvertCalculationToQuote(calculationId?: string) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -88,7 +90,7 @@ export function useConvertCalculationToQuote(calculationId?: string) {
       const id = payload?.calculationId ?? calculationId;
 
       if (!id) {
-        throw new Error('Не указан расчёт для конвертации в КП');
+        throw new Error(t('calculations.missingCalculationId'));
       }
 
       const response = await apiClient.post<Quote>(
@@ -128,7 +130,7 @@ export function useConvertCalculationToQuote(calculationId?: string) {
       return response.data;
     },
     onSuccess: (quote) => {
-      showSuccess('КП создано из расчёта');
+      showSuccess(t('quotes.toastCreatedFromCalculation'));
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({ queryKey: ['calculations'] });
       void queryClient.invalidateQueries({
@@ -156,6 +158,7 @@ export type UpdateQuoteCommercialTermsPayload = {
 
 export function useUpdateQuoteCommercialTerms() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -195,7 +198,7 @@ export function useUpdateQuoteCommercialTerms() {
       return response.data;
     },
     onSuccess: (quote) => {
-      showSuccess('Коммерческие условия КП обновлены');
+      showSuccess(t('quotes.toastTermsUpdated'));
       queryClient.setQueriesData<Quote[]>(
         { queryKey: ['quotes'] },
         (current) => updateQuoteLists(current, quote),
@@ -217,6 +220,7 @@ export type ApproveQuotePricingPayload = {
 };
 
 export function usePreviewQuotePricing() {
+  const { t, messages } = useI18n();
   return useMutation({
     mutationFn: async (
       payload: ApproveQuotePricingPayload,
@@ -228,13 +232,14 @@ export function usePreviewQuotePricing() {
       return response.data;
     },
     onError: (error) => {
-      showError(getErrorMessage(error, 'Не удалось рассчитать цены КП.'));
+      showError(getErrorMessage(error, t('quotes.calculateFailed'), messages));
     },
   });
 }
 
 export function useApproveQuotePricing() {
   const queryClient = useQueryClient();
+  const { t, messages } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: ApproveQuotePricingPayload): Promise<Quote> => {
@@ -245,7 +250,7 @@ export function useApproveQuotePricing() {
       return response.data;
     },
     onSuccess: (quote) => {
-      showSuccess('Коммерческие цены утверждены');
+      showSuccess(t('quotes.toastPricesApproved'));
       queryClient.setQueryData(['quotes', 'detail', quote.id], quote);
       queryClient.setQueriesData<Quote[]>(
         { queryKey: ['quotes'] },
@@ -264,13 +269,14 @@ export function useApproveQuotePricing() {
       }
     },
     onError: (error) => {
-      showError(getErrorMessage(error, 'Не удалось утвердить цены КП.'));
+      showError(getErrorMessage(error, t('quotes.approveFailed'), messages));
     },
   });
 }
 
 export function useFinalizeQuote() {
   const queryClient = useQueryClient();
+  const { t, messages } = useI18n();
 
   return useMutation({
     mutationFn: async (id: string): Promise<Quote> => {
@@ -278,7 +284,7 @@ export function useFinalizeQuote() {
       return response.data;
     },
     onSuccess: (quote) => {
-      showSuccess('КП сформировано');
+      showSuccess(t('quotes.toastFinalized'));
       queryClient.setQueryData(['quotes', 'detail', quote.id], quote);
       queryClient.setQueriesData<Quote[]>(
         { queryKey: ['quotes'] },
@@ -297,20 +303,25 @@ export function useFinalizeQuote() {
       }
     },
     onError: (error) => {
-      showError(getErrorMessage(error, 'Не удалось сформировать КП.'));
+      showError(getErrorMessage(error, t('quotes.finalizeFailed'), messages));
     },
   });
 }
 
 export function useCreateQuoteVersion() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   return useMutation({
     mutationFn: async (id: string): Promise<Quote> => {
       const response = await apiClient.post<Quote>(`/quotes/${id}/versions`);
       return response.data;
     },
     onSuccess: (quote) => {
-      showSuccess(`Создана версия КП v${quote.versionNumber ?? 2}`);
+      showSuccess(
+        t('quotes.toastVersionCreated', {
+          version: quote.versionNumber ?? 2,
+        }),
+      );
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({ queryKey: ['lead-workspace', quote.leadId] });
     },
@@ -330,6 +341,7 @@ export type UpdateQuoteStatusPayload = {
 
 export function useUpdateQuoteStatus() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: UpdateQuoteStatusPayload): Promise<Quote> => {
@@ -346,7 +358,7 @@ export function useUpdateQuoteStatus() {
       return response.data;
     },
     onSuccess: (quote) => {
-      showSuccess('Статус КП обновлён');
+      showSuccess(t('quotes.toastStatusUpdated'));
       queryClient.setQueriesData<Quote[]>(
         { queryKey: ['quotes'] },
         (current) => updateQuoteLists(current, quote),
@@ -364,6 +376,7 @@ export function useUpdateQuoteStatus() {
 
 export function useRecordQuoteClientAcceptance() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (id: string): Promise<Quote> => {
@@ -372,7 +385,7 @@ export function useRecordQuoteClientAcceptance() {
       return response.data;
     },
     onSuccess: (quote) => {
-      showSuccess('Согласие клиента зафиксировано');
+      showSuccess(t('quotes.toastClientAccepted'));
       queryClient.setQueriesData<Quote[]>(
         { queryKey: ['quotes'] },
         (current) => updateQuoteLists(current, quote),
@@ -390,6 +403,7 @@ export function useRecordQuoteClientAcceptance() {
 
 export function useConvertQuoteToDeal() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (id: string): Promise<{ quote: Quote; dealId: string }> => {
@@ -400,7 +414,7 @@ export function useConvertQuoteToDeal() {
       return response.data;
     },
     onSuccess: (result) => {
-      showSuccess('КП конвертировано в сделку');
+      showSuccess(t('quotes.toastConverted'));
       queryClient.setQueriesData<Quote[]>(
         { queryKey: ['quotes'] },
         (current) => updateQuoteLists(current, result.quote),
@@ -448,6 +462,7 @@ export function useDownloadQuoteDocx() {
 }
 
 function useDownloadQuoteDocument(format: 'pdf' | 'docx') {
+  const { t, messages } = useI18n();
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
       let response;
@@ -467,7 +482,7 @@ function useDownloadQuoteDocument(format: 'pdf' | 'docx') {
         } catch {
           parsed = { message: text };
         }
-        throw createApiErrorFromPayload(parsed, text || 'Не удалось скачать КП');
+        throw createApiErrorFromPayload(parsed, text || t('quotes.downloadFailed'));
       }
 
       const filename =
@@ -482,7 +497,7 @@ function useDownloadQuoteDocument(format: 'pdf' | 'docx') {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
     onError: (error) => {
-      showError(getErrorMessage(error, 'Не удалось скачать КП.'));
+      showError(getErrorMessage(error, t('quotes.downloadFailed'), messages));
     },
   });
 }

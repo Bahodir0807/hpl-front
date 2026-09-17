@@ -6,6 +6,7 @@ import { apiClient } from '../lib/api-client';
 import { getSupplierOrderErrorMessage } from '../lib/supplier-order-errors';
 import { unwrapSupplierOrderList } from '../lib/supplier-order-presentation';
 import { showError, showSuccess } from '../lib/toast';
+import { useI18n } from '@/i18n/provider';
 import { SupplierOrder } from '../types/hpl';
 
 export type { SupplierOrder, SupplierOrderStatus } from '../types/hpl';
@@ -136,6 +137,7 @@ export function useSupplierOrder(id: string | null) {
 
 export function useCreateSupplierOrder() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -150,7 +152,7 @@ export function useCreateSupplierOrder() {
       return response.data;
     },
     onSuccess: (order) => {
-      showSuccess('Заказ поставщику создан');
+      showSuccess(t('toasts.supplierOrderCreated'));
       invalidateSupplierOrderQueries(queryClient, order.dealId);
     },
     onError: (error, payload) => {
@@ -164,6 +166,7 @@ export function useCreateSupplierOrder() {
 
 export function useUpdateSupplierOrderDates() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -177,7 +180,7 @@ export function useUpdateSupplierOrderDates() {
       return response.data;
     },
     onSuccess: (order) => {
-      showSuccess('Плановые даты обновлены');
+      showSuccess(t('toasts.plannedDatesUpdated'));
       invalidateSupplierOrderQueries(queryClient, order.dealId);
     },
     onError: (error, payload) => {
@@ -191,6 +194,7 @@ export function useUpdateSupplierOrderDates() {
 
 export function useConfirmSupplierOrderReady() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -203,7 +207,7 @@ export function useConfirmSupplierOrderReady() {
       return response.data;
     },
     onSuccess: (order) => {
-      showSuccess('Готовность к отгрузке подтверждена');
+      showSuccess(t('toasts.readyConfirmed'));
       invalidateSupplierOrderQueries(queryClient, order.dealId, {
         notifications: true,
       });
@@ -219,6 +223,7 @@ export function useConfirmSupplierOrderReady() {
 
 export function useShipSupplierOrder() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -232,7 +237,7 @@ export function useShipSupplierOrder() {
       return response.data;
     },
     onSuccess: (order) => {
-      showSuccess('Заказ поставщику отгружен');
+      showSuccess(t('toasts.supplierOrderShipped'));
       invalidateSupplierOrderQueries(queryClient, order.dealId, {
         notifications: true,
       });
@@ -248,6 +253,7 @@ export function useShipSupplierOrder() {
 
 export function useConfirmSupplierOrderClientDelivery() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -260,7 +266,7 @@ export function useConfirmSupplierOrderClientDelivery() {
       return response.data;
     },
     onSuccess: (order) => {
-      showSuccess('Доставка клиенту подтверждена');
+      showSuccess(t('toasts.clientDeliveryConfirmed'));
       invalidateSupplierOrderQueries(queryClient, order.dealId, {
         notifications: true,
         tasks: true,

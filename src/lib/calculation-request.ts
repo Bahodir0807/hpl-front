@@ -21,6 +21,10 @@ import {
   canShowSubmitCalculationRequestToHead,
   canSubmitCalculationRequest,
 } from "@/lib/calculation-presentation";
+import { ru } from "@/i18n/ru";
+import { getActiveMessages } from "@/i18n/active-messages";
+import type { Messages } from "@/i18n/types";
+import { interpolate, type TranslateFn } from "@/i18n/translate";
 
 export {
   canCreateCalculationRequest,
@@ -29,26 +33,40 @@ export {
   canSubmitCalculationRequest,
 };
 
-export const SUBMIT_TO_HEAD_LABEL = "Отправить руководителю";
-export const CREATE_CALCULATION_REQUEST_LABEL = "Создать запрос расчёта";
-export const ADD_CALCULATION_LABEL = "+ Добавить расчёт";
-export const ADD_HPL_ROW_LABEL = "+ Добавить HPL-панель";
-export const CONVERT_REQUEST_TO_QUOTE_LABEL = "Создать черновик КП";
-export const CUSTOM_TYPE_DESCRIPTION_LABEL = "Описание нестандартного типа";
+export const SUBMIT_TO_HEAD_LABEL = ru.calculations.sendToHead;
+export const CREATE_CALCULATION_REQUEST_LABEL = ru.calculations.createRequest;
+export const ADD_CALCULATION_LABEL = ru.calculations.addCalculationButton;
+export const ADD_HPL_ROW_LABEL = ru.calculations.addPanelButton;
+export const CONVERT_REQUEST_TO_QUOTE_LABEL = ru.calculations.convertToQuote;
+export const CUSTOM_TYPE_DESCRIPTION_LABEL = ru.calculations.customTypeDescription;
 export const CUSTOM_TYPE_DESCRIPTION_REQUIRED_MESSAGE =
-  "Для типа «Другой» укажите описание";
-export const HALF_FILLED_CUSTOM_SIZE_MESSAGE = "Укажите ширину и высоту вместе";
-export const CUSTOM_SIZE_INTEGER_MESSAGE =
-  "Ширина и высота должны быть целыми числами не меньше 1 мм";
-export const CUSTOM_SIZE_SNAPSHOT_HINT =
-  "Нестандартный размер сохраняется как снимок. Для текущего расчёта цены нужен стандартный размер.";
-export const SHEETS_COUNT_PLACEHOLDER = "—";
+  ru.validation.customTypeDescriptionRequired;
+export const HALF_FILLED_CUSTOM_SIZE_MESSAGE = ru.validation.halfFilledCustomSize;
+export const CUSTOM_SIZE_INTEGER_MESSAGE = ru.validation.customSizeInteger;
+export const CUSTOM_SIZE_SNAPSHOT_HINT = ru.calculations.customSizeHint;
+export const SHEETS_COUNT_PLACEHOLDER = ru.common.dash;
+
+const DEFAULT_CALCULATION_TITLE_RE =
+  /^(?:Расчёт №|Hisob-kitob №|Calculation #)(\d+)$/;
+
+export function displayCalculationGroupTitle(
+  title: string,
+  index: number,
+  t: TranslateFn,
+): string {
+  const trimmed = title.trim();
+  const match = trimmed.match(DEFAULT_CALCULATION_TITLE_RE);
+  if (!trimmed || match) {
+    return t("calculations.calculationTitle", {
+      number: match?.[1] ?? index + 1,
+    });
+  }
+
+  return trimmed;
+}
 
 export const calculationRequestStatusLabels: Record<string, string> = {
-  draft: "Черновик",
-  submitted: "Отправлен руководителю",
-  processing: "На проверке",
-  quoted: "КП создано",
+  ...ru.statuses.calculationRequest,
 };
 
 export type CalculationRequestItemForm = {
@@ -306,12 +324,13 @@ export function previewSheetsCount(
 
 export function formatSheetsCountDisplay(
   count: number | null | undefined,
+  messages: Messages = getActiveMessages(),
 ): string {
   if (count == null) {
-    return SHEETS_COUNT_PLACEHOLDER;
+    return messages.common.dash;
   }
 
-  return `${count} шт.`;
+  return interpolate(messages.common.pieces, { count });
 }
 
 export function requestItemSheetsCountDisplay(
@@ -320,14 +339,16 @@ export function requestItemSheetsCountDisplay(
     "id" | "sheetsCount" | "requiredAreaM2"
   >,
   size?: PanelSizeDimensions | null,
+  messages: Messages = getActiveMessages(),
 ): string {
   const persisted = item.id ? toPositiveInteger(item.sheetsCount) : null;
   if (persisted != null) {
-    return formatSheetsCountDisplay(persisted);
+    return formatSheetsCountDisplay(persisted, messages);
   }
 
   return formatSheetsCountDisplay(
     previewSheetsCount(item.requiredAreaM2, size),
+    messages,
   );
 }
 
@@ -668,33 +689,37 @@ export function validateRequestItem(
     code: string;
     displayNameRu?: string | null;
   } | null,
-  options: { requireCompleteTechnicalFields?: boolean } = {},
+  options: {
+    requireCompleteTechnicalFields?: boolean;
+    messages?: Messages;
+  } = {},
 ): CalculationRequestItemErrors {
   const errors: CalculationRequestItemErrors = {};
+  const messages = options.messages ?? ru;
   const application =
     toCanonicalHplApplication(panelType?.code) ??
     panelTypeCodeFromApplication(panelType?.code);
   const requireComplete = options.requireCompleteTechnicalFields !== false;
 
   if (requireComplete && !item.qualityClassId.trim()) {
-    errors.qualityClassId = "Укажите класс";
+    errors.qualityClassId = messages.validation.specifyClass;
   }
   if (requireComplete && !item.supplierId.trim()) {
-    errors.supplierId = "Укажите поставщика";
+    errors.supplierId = messages.validation.specifySupplier;
   }
   if (requireComplete && !item.panelTypeId.trim()) {
-    errors.panelTypeId = "Укажите тип HPL";
+    errors.panelTypeId = messages.validation.specifyHplType;
   }
 
   if (
     requireComplete &&
     !isValidThicknessForApplication(application, item.thicknessMm)
   ) {
-    errors.thicknessMm = "Укажите толщину";
+    errors.thicknessMm = messages.validation.thicknessRequired;
   }
 
   if (requireComplete && !item.panelSizeId.trim()) {
-    errors.panelSizeId = "Укажите размер";
+    errors.panelSizeId = messages.validation.specifySize;
   }
 
   const customPair = parseCustomSizePair(
@@ -702,20 +727,21 @@ export function validateRequestItem(
     item.customHeightMm,
   );
   if (customPair.halfFilled) {
-    errors.customWidthMm = HALF_FILLED_CUSTOM_SIZE_MESSAGE;
-    errors.customHeightMm = HALF_FILLED_CUSTOM_SIZE_MESSAGE;
+    errors.customWidthMm = messages.validation.halfFilledCustomSize;
+    errors.customHeightMm = messages.validation.halfFilledCustomSize;
   } else if (customPair.invalid) {
-    errors.customWidthMm = CUSTOM_SIZE_INTEGER_MESSAGE;
-    errors.customHeightMm = CUSTOM_SIZE_INTEGER_MESSAGE;
+    errors.customWidthMm = messages.validation.customSizeInteger;
+    errors.customHeightMm = messages.validation.customSizeInteger;
   }
 
   const area = toDecimalNumber(item.requiredAreaM2);
   if (requireComplete && (area == null || area <= 0)) {
-    errors.requiredAreaM2 = "Укажите объём м²";
+    errors.requiredAreaM2 = messages.validation.specifyArea;
   }
 
   if (isOtherPanelType(panelType) && !item.customTypeDescription.trim()) {
-    errors.customTypeDescription = CUSTOM_TYPE_DESCRIPTION_REQUIRED_MESSAGE;
+    errors.customTypeDescription =
+      messages.validation.customTypeDescriptionRequired;
   }
 
   return errors;
@@ -728,7 +754,10 @@ export function validateRequestForm(
     code: string;
     displayNameRu?: string | null;
   }>,
-  options: { requireCompleteTechnicalFields?: boolean } = {},
+  options: {
+    requireCompleteTechnicalFields?: boolean;
+    messages?: Messages;
+  } = {},
 ): {
   valid: boolean;
   itemErrors: Record<string, CalculationRequestItemErrors>;

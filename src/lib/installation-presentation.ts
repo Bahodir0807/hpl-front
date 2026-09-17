@@ -1,11 +1,13 @@
 import type { InstallationJob } from '@/hooks/use-installations';
 import type { Deal, DealInstallation, InstallationStatus } from '@/hooks/use-deals';
 import { hasRole, type RoleAccessUser } from '@/lib/role-access';
+import { ru } from '@/i18n/ru';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
+import { interpolate } from '@/i18n/translate';
 
 export const INSTALLATION_SCHEDULE_PERMISSION = 'installation:schedule';
 export const INSTALLATION_ASSESS_PERMISSION = 'installation:assess';
-export const INSTALLATION_CONFIRM_WORK_PERMISSION =
-  'installation:confirm_work';
 export const INSTALLATION_CONFIRM_SUPERVISOR_PERMISSION =
   'installation:confirm_supervisor';
 
@@ -16,23 +18,16 @@ export const INSTALLATION_STATUSES: InstallationStatus[] = [
 ];
 
 export const installationStatusLabels: Record<InstallationStatus, string> = {
-  SCHEDULED: 'Запланирован',
-  IN_PROGRESS: 'В работе',
-  COMPLETED: 'Завершён',
+  ...ru.statuses.installation,
 };
 
-export const INSTALLER_EMPTY_JOBS_MESSAGE =
-  'Нет монтажных работ, требующих действий.';
+export const INSTALLATION_EMPTY_JOBS_MESSAGE = ru.installations.empty;
 
-export const INSTALLATION_NOT_FOUND_MESSAGE = 'Монтажная работа не найдена.';
+export const INSTALLATION_NOT_FOUND_MESSAGE = ru.errors.installationNotFound;
 
-export const INSTALLATION_NOT_REQUIRED_COPY = 'Монтаж не требуется.';
+export const INSTALLATION_NOT_REQUIRED_COPY = ru.installations.notRequired;
 
-export const MATERIAL_NOT_DELIVERED_MESSAGE =
-  'Монтаж пока недоступен: материал ещё не доставлен клиенту.';
-
-export const DISTINCT_INSTALLATION_ACTORS_COPY =
-  'Подтверждение монтажника и подтверждение руководителя должны выполнить разные сотрудники.';
+export const MATERIAL_NOT_DELIVERED_MESSAGE = ru.errors.materialNotDelivered;
 
 export type InstallationAuthorityUser = RoleAccessUser & {
   id?: string;
@@ -63,13 +58,16 @@ export function normalizeInstallationStatus(
   return null;
 }
 
-export function installationStatusLabel(status?: string | null): string {
+export function installationStatusLabel(
+  status?: string | null,
+  messages: Messages = getActiveMessages(),
+): string {
   const normalized = normalizeInstallationStatus(status);
   if (!normalized) {
-    return status?.trim() ? status : '—';
+    return status?.trim() ? status : messages.common.dash;
   }
 
-  return installationStatusLabels[normalized];
+  return messages.statuses.installation[normalized];
 }
 
 export function canScheduleInstallation(
@@ -86,23 +84,8 @@ export function canAssessInstallation(
 ): boolean {
   return (
     permissionSet(user).has(INSTALLATION_ASSESS_PERMISSION) &&
-    hasRole(user, 'INSTALLER', 'HEAD', 'DIRECTOR')
+    hasRole(user, 'HEAD', 'DIRECTOR')
   );
-}
-
-export function canStartInstallation(
-  user: InstallationAuthorityUser | null | undefined,
-): boolean {
-  return (
-    permissionSet(user).has(INSTALLATION_CONFIRM_WORK_PERMISSION) &&
-    hasRole(user, 'INSTALLER')
-  );
-}
-
-export function canInstallerConfirmInstallation(
-  user: InstallationAuthorityUser | null | undefined,
-): boolean {
-  return canStartInstallation(user);
 }
 
 export function canSupervisorConfirmInstallation(
@@ -127,20 +110,6 @@ export function isInstallationCompleted(
   );
 }
 
-export function sameInstallationActor(
-  left?: string | null,
-  right?: string | null,
-): boolean {
-  return Boolean(left && right && left === right);
-}
-
-export function isDistinctUserViolation(installation?: DealInstallation | null) {
-  return sameInstallationActor(
-    installation?.installerConfirmedById,
-    installation?.supervisorConfirmedById,
-  );
-}
-
 export function shouldShowScheduleControls(
   user: InstallationAuthorityUser | null | undefined,
   installation?: DealInstallation | null,
@@ -150,40 +119,6 @@ export function shouldShowScheduleControls(
   }
 
   return !isInstallationCompleted(installation);
-}
-
-export function shouldShowStartAction(
-  user: InstallationAuthorityUser | null | undefined,
-  installation?: DealInstallation | null,
-): boolean {
-  if (!canStartInstallation(user) || !installation) {
-    return false;
-  }
-
-  if (isInstallationCompleted(installation) || installation.startedAt) {
-    return false;
-  }
-
-  return true;
-}
-
-export function shouldShowInstallerConfirmAction(
-  user: InstallationAuthorityUser | null | undefined,
-  installation?: DealInstallation | null,
-): boolean {
-  if (!canInstallerConfirmInstallation(user) || !installation) {
-    return false;
-  }
-
-  if (isInstallationCompleted(installation) || installation.installerConfirmedAt) {
-    return false;
-  }
-
-  if (sameInstallationActor(user?.id, installation.supervisorConfirmedById)) {
-    return false;
-  }
-
-  return true;
 }
 
 export function shouldShowSupervisorConfirmAction(
@@ -201,49 +136,19 @@ export function shouldShowSupervisorConfirmAction(
     return false;
   }
 
-  if (sameInstallationActor(user?.id, installation.installerConfirmedById)) {
-    return false;
-  }
-
   return true;
 }
 
-export function distinctUserBlockMessage(
-  user: InstallationAuthorityUser | null | undefined,
-  installation?: DealInstallation | null,
-): string | null {
-  if (!installation || !user?.id) {
-    return null;
-  }
-
-  if (
-    canSupervisorConfirmInstallation(user) &&
-    !installation.supervisorConfirmedAt &&
-    sameInstallationActor(user.id, installation.installerConfirmedById)
-  ) {
-    return DISTINCT_INSTALLATION_ACTORS_COPY;
-  }
-
-  if (
-    canInstallerConfirmInstallation(user) &&
-    !installation.installerConfirmedAt &&
-    sameInstallationActor(user.id, installation.supervisorConfirmedById)
-  ) {
-    return DISTINCT_INSTALLATION_ACTORS_COPY;
-  }
-
-  if (isDistinctUserViolation(installation)) {
-    return DISTINCT_INSTALLATION_ACTORS_COPY;
-  }
-
-  return null;
-}
-
-export function installationJobTitle(job: InstallationJob): string {
+export function installationJobTitle(
+  job: InstallationJob,
+  messages: Messages = getActiveMessages(),
+): string {
   return (
     job.deal.title?.trim() ||
     job.deal.client.name?.trim() ||
-    `Монтаж ${compactInstallationId(job.id)}`
+    interpolate(messages.installations.jobFallback, {
+      id: compactInstallationId(job.id),
+    })
   );
 }
 

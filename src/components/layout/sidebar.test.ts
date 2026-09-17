@@ -31,9 +31,9 @@ describe("sidebar permissions", () => {
     expect(hrefs.every((href) => !href.includes("calculat"))).toBe(true);
   });
 
-  it("shows the installation workspace for INSTALLER and HEAD permissions", () => {
+  it("shows the installation workspace for management permissions", () => {
     expect(
-      visibleHrefs(["deals:read", "installation:confirm_work"]),
+      visibleHrefs(["deals:read", "installation:assess"]),
     ).toContain("/installations");
     expect(
       visibleHrefs(["leads:read", "installation:schedule"]),

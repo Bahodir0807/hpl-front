@@ -4,7 +4,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axios from 'axios';
 import { ReactNode, useState } from 'react';
 import { Toaster } from 'sonner';
+import { useTheme } from 'next-themes';
 import { AuthContextProvider } from '../context/auth-context';
+import { I18nProvider } from '@/i18n/provider';
+import { AppThemeProvider } from '@/theme/app-theme-provider';
+import type { Locale, ThemeName } from '@/i18n/config';
 
 function shouldRetryQuery(failureCount: number, error: unknown): boolean {
   const status = axios.isAxiosError(error) ? error.response?.status : undefined;
@@ -16,7 +20,28 @@ function shouldRetryQuery(failureCount: number, error: unknown): boolean {
   return failureCount < 1;
 }
 
-export function AppProviders({ children }: { children: ReactNode }) {
+function ThemedToaster() {
+  const { resolvedTheme } = useTheme();
+  return (
+    <Toaster
+      position="top-right"
+      richColors
+      closeButton
+      duration={4000}
+      theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
+    />
+  );
+}
+
+export function AppProviders({
+  children,
+  initialLocale,
+  initialTheme,
+}: {
+  children: ReactNode;
+  initialLocale: Locale;
+  initialTheme: ThemeName;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -31,10 +56,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthContextProvider>
-        {children}
-        <Toaster position="top-right" richColors closeButton duration={4000} />
-      </AuthContextProvider>
+      <AppThemeProvider initialTheme={initialTheme}>
+        <I18nProvider initialLocale={initialLocale}>
+          <AuthContextProvider>
+            {children}
+            <ThemedToaster />
+          </AuthContextProvider>
+        </I18nProvider>
+      </AppThemeProvider>
     </QueryClientProvider>
   );
 }

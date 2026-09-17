@@ -23,6 +23,7 @@ import {
   requestFormFromQualification,
   qualityClassStillAvailable,
   unwrapRequestCalculations,
+  displayCalculationGroupTitle,
   type CalculationRequestItemForm,
 } from "./calculation-request";
 import { isOtherPanelType } from "./hpl-domain";
@@ -617,7 +618,7 @@ describe("calculation request form helpers", () => {
 
     expect(unwrapRequestCalculations(request)).toHaveLength(1);
     expect(isSubmittedCalculationRequest(request.status)).toBe(true);
-    expect(calculationRequestStatusLabel("processing")).toBe("На проверке");
+    expect(calculationRequestStatusLabel("processing")).toBe("В обработке");
 
     const hydrated = requestFormFromApi(request).calculations[0].items[0];
     expect(requestFormFromApi(request).calculations[0].title).toBe("Расчёт №1");
@@ -790,6 +791,18 @@ describe("calculation request form helpers", () => {
     expect(result.valid).toBe(false);
     expect(result.itemErrors[form.calculations[0].items[0].key]?.supplierId).toBe(
       "Укажите поставщика",
+    );
+  });
+
+  it("localizes default calculation titles without rewriting custom titles", async () => {
+    const { createTranslator } = await import("@/i18n/translate");
+    const { dictionaries } = await import("@/i18n/dictionaries");
+    const tEn = createTranslator(dictionaries.en);
+    expect(displayCalculationGroupTitle("Расчёт №1", 0, tEn)).toBe(
+      "Calculation #1",
+    );
+    expect(displayCalculationGroupTitle("Клиентский расчёт", 0, tEn)).toBe(
+      "Клиентский расчёт",
     );
   });
 });

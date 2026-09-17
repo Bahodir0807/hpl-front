@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/i18n/provider';
 
 interface PaginationProps {
   page: number;
@@ -15,6 +16,8 @@ export function Pagination({
   onPageChange,
   total,
 }: PaginationProps) {
+  const { t } = useI18n();
+
   if (totalPages <= 1) return null;
 
   return (
@@ -25,11 +28,13 @@ export function Pagination({
         onClick={() => onPageChange(page - 1)}
         disabled={page <= 1}
       >
-        Назад
+        {t('common.back')}
       </Button>
       <span className="text-sm text-slate-600">
-        Страница {page} из {totalPages}
-        {typeof total === 'number' ? ` · всего записей: ${total}` : ''}
+        {t('common.pageOf', { page, totalPages })}
+        {typeof total === 'number'
+          ? ` · ${t('common.totalRecords', { total })}`
+          : ''}
       </span>
       <Button
         variant="outline"
@@ -37,7 +42,7 @@ export function Pagination({
         onClick={() => onPageChange(page + 1)}
         disabled={page >= totalPages}
       >
-        Вперёд
+        {t('common.forward')}
       </Button>
     </div>
   );

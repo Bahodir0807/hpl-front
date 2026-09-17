@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
+import { useI18n } from '@/i18n/provider';
 import type { NormalizedLeadWorkspace } from './use-lead-workspace';
 import type {
   HplApplication,
@@ -262,6 +263,7 @@ export function useCheckDuplicates(input: DuplicateLookup) {
 
 export function useCreateLead() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreateLeadPayload): Promise<Lead> => {
@@ -270,7 +272,7 @@ export function useCreateLead() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess('Лид создан');
+      showSuccess(t('leads.toastCreated'));
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
     },
     onError: (error) => {
@@ -281,6 +283,7 @@ export function useCreateLead() {
 
 export function useQualifyLead() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: QualifyLeadPayload): Promise<Lead> => {
@@ -290,7 +293,7 @@ export function useQualifyLead() {
       return response.data;
     },
     onSuccess: (_lead, payload) => {
-      showSuccess('Лид квалифицирован');
+      showSuccess(t('leads.toastQualified'));
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
       void queryClient.invalidateQueries({
@@ -306,6 +309,7 @@ export function useQualifyLead() {
 
 export function useUpsertLeadQualification() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: { id: string } & UpsertLeadQualificationPayload) => {
@@ -315,7 +319,7 @@ export function useUpsertLeadQualification() {
       return response.data;
     },
     onSuccess: (_qualification, payload) => {
-      showSuccess('Потребность HPL сохранена');
+      showSuccess(t('leads.toastNeedSaved'));
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', payload.id],
       });
@@ -328,6 +332,7 @@ export function useUpsertLeadQualification() {
 
 export function useConfirmLeadCommercialQualification() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -342,7 +347,7 @@ export function useConfirmLeadCommercialQualification() {
       return response.data;
     },
     onSuccess: (_qualification, payload) => {
-      showSuccess('Коммерческая квалификация подтверждена');
+      showSuccess(t('leads.toastCommercialConfirmed'));
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', payload.id],
       });
@@ -356,6 +361,7 @@ export function useConfirmLeadCommercialQualification() {
 
 export function useUnqualifyLead() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: UnqualifyLeadPayload): Promise<Lead> => {
@@ -369,7 +375,7 @@ export function useUnqualifyLead() {
       return response.data;
     },
     onSuccess: (_lead, payload) => {
-      showSuccess('Лид переведён в неквалифицированные');
+      showSuccess(t('leads.toastUnqualified'));
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
     },
@@ -381,6 +387,7 @@ export function useUnqualifyLead() {
 
 export function useLoseLead() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: LoseLeadPayload): Promise<Lead> => {
@@ -391,7 +398,7 @@ export function useLoseLead() {
       return response.data;
     },
     onSuccess: (_lead, payload) => {
-      showSuccess('Лид закрыт как проигранный');
+      showSuccess(t('leads.toastLost'));
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
       void queryClient.invalidateQueries({
@@ -408,6 +415,7 @@ export function useLoseLead() {
 
 export function useAssignLeadOwner() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: AssignLeadOwnerPayload): Promise<Lead> => {
@@ -419,7 +427,7 @@ export function useAssignLeadOwner() {
       return response.data;
     },
     onSuccess: (_lead, payload) => {
-      showSuccess('Менеджер назначен');
+      showSuccess(t('leads.toastManagerAssigned'));
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', payload.id] });
       void queryClient.invalidateQueries({
@@ -442,6 +450,7 @@ export type ManagerCommercialNoteResponse = {
 
 export function useUpdateLeadManagerCommercialNote() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -455,7 +464,7 @@ export function useUpdateLeadManagerCommercialNote() {
       return response.data;
     },
     onSuccess: (result, payload) => {
-      showSuccess('Примечание сохранено');
+      showSuccess(t('leads.toastNoteSaved'));
       queryClient.setQueryData<Lead>(['lead', payload.id], (current) =>
         current
           ? {
@@ -493,6 +502,7 @@ export function useUpdateLeadManagerCommercialNote() {
 
 export function useHandoffLeadToHead() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -505,7 +515,7 @@ export function useHandoffLeadToHead() {
       return response.data;
     },
     onSuccess: (_result, leadId) => {
-      showSuccess('Данные переданы руководителю');
+      showSuccess(t('leads.toastHandedToHead'));
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
       void queryClient.invalidateQueries({ queryKey: ['lead', leadId] });
       void queryClient.invalidateQueries({

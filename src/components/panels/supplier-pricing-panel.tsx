@@ -24,8 +24,8 @@ import {
 } from '@/lib/hpl-domain';
 import { formatSupplierName } from '@/lib/labels';
 import { qualityLineLabel } from '@/lib/quality-line-presentation';
-
-const MISSING_PRICE_MESSAGE = 'Цена не настроена';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
 
 function sameThickness(left: unknown, right: unknown): boolean {
   const a = toDecimalNumber(left);
@@ -47,6 +47,8 @@ export function SupplierPricingPanel() {
 }
 
 function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
+  const { t, messages } = useI18n();
+  const { supplierDisplayNames } = useLabelMaps();
   const typesQuery = usePanelTypes();
   const suppliersQuery = useSuppliers();
   const pricingQuery = useThicknessPricing(true);
@@ -132,21 +134,20 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
     >
       <div className="mb-4">
         <h3 className="text-base font-semibold text-slate-950">
-          Закупочные цены поставщиков
+          {t('panels.pricingTitle')}
         </h3>
         <p className="mt-1 text-sm text-slate-600">
-          Закупочная цена в CNY за м². Курс CNY → USD задаёт директор, коэффициент
-          продажи фиксирован.
+          {t('panels.pricingHint')}
         </p>
       </div>
 
       {canManage ? (
         <form className="mb-6 grid gap-3 md:grid-cols-2" onSubmit={(event) => void submit(event)}>
           <label className="block text-sm text-slate-700">
-            <span className="mb-1 block font-medium">Тип HPL</span>
+            <span className="mb-1 block font-medium">{t('calculator.typeHpl')}</span>
             <select
               value={panelTypeId}
-              aria-label="Тип HPL"
+              aria-label={t('calculator.typeHpl')}
               onChange={(event) => {
                 setPanelTypeId(event.target.value);
                 setQualityClassId('');
@@ -154,7 +155,7 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
               }}
               className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
             >
-              <option value="">Выберите тип</option>
+              <option value="">{t('hpl.selectType')}</option>
               {types.map((type) => (
                 <option key={type.id} value={type.id}>
                   {panelTypeLabel(type)}
@@ -164,42 +165,47 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
           </label>
 
           <label className="block text-sm text-slate-700">
-            <span className="mb-1 block font-medium">Поставщик</span>
+            <span className="mb-1 block font-medium">{t('common.supplier')}</span>
             <select
               value={supplierId}
-              aria-label="Поставщик"
+              aria-label={t('common.supplier')}
               onChange={(event) => {
                 setSupplierId(event.target.value);
                 setQualityClassId('');
               }}
               className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
             >
-              <option value="">Выберите поставщика</option>
+              <option value="">{t('validation.selectSupplier')}</option>
               {suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
-                  {formatSupplierName(supplier.code, supplier.name)}
+                  {formatSupplierName(
+                    supplier.code,
+                    supplier.name,
+                    t('common.dash'),
+                    supplierDisplayNames,
+                  )}
                 </option>
               ))}
             </select>
           </label>
 
           <label className="block text-sm text-slate-700">
-            <span className="mb-1 block font-medium">Линейка</span>
+            <span className="mb-1 block font-medium">{t('panels.qualityLine')}</span>
             <select
               value={qualityClassId}
-              aria-label="Линейка"
+              aria-label={t('panels.qualityLine')}
               onChange={(event) => setQualityClassId(event.target.value)}
               disabled={!selectedSupplier || !selectedType}
               className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50"
             >
               <option value="">
                 {qualityClasses.length === 0 && selectedSupplier && selectedType
-                  ? 'Нет доступной линейки'
-                  : 'Выберите линейку'}
+                  ? t('panels.noQualityLine')
+                  : t('hpl.qualityLinePlaceholder')}
               </option>
               {qualityClasses.map((quality) => (
                 <option key={quality.id} value={quality.id}>
-                  {qualityLineLabel(quality)}
+                  {qualityLineLabel(quality, messages)}
                 </option>
               ))}
             </select>
@@ -213,27 +219,27 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
           />
 
           <label className="block text-sm text-slate-700">
-            <span className="mb-1 block font-medium">Закупочная цена, CNY</span>
+            <span className="mb-1 block font-medium">{t('panels.purchasePriceCny')}</span>
             <input
               type="text"
               inputMode="decimal"
               value={basePricePerM2}
               onChange={(event) => setBasePricePerM2(event.target.value)}
               placeholder="0.00"
-              aria-label="Закупочная цена, CNY"
+              aria-label={t('panels.purchasePriceCny')}
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
             />
           </label>
 
           <div className="flex items-end">
             <Button type="submit" size="sm" disabled={!canSubmit}>
-              {matchingPrice ? 'Обновить цену' : 'Сохранить цену'}
+              {matchingPrice ? t('panels.updatePrice') : t('panels.savePrice')}
             </Button>
           </div>
         </form>
       ) : (
         <p className="mb-4 text-xs text-slate-500">
-          Изменять закупочные цены может только руководитель.
+          {t('panels.headOnly')}
         </p>
       )}
 
@@ -245,15 +251,15 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
       !thicknessError &&
       !matchingPrice ? (
         <p className="mb-4 text-sm text-amber-800">
-          {MISSING_PRICE_MESSAGE}
+          {t('panels.priceMissing')}
           {selectedSupplier && selectedQuality
-            ? `: ${formatSupplierName(selectedSupplier.code, selectedSupplier.name)}, ${qualityLineLabel(selectedQuality)}, ${formatThicknessMm(thicknessMm)}`
+            ? `: ${formatSupplierName(selectedSupplier.code, selectedSupplier.name, t('common.dash'), supplierDisplayNames)}, ${qualityLineLabel(selectedQuality, messages)}, ${formatThicknessMm(thicknessMm)}`
             : ''}
         </p>
       ) : null}
 
       {pricingQuery.isLoading ? (
-        <p className="text-sm text-slate-600">Загрузка закупочных цен...</p>
+        <p className="text-sm text-slate-600">{t('panels.loadingPrices')}</p>
       ) : null}
 
       <div className="overflow-x-auto">
@@ -261,22 +267,22 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
           <thead className="bg-slate-50">
             <tr>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Тип HPL
+                {t('calculator.typeHpl')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Поставщик
+                {t('common.supplier')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Линейка
+                {t('panels.qualityLine')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Толщина
+                {t('common.thickness')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Закупочная цена, CNY
+                {t('panels.purchasePriceCny')}
               </th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                Статус
+                {t('common.status')}
               </th>
             </tr>
           </thead>
@@ -286,13 +292,18 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
                 <td className="px-3 py-2 text-slate-700">
                   {row.panelTypes && row.panelTypes.length > 0
                     ? row.panelTypes.map((type) => panelTypeLabel(type)).join(', ')
-                    : '—'}
+                    : t('common.dash')}
                 </td>
                 <td className="px-3 py-2 text-slate-900">
-                  {formatSupplierName(row.supplier?.code, row.supplier?.name)}
+                  {formatSupplierName(
+                    row.supplier?.code,
+                    row.supplier?.name,
+                    t('common.dash'),
+                    supplierDisplayNames,
+                  )}
                 </td>
                 <td className="px-3 py-2 text-slate-700">
-                  {qualityLineLabel(row.qualityClass ?? {})}
+                  {qualityLineLabel(row.qualityClass ?? {}, messages)}
                 </td>
                 <td className="px-3 py-2 text-slate-700">
                   {formatThicknessMm(row.thicknessMm)}
@@ -300,10 +311,10 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
                 <td className="px-3 py-2 text-slate-900">
                   {row.basePricePerM2 != null
                     ? `${row.basePricePerM2} CNY`
-                    : '—'}
+                    : t('common.dash')}
                 </td>
                 <td className="px-3 py-2 text-slate-700">
-                  {row.isActive ? 'Активна' : 'Неактивна'}
+                  {row.isActive ? t('panels.priceActive') : t('panels.priceInactive')}
                 </td>
               </tr>
             ))}
@@ -311,7 +322,7 @@ function SupplierPricingPanelBody({ canManage }: { canManage: boolean }) {
         </table>
         {!pricingQuery.isLoading && prices.length === 0 ? (
           <div className="p-6 text-center text-sm text-slate-500">
-            {MISSING_PRICE_MESSAGE}
+            {t('panels.priceMissing')}
           </div>
         ) : null}
       </div>

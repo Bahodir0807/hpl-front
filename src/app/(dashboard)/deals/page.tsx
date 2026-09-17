@@ -18,7 +18,6 @@ import {
 import { useSuppliers } from "../../../hooks/use-panels";
 import {
   normalizeSupplierOrderStatus,
-  supplierOrderStatusLabels,
   useSupplierOrder,
 } from "../../../hooks/use-supplier-orders";
 import { useUsersList, User } from "../../../hooks/use-users";
@@ -33,6 +32,8 @@ import {
   resolveUserName,
 } from "../../../lib/display-names";
 import { formatSupplierName } from "../../../lib/labels";
+import { useI18n } from "@/i18n/provider";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 const DealDetailsModal = dynamic(
   () =>
@@ -54,18 +55,6 @@ type PendingStageChange = {
   dealId: string;
   newStage: DealStage;
   message?: string;
-};
-
-const stageLabels: Record<DealStage, string> = {
-  QUALIFICATION: "Квалификация",
-  HPL_SELECTION: "Подбор HPL",
-  OFFER_PREPARATION: "Подготовка КП",
-  NEGOTIATION: "Переговоры",
-  AGREEMENT_PENDING: "Согласование",
-  PAYMENT_PREPARATION: "Подготовка оплаты",
-  SHIPPED: "Отгружено",
-  WON: "Выиграна",
-  LOST: "Проиграна",
 };
 
 // WON и LOST — терминальные стадии: из них нет переходов ни вперёд, ни назад.
@@ -99,10 +88,11 @@ function getOwnerLabel(deal: Deal, usersById: Map<string, User>): string {
   return resolveUserName(deal.owner, deal.ownerId, usersById);
 }
 
-function getStageErrorMessage(error: unknown): string | undefined {
-  return localizeStageRequirementMessage(
-    getErrorMessage(error, "Требования этапа не выполнены."),
-  );
+function getStageErrorMessage(
+  error: unknown,
+  fallback: string,
+): string | undefined {
+  return localizeStageRequirementMessage(getErrorMessage(error, fallback));
 }
 
 function isBadRequest(error: unknown): boolean {
@@ -110,6 +100,7 @@ function isBadRequest(error: unknown): boolean {
 }
 
 function NextActionBadge({ nextActionAt }: { nextActionAt?: string | null }) {
+  const { t } = useI18n();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -125,7 +116,7 @@ function NextActionBadge({ nextActionAt }: { nextActionAt?: string | null }) {
   if (!nextActionAt) {
     return (
       <span className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">
-        нет задачи
+        {t("deals.noTask")}
       </span>
     );
   }
@@ -136,7 +127,7 @@ function NextActionBadge({ nextActionAt }: { nextActionAt?: string | null }) {
   if (dueDate.getTime() < now) {
     return (
       <span className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">
-        просрочена
+        {t("deals.overdue")}
       </span>
     );
   }
@@ -144,24 +135,26 @@ function NextActionBadge({ nextActionAt }: { nextActionAt?: string | null }) {
   if (dueDate.getTime() <= now + warningWindowMs) {
     return (
       <span className="rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
-        скоро срок
+        {t("deals.dueSoon")}
       </span>
     );
   }
 
   return (
     <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-      в срок
+      {t("deals.onTime")}
     </span>
   );
 }
 
 export default function DealsPage() {
+  const { t } = useI18n();
+
   return (
     <Suspense
       fallback={
         <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
-          Загрузка сделок...
+          {t("deals.loading")}
         </div>
       }
     >
@@ -171,6 +164,8 @@ export default function DealsPage() {
 }
 
 function DealsPageContent() {
+  const { t, locale } = useI18n();
+  const labels = useLabelMaps();
   const router = useRouter();
   const searchParams = useSearchParams();
   const dealIdParam = searchParams.get("dealId");
@@ -200,6 +195,7 @@ function DealsPageContent() {
     useState<PendingStageChange | null>(null);
   const total = dealsQuery.data?.total ?? 0;
   const totalPages = Math.ceil(total / 50);
+  const stageLabels = labels.dealStageLabels;
 
   const selectedDealId =
     dealIdParam ?? resolvedSupplierOrderQuery.data?.dealId ?? null;
@@ -289,7 +285,7 @@ function DealsPageContent() {
         setPendingStageChange({
           dealId,
           newStage,
-          message: getStageErrorMessage(error),
+          message: getStageErrorMessage(error, t("deals.stageRequirements")),
         });
         return;
       }
@@ -304,17 +300,17 @@ function DealsPageContent() {
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-xl font-semibold text-slate-950">
-              Сделки / Воронка продаж
+              {t("deals.title")}
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">
-              Канбан по этапам, статус поставки и сделки из калькулятора HPL.
+              {t("deals.subtitle")}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 rounded border border-slate-200 bg-white px-3 py-3">
           <label className="flex items-center gap-2 text-sm text-slate-700">
-            <span className="font-medium">Источник</span>
+            <span className="font-medium">{t("deals.source")}</span>
             <select
               value={source}
               onChange={(event) => {
@@ -323,14 +319,14 @@ function DealsPageContent() {
               }}
               className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-slate-500"
             >
-              <option value="">Все</option>
+              <option value="">{t("common.all")}</option>
               <option value="telegram">Telegram</option>
-              <option value="website">Сайт</option>
-              <option value="manual">Вручную</option>
+              <option value="website">{t("deals.website")}</option>
+              <option value="manual">{t("deals.manual")}</option>
             </select>
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
-            <span className="font-medium">Поставщик</span>
+            <span className="font-medium">{t("deals.supplier")}</span>
             <select
               value={supplierId}
               onChange={(event) => {
@@ -339,10 +335,15 @@ function DealsPageContent() {
               }}
               className="rounded border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-slate-500"
             >
-              <option value="">Все</option>
+              <option value="">{t("common.all")}</option>
               {(suppliersQuery.data ?? []).map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
-                  {formatSupplierName(supplier.code, supplier.name)}
+                  {formatSupplierName(
+                    supplier.code,
+                    supplier.name,
+                    t("suppliers.fallback"),
+                    labels.supplierDisplayNames,
+                  )}
                 </option>
               ))}
             </select>
@@ -354,7 +355,7 @@ function DealsPageContent() {
               onChange={(event) => setShowCompleted(event.target.checked)}
               className="h-4 w-4"
             />
-            Показать операционно завершённые
+            {t("deals.showCompleted")}
           </label>
         </div>
 
@@ -363,19 +364,19 @@ function DealsPageContent() {
         isAxiosError(linkedDealQuery.error) &&
         linkedDealQuery.error.response?.status === 404 ? (
           <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Сделка не найдена.
+            {t("deals.notFound")}
           </div>
         ) : null}
 
         {dealsQuery.isLoading ? (
           <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
-            Загрузка сделок...
+            {t("deals.loading")}
           </div>
         ) : null}
 
         {dealsQuery.isError ? (
           <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-            Не удалось загрузить сделки.
+            {t("deals.loadFailed")}
           </div>
         ) : null}
 
@@ -401,7 +402,9 @@ function DealsPageContent() {
                       </div>
                       <div className="mt-1 truncate text-[11px] text-slate-500">
                         {stageDeals.length}{" "}
-                        {stageDeals.length === 1 ? "сделка" : "сделок"}
+                        {stageDeals.length === 1
+                          ? t("deals.dealCountOne")
+                          : t("deals.dealCountMany")}
                       </div>
                     </div>
 
@@ -454,38 +457,40 @@ function DealsPageContent() {
                             {isCommerciallyWon(deal) ? (
                               <div className="mt-2 flex flex-wrap gap-1">
                                 <span className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                  Коммерчески выиграна
+                                  {t("deals.commerciallyWon")}
                                 </span>
                                 {isOperationallyCompleted(deal) ? (
                                   <span className="rounded border border-slate-900 bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                    Операционно завершена
+                                    {t("deals.operationallyCompleted")}
                                   </span>
                                 ) : (
                                   <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                                    В исполнении
+                                    {t("deals.inFulfillment")}
                                   </span>
                                 )}
                               </div>
                             ) : null}
                             {deal.completedAt ? (
                               <div className="mt-1 text-[11px] text-slate-500">
-                                Завершена {formatDateTime(deal.completedAt)}
+                                {t("deals.completedAt", {
+                                  date: formatDateTime(deal.completedAt, locale),
+                                })}
                               </div>
                             ) : null}
 
                             <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                               <div className="min-w-0">
-                                <div className="text-slate-500">Сумма</div>
+                                <div className="text-slate-500">{t("deals.amount")}</div>
                                 <div className="truncate font-semibold text-slate-900">
                                   {formatMoney(deal.totalAmount)}
                                 </div>
                               </div>
                               <div className="min-w-0">
-                                <div className="text-slate-500">Поставка</div>
+                                <div className="text-slate-500">{t("deals.delivery")}</div>
                                 <div className="truncate font-medium text-slate-900">
                                   {orderStatus
-                                    ? supplierOrderStatusLabels[orderStatus]
-                                    : "—"}
+                                    ? labels.supplierOrderStatusLabels[orderStatus]
+                                    : t("common.dash")}
                                 </div>
                               </div>
                             </div>
@@ -496,7 +501,7 @@ function DealsPageContent() {
                             <div className="mt-3 flex items-center justify-between gap-2">
                               {isOperationallyCompleted(deal) ? (
                                 <span className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                                  завершена
+                                  {t("deals.completed")}
                                 </span>
                               ) : (
                                 <NextActionBadge
@@ -514,10 +519,12 @@ function DealsPageContent() {
                                       );
                                     }}
                                     disabled={changeStage.isPending}
-                                    title={`Вернуть на этап «${stageLabels[previousStage]}»`}
+                                    title={t("deals.moveBack", {
+                                      stage: stageLabels[previousStage],
+                                    })}
                                     className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
                                   >
-                                    ← Назад
+                                    {t("common.previous")}
                                   </button>
                                 ) : null}
                                 {nextStage ? (
@@ -527,10 +534,12 @@ function DealsPageContent() {
                                       void changeDealStage(deal.id, nextStage);
                                     }}
                                     disabled={changeStage.isPending}
-                                    title={`Перевести на этап «${stageLabels[nextStage]}»`}
+                                    title={t("deals.moveForward", {
+                                      stage: stageLabels[nextStage],
+                                    })}
                                     className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
                                   >
-                                    Далее →
+                                    {t("common.next")}
                                   </button>
                                 ) : null}
                               </div>
@@ -541,7 +550,7 @@ function DealsPageContent() {
 
                       {stageDeals.length === 0 ? (
                         <div className="rounded border border-dashed border-slate-300 bg-white p-4 text-center text-xs text-slate-500">
-                          Нет сделок
+                          {t("deals.emptyColumn")}
                         </div>
                       ) : null}
                     </div>

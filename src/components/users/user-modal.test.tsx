@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { UserModal } from './user-modal';
 
@@ -16,7 +15,6 @@ describe('UserModal role assignment', () => {
     expect(screen.getByRole('option', { name: 'Администратор' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Менеджер' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Кладовщик' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Монтажник' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Наблюдатель' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Финансист' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Директор' })).not.toBeInTheDocument();
@@ -25,8 +23,7 @@ describe('UserModal role assignment', () => {
     expect(screen.queryByText('OBSERVER')).not.toBeInTheDocument();
     expect(screen.queryByText('FINANCIER')).not.toBeInTheDocument();
 
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'INSTALLER');
-    expect(screen.getByRole('combobox')).toHaveValue('INSTALLER');
+    expect(screen.getAllByRole('option')).toHaveLength(3);
   });
 
   it('displays protected role labels when editing an existing user', () => {

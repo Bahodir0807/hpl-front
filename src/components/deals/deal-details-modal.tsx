@@ -23,14 +23,11 @@ import { isCommerciallyWon, isOperationallyCompleted } from "../../lib/deal-comp
 import { getErrorMessage } from "../../lib/errors";
 import { formatThicknessMm, panelSizeLabel, panelTypeLabel } from "../../lib/hpl-domain";
 import { FileUpload } from "../ui/file-upload";
-import {
-  dealStageLabels,
-  enumLabel,
-  formatSupplierName,
-  taskStatusLabels,
-  taskTypeLabels,
-} from "../../lib/labels";
+import { enumLabel, formatSupplierName } from "../../lib/labels";
 import { lossReasonLabel } from "../../lib/loss-reasons";
+import { useI18n } from "@/i18n/provider";
+import { localizeSystemText } from "@/i18n/system-labels";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 type DealDetailsModalProps = {
   dealId: string | null;
@@ -48,14 +45,14 @@ type TabId =
   | "history"
   | "tasks";
 
-const tabs: { id: TabId; label: string }[] = [
-  { id: "items", label: "Позиции HPL" },
-  { id: "calculations", label: "Расчёты" },
-  { id: "supplier", label: "Заказы поставщику" },
-  { id: "installation", label: "Монтаж" },
-  { id: "offers", label: "Документы КП" },
-  { id: "history", label: "История этапов" },
-  { id: "tasks", label: "Открытые задачи" },
+const tabIds: TabId[] = [
+  "items",
+  "calculations",
+  "supplier",
+  "installation",
+  "offers",
+  "history",
+  "tasks",
 ];
 
 const openTaskStatuses: TaskStatus[] = ["PENDING", "IN_PROGRESS"];
@@ -65,6 +62,7 @@ function formatDealItemSize(item: DealItem): string {
 }
 
 function OfferRow({ offer }: { offer: DealOffer }) {
+  const { t } = useI18n();
   return (
     <tr>
       <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-900">
@@ -87,7 +85,7 @@ function OfferRow({ offer }: { offer: DealOffer }) {
               : "border-slate-200 bg-slate-50 text-slate-700"
           }`}
         >
-          {offer.isApproved ? "Согласовано" : "Черновик"}
+          {offer.isApproved ? t("statuses.quote.approved") : t("statuses.quote.draft")}
         </span>
       </td>
     </tr>
@@ -100,6 +98,13 @@ export function DealDetailsModal({
   installation = false,
   onClose,
 }: DealDetailsModalProps) {
+  const { t, messages } = useI18n();
+  const {
+    dealStageLabels,
+    taskStatusLabels,
+    taskTypeLabels,
+    supplierDisplayNames,
+  } = useLabelMaps();
   const { hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>(
     installation ? "installation" : supplierOrderId ? "supplier" : "items",
@@ -149,7 +154,7 @@ export function DealDetailsModal({
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-slate-950">
-              {deal?.title ?? "Сделка"}
+              {deal?.title ?? t("deals.fallback")}
             </h2>
             <div className="mt-1 truncate text-sm text-slate-600">
               {deal?.client?.name ?? deal?.clientId ?? "-"} ·{" "}
@@ -159,21 +164,21 @@ export function DealDetailsModal({
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
                 {isCommerciallyWon(deal) ? (
                   <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
-                    Коммерчески выиграна
+                    {t("deals.commerciallyWon")}
                   </span>
                 ) : null}
                 {isOperationallyCompleted(deal) ? (
                   <span className="rounded border border-slate-900 bg-slate-900 px-2 py-1 font-medium text-white">
-                    Операционно завершена {formatDateTime(deal.completedAt)}
+                    {t("deals.operationallyCompleted")} {formatDateTime(deal.completedAt)}
                   </span>
                 ) : isCommerciallyWon(deal) ? (
                   <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-medium text-slate-700">
-                    В исполнении
+                    {t("deals.inFulfillment")}
                   </span>
                 ) : null}
                 {deal.stage === "LOST" ? (
                   <span className="rounded border border-red-200 bg-red-50 px-2 py-1 font-medium text-red-700">
-                    {lossReasonLabel(deal.lostReasonCode)}
+                    {lossReasonLabel(deal.lostReasonCode, messages)}
                   </span>
                 ) : null}
               </div>
@@ -186,10 +191,10 @@ export function DealDetailsModal({
             {canSeePurchasePrice ? (
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
                 <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-                  Сумма: {formatMoney(deal?.totalAmount)}
+                  {t("deals.amount")}: {formatMoney(deal?.totalAmount)}
                 </span>
                 <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-                  Маржа: {formatMoney(deal?.margin)}
+                  {t("deals.margin")}: {formatMoney(deal?.margin)}
                 </span>
               </div>
             ) : null}
@@ -203,7 +208,7 @@ export function DealDetailsModal({
                 onClick={() => setIsLoseOpen(true)}
                 className="rounded border border-red-200 bg-white px-2 py-1 text-sm text-red-700 hover:bg-red-50"
               >
-                Проиграна
+                {t("deals.lost")}
               </button>
             ) : null}
             <button
@@ -211,25 +216,25 @@ export function DealDetailsModal({
               onClick={onClose}
               className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
             >
-              Закрыть
+              {t("common.close")}
             </button>
           </div>
         </div>
 
         <div className="overflow-x-auto border-b border-slate-200 px-5">
           <div className="flex w-max min-w-full gap-1">
-            {tabs.map((tab) => (
+            {tabIds.map((tabId) => (
               <button
-                key={tab.id}
+                key={tabId}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setActiveTab(tabId)}
                 className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
-                  activeTab === tab.id
+                  activeTab === tabId
                     ? "border-slate-900 text-slate-950"
                     : "border-transparent text-slate-600 hover:text-slate-950"
                 }`}
               >
-                {tab.label}
+                {t(`deals.tabs.${tabId}`)}
               </button>
             ))}
           </div>
@@ -237,18 +242,18 @@ export function DealDetailsModal({
 
         <div className="overflow-y-auto overflow-x-hidden p-5">
           {dealQuery.isLoading ? (
-            <div className="text-sm text-slate-600">Загрузка сделки...</div>
+            <div className="text-sm text-slate-600">{t("deals.loadingOne")}</div>
           ) : null}
 
           {dealQuery.isError ? (
             <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               {isAxiosError(dealQuery.error) &&
               dealQuery.error.response?.status === 403
-                ? "Недостаточно прав для просмотра сделки."
+                ? t("deals.forbidden")
                 : isAxiosError(dealQuery.error) &&
                     dealQuery.error.response?.status === 404
-                  ? "Сделка не найдена."
-                  : "Не удалось загрузить сделку."}
+                  ? t("deals.notFound")
+                  : t("deals.loadOneFailed")}
             </div>
           ) : null}
 
@@ -260,30 +265,30 @@ export function DealDetailsModal({
                     <thead className="bg-slate-50">
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Тип панели
+                          {t("deals.panelType")}
                         </th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                          Поставщик
+                          {t("common.supplier")}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
-                          Размер
+                          {t("common.size")}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
-                          Толщина
+                          {t("common.thickness")}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
-                          Листы
+                          {t("common.sheets")}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
-                          Цена
+                          {t("common.price")}
                         </th>
                         {canSeePurchasePrice && !isHplCalculatorDeal(deal) ? (
                           <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
-                            Закупочная цена
+                            {t("deals.purchasePrice")}
                           </th>
                         ) : null}
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-700">
-                          Итого
+                          {t("common.total")}
                         </th>
                       </tr>
                     </thead>
@@ -292,9 +297,9 @@ export function DealDetailsModal({
                         <tr key={item.id}>
                           <td className="min-w-40 px-3 py-2">
                             <div className="font-medium text-slate-950">
-                              {panelTypeLabel(item.panelType) !== '—'
-                                ? panelTypeLabel(item.panelType)
-                                : (item.product?.name ?? '—')}
+                              {panelTypeLabel(item.panelType, messages) !== messages.common.dash
+                                ? panelTypeLabel(item.panelType, messages)
+                                : (item.product?.name ?? messages.common.dash)}
                             </div>
                             {item.product?.sku && !isHplCalculatorDeal(deal) ? (
                               <div className="text-xs text-slate-600">
@@ -306,7 +311,8 @@ export function DealDetailsModal({
                             {formatSupplierName(
                               item.supplier?.code ?? deal.supplier?.code,
                               item.supplier?.name ?? deal.supplier?.name,
-                              "—",
+                              messages.common.dash,
+                              supplierDisplayNames,
                             )}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 text-slate-700">
@@ -335,7 +341,7 @@ export function DealDetailsModal({
                   </table>
                   {(deal.items ?? []).length === 0 ? (
                     <div className="p-4 text-sm text-slate-600">
-                      Позиции HPL еще не добавлены.
+                      {t("deals.emptyItems")}
                     </div>
                   ) : null}
                 </div>
@@ -370,10 +376,10 @@ export function DealDetailsModal({
                 <div className="space-y-3">
                   <div>
                     <h3 className="text-sm font-semibold text-slate-950">
-                      Версии документов после создания сделки
+                      {t("deals.offerVersionsTitle")}
                     </h3>
                     <p className="mt-1 text-xs text-slate-500">
-                      Коммерческое предложение до сделки хранится в карточке лида.
+                      {t("deals.offerVersionsHint")}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -391,7 +397,7 @@ export function DealDetailsModal({
                       disabled={addOffer.isPending}
                       className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
                     >
-                      Добавить версию документа
+                      {t("deals.addDocumentVersion")}
                     </button>
                     <FileUpload
                       relatedType="DEAL"
@@ -400,12 +406,12 @@ export function DealDetailsModal({
                     />
                     {offerFileId ? (
                       <span className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-                        PDF прикреплён к новой версии документа
+                        {t("deals.pdfAttached")}
                         <button
                           type="button"
                           onClick={() => setOfferFileId(null)}
                           className="ml-1 text-emerald-800 hover:text-emerald-950"
-                          title="Открепить файл"
+                          title={t("common.detachFile")}
                         >
                           ×
                         </button>
@@ -418,19 +424,19 @@ export function DealDetailsModal({
                       <thead className="bg-slate-50">
                         <tr>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Версия
+                            {t("common.version")}
                           </th>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Номер
+                            {t("common.number")}
                           </th>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Сумма
+                            {t("common.amount")}
                           </th>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Действует до
+                            {t("deals.validUntil")}
                           </th>
                           <th className="px-3 py-2 text-left font-semibold text-slate-700">
-                            Статус
+                            {t("common.status")}
                           </th>
                         </tr>
                       </thead>
@@ -458,11 +464,12 @@ export function DealDetailsModal({
                       <div className="mt-1 text-xs text-slate-600">
                         {formatDateTime(history.createdAt)}
                         {history.isException
-                          ? ` · исключение согласовано: ${
-                              history.approvedBy?.email ??
-                              history.approvedById ??
-                              "-"
-                            }`
+                          ? t("deals.exceptionApproved", {
+                              name:
+                                history.approvedBy?.email ??
+                                history.approvedById ??
+                                t("common.dash"),
+                            })
                           : ""}
                       </div>
                       {history.reason ? (
@@ -474,7 +481,7 @@ export function DealDetailsModal({
                   ))}
                   {(deal.stageHistory ?? []).length === 0 ? (
                     <div className="text-sm text-slate-600">
-                      История смены этапов пуста.
+                      {t("deals.emptyHistory")}
                     </div>
                   ) : null}
                 </div>
@@ -489,26 +496,26 @@ export function DealDetailsModal({
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0 truncate font-medium text-slate-950">
-                          {task.title}
+                          {localizeSystemText(task.title)}
                         </div>
                         <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">
                           {enumLabel(taskStatusLabels, task.status)}
                         </span>
                       </div>
                       <div className="mt-1 text-xs text-slate-600">
-                        {enumLabel(taskTypeLabels, task.type)} · срок{" "}
+                        {enumLabel(taskTypeLabels, task.type)} · {t("deals.duePrefix")}{" "}
                         {formatDateTime(task.dueDate)}
                       </div>
                     </div>
                   ))}
                   {tasksQuery.isLoading ? (
                     <div className="text-sm text-slate-600">
-                      Загрузка задач...
+                      {t("tasks.loading")}
                     </div>
                   ) : null}
                   {!tasksQuery.isLoading && openTasks.length === 0 ? (
                     <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                      Открытых задач по сделке нет.
+                      {t("deals.emptyOpenTasks")}
                     </div>
                   ) : null}
                 </div>
@@ -521,9 +528,9 @@ export function DealDetailsModal({
     <LoseOpportunityModal
       isOpen={isLoseOpen}
       title={deal?.title ?? ""}
-      entityLabel="сделку"
+      entityLabel={t("deals.entityLabel")}
       pending={loseDeal.isPending}
-      error={loseDeal.isError ? getErrorMessage(loseDeal.error) : null}
+      error={loseDeal.isError ? getErrorMessage(loseDeal.error, undefined, messages) : null}
       onClose={() => setIsLoseOpen(false)}
       onSubmit={async (payload) => {
         if (!deal) {

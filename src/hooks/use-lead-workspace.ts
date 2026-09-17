@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
+import { useI18n } from '@/i18n/provider';
 import { LeadActivity, LeadCall, LeadNote, LeadWorkspace } from '../types/hpl';
 
 export type {
@@ -71,6 +72,7 @@ export function useLeadWorkspace(leadId: string) {
 
 export function useCreateLeadCall() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreateLeadCallPayload): Promise<LeadCall> => {
@@ -83,7 +85,7 @@ export function useCreateLeadCall() {
       return response.data;
     },
     onSuccess: (_call, payload) => {
-      showSuccess('Звонок зарегистрирован');
+      showSuccess(t('leads.toastCallLogged'));
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', payload.leadId],
       });
@@ -97,6 +99,7 @@ export function useCreateLeadCall() {
 
 export function useCreateLeadNote() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreateLeadNotePayload): Promise<LeadNote> => {
@@ -108,7 +111,7 @@ export function useCreateLeadNote() {
       return response.data;
     },
     onSuccess: (_note, payload) => {
-      showSuccess('Заметка добавлена');
+      showSuccess(t('leads.toastNoteAdded'));
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', payload.leadId],
       });

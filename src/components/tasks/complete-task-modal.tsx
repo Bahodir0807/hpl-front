@@ -1,16 +1,16 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Task, useCompleteTask } from '../../hooks/use-tasks';
+import { useI18n } from '@/i18n/provider';
+import { localizeSystemText } from '@/i18n/system-labels';
 
-const completeTaskSchema = z.object({
-  result: z.string().min(3, 'Укажите результат выполнения'),
-});
-
-type CompleteTaskFormValues = z.infer<typeof completeTaskSchema>;
+type CompleteTaskFormValues = {
+  result: string;
+};
 
 type CompleteTaskModalProps = {
   task: Task | null;
@@ -24,6 +24,14 @@ export function CompleteTaskModal({
   onClose,
 }: CompleteTaskModalProps) {
   const completeTask = useCompleteTask();
+  const { t } = useI18n();
+  const completeTaskSchema = useMemo(
+    () =>
+      z.object({
+        result: z.string().min(3, t('validation.taskResultRequired')),
+      }),
+    [t],
+  );
   const {
     register,
     handleSubmit,
@@ -59,9 +67,11 @@ export function CompleteTaskModal({
       <div className="w-full max-w-md rounded border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4">
           <h2 className="text-base font-semibold text-slate-950">
-            Завершить задачу
+            {t('tasks.completeTitle')}
           </h2>
-          <p className="mt-1 text-sm text-slate-600">{task.title}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            {localizeSystemText(task.title)}
+          </p>
         </div>
 
         <form
@@ -72,7 +82,7 @@ export function CompleteTaskModal({
         >
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Результат
+              {t('tasks.result')}
             </span>
             <textarea
               rows={4}
@@ -87,7 +97,7 @@ export function CompleteTaskModal({
           </label>
 
           {completeTask.isError ? (
-            <p className="text-sm text-red-600">Не удалось завершить задачу</p>
+            <p className="text-sm text-red-600">{t('tasks.completeFailed')}</p>
           ) : null}
 
           <div className="flex justify-end gap-2 pt-1">
@@ -96,14 +106,14 @@ export function CompleteTaskModal({
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={completeTask.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              Завершить
+              {t('tasks.complete')}
             </button>
           </div>
         </form>

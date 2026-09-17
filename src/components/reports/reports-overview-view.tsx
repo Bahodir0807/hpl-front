@@ -1,6 +1,9 @@
+'use client';
+
 import { formatNumber } from '@/lib/format';
 import type { ReportsOverview } from '@/hooks/use-reports';
 import { lossReasonLabel } from '@/lib/loss-reasons';
+import { useI18n } from '@/i18n/provider';
 
 function KpiCard({
   label,
@@ -9,11 +12,12 @@ function KpiCard({
   label: string;
   value: string | number | null | undefined;
 }) {
+  const { t } = useI18n();
   return (
     <div className="rounded border border-slate-200 bg-slate-50 px-3 py-3">
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-1 text-lg font-semibold text-slate-950">
-        {value === null || value === undefined ? '—' : value}
+        {value === null || value === undefined ? t('common.dash') : value}
       </div>
     </div>
   );
@@ -26,6 +30,7 @@ function LossReasonTable({
   title: string;
   reasons?: Record<string, number>;
 }) {
+  const { t, messages } = useI18n();
   const entries = Object.entries(reasons ?? {});
   if (entries.length === 0) {
     return null;
@@ -40,17 +45,17 @@ function LossReasonTable({
         <thead>
           <tr>
             <th className="px-3 py-2 text-left font-medium text-slate-600">
-              Причина
+              {t('reports.reason')}
             </th>
             <th className="px-3 py-2 text-left font-medium text-slate-600">
-              Количество
+              {t('reports.count')}
             </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200">
           {entries.map(([reason, count]) => (
             <tr key={reason}>
-              <td className="px-3 py-2">{lossReasonLabel(reason)}</td>
+              <td className="px-3 py-2">{lossReasonLabel(reason, messages)}</td>
               <td className="px-3 py-2">{count}</td>
             </tr>
           ))}
@@ -61,72 +66,73 @@ function LossReasonTable({
 }
 
 export function ReportsOverviewView({ data }: { data: ReportsOverview }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard label="Лиды" value={data.leads?.total} />
-        <KpiCard label="Квалифицированы" value={data.leads?.qualified} />
-        <KpiCard label="Конвертированы" value={data.leads?.converted} />
-        <KpiCard label="Проигранные лиды" value={data.leads?.lost} />
-        <KpiCard label="КП создано" value={data.quotes?.created} />
-        <KpiCard label="КП согласовано" value={data.quotes?.approved} />
+        <KpiCard label={t('reports.leads')} value={data.leads?.total} />
+        <KpiCard label={t('reports.qualified')} value={data.leads?.qualified} />
+        <KpiCard label={t('reports.converted')} value={data.leads?.converted} />
+        <KpiCard label={t('reports.lostLeads')} value={data.leads?.lost} />
+        <KpiCard label={t('reports.quotesCreated')} value={data.quotes?.created} />
+        <KpiCard label={t('reports.quotesApproved')} value={data.quotes?.approved} />
         <KpiCard
-          label="Согласие клиента"
+          label={t('reports.clientConsent')}
           value={data.quotes?.clientAccepted}
         />
-        <KpiCard label="Активные сделки" value={data.deals?.active} />
-        <KpiCard label="Коммерчески выиграны" value={data.deals?.won} />
+        <KpiCard label={t('reports.activeDeals')} value={data.deals?.active} />
+        <KpiCard label={t('reports.commerciallyWon')} value={data.deals?.won} />
         <KpiCard
-          label="Операционно завершены"
+          label={t('reports.operationallyCompleted')}
           value={data.deals?.operationallyCompleted}
         />
-        <KpiCard label="Проигранные сделки" value={data.deals?.lost} />
+        <KpiCard label={t('reports.lostDeals')} value={data.deals?.lost} />
         <KpiCard
-          label="Активные заказы поставщику"
+          label={t('reports.activeSupplierOrders')}
           value={data.supplierOrders?.active}
         />
         <KpiCard
-          label="Просроченная готовность"
+          label={t('reports.overdueReady')}
           value={data.supplierOrders?.overdueReadiness}
         />
-        <KpiCard label="Монтаж запланирован" value={data.installation?.scheduled} />
+        <KpiCard label={t('reports.installationScheduled')} value={data.installation?.scheduled} />
         <KpiCard
-          label="Ожидает двойного подтверждения"
+          label={t('reports.waitingDoubleConfirm')}
           value={data.installation?.pendingDualConfirmation}
         />
-        <KpiCard label="Монтаж завершён" value={data.installation?.completed} />
-        <KpiCard label="Остаток на складе" value={data.warehouse?.onHand} />
-        <KpiCard label="Доступно" value={data.warehouse?.available} />
+        <KpiCard label={t('reports.installationCompleted')} value={data.installation?.completed} />
+        <KpiCard label={t('reports.warehouseOnHand')} value={data.warehouse?.onHand} />
+        <KpiCard label={t('reports.warehouseAvailable')} value={data.warehouse?.available} />
         <KpiCard
-          label="Ожидаемые приходы"
+          label={t('reports.expectedReceipts')}
           value={data.warehouse?.pendingPurchases}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <KpiCard
-          label="КП → согласие, ч"
+          label={t('reports.quoteToConsentHours')}
           value={
             data.averageDurationsHours?.quoteCreatedToClientAccepted == null
-              ? '—'
+              ? t('common.dash')
               : formatNumber(
                   data.averageDurationsHours.quoteCreatedToClientAccepted,
                 )
           }
         />
         <KpiCard
-          label="Заказ → готовность, ч"
+          label={t('reports.orderToReadyHours')}
           value={
             data.averageDurationsHours?.supplierOrderedToReady == null
-              ? '—'
+              ? t('common.dash')
               : formatNumber(data.averageDurationsHours.supplierOrderedToReady)
           }
         />
         <KpiCard
-          label="Выигрыш → завершение, ч"
+          label={t('reports.winToCompleteHours')}
           value={
             data.averageDurationsHours?.dealWonToOperationalCompletion == null
-              ? '—'
+              ? t('common.dash')
               : formatNumber(
                   data.averageDurationsHours.dealWonToOperationalCompletion,
                 )
@@ -136,11 +142,11 @@ export function ReportsOverviewView({ data }: { data: ReportsOverview }) {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <LossReasonTable
-          title="Причины проигрыша лидов"
+          title={t('reports.lostLeadReasons')}
           reasons={data.leads?.lossReasons}
         />
         <LossReasonTable
-          title="Причины проигрыша сделок"
+          title={t('reports.lostDealReasons')}
           reasons={data.deals?.lossReasons}
         />
       </div>

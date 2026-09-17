@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "@/i18n/provider";
 
 export type SearchComboboxOption = {
   value: string;
@@ -25,14 +26,18 @@ export function SearchCombobox({
   value,
   onChange,
   options,
-  placeholder = "Выберите значение",
-  searchPlaceholder = "Поиск...",
-  emptyLabel = "Ничего не найдено",
+  placeholder,
+  searchPlaceholder,
+  emptyLabel,
   disabled = false,
   loading = false,
   ariaLabel,
   onSearchChange,
 }: SearchComboboxProps) {
+  const { t } = useI18n();
+  const resolvedPlaceholder = placeholder ?? t('common.selectPlaceholder');
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t('common.search');
+  const resolvedEmptyLabel = emptyLabel ?? t('common.noData');
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -87,7 +92,7 @@ export function SearchCombobox({
         className="flex w-full items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 outline-none focus:border-slate-500 disabled:bg-slate-100"
       >
         <span className={selectedOption ? "text-slate-900" : "text-slate-500"}>
-          {selectedOption?.label ?? placeholder}
+          {selectedOption?.label ?? resolvedPlaceholder}
         </span>
         <span className="text-slate-400">▾</span>
       </button>
@@ -102,18 +107,18 @@ export function SearchCombobox({
                 setSearch(nextValue);
                 onSearchChange?.(nextValue);
               }}
-              placeholder={searchPlaceholder}
+              placeholder={resolvedSearchPlaceholder}
               className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-slate-500"
             />
           </div>
 
           <div className="max-h-56 overflow-y-auto p-1">
             {loading ? (
-              <div className="px-3 py-2 text-sm text-slate-600">Загрузка...</div>
+              <div className="px-3 py-2 text-sm text-slate-600">{t('common.loadingEllipsis')}</div>
             ) : null}
 
             {!loading && filteredOptions.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-slate-500">{emptyLabel}</div>
+              <div className="px-3 py-2 text-sm text-slate-500">{resolvedEmptyLabel}</div>
             ) : null}
 
             {!loading

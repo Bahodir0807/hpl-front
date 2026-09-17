@@ -1,4 +1,7 @@
 import type { SupplierOrder, SupplierOrderStatus } from '@/types/hpl';
+import { ru } from '@/i18n/ru';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
 
 export const SUPPLIER_ORDERS_MANAGE_PERMISSION = 'supplier_orders:manage';
 export const SUPPLIER_ORDERS_CONFIRM_CLIENT_DELIVERY_PERMISSION =
@@ -15,14 +18,20 @@ export const supplierOrderStatuses: SupplierOrderStatus[] = [
 ];
 
 export const supplierOrderStatusLabels: Record<SupplierOrderStatus, string> = {
-  DRAFT: 'Черновик',
-  SENT_TO_PRODUCTION: 'Отправлено в производство',
-  IN_PRODUCTION: 'В производстве',
-  READY_FOR_SHIPMENT: 'Готов к отгрузке',
-  SHIPPED: 'Отгружено',
-  DELIVERED: 'Доставлено',
-  CANCELLED: 'Отменён',
+  ...ru.statuses.supplierOrder,
 };
+
+export function supplierOrderStatusLabel(
+  status?: string | null,
+  messages: Messages = getActiveMessages(),
+): string {
+  const normalized = normalizeSupplierOrderStatus(status);
+  if (!normalized) {
+    return status?.trim() ? status : messages.common.dash;
+  }
+
+  return messages.statuses.supplierOrder[normalized];
+}
 
 const LEGACY_STATUS_MAP: Record<string, SupplierOrderStatus> = {
   draft: 'DRAFT',

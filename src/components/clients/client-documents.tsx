@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useDownloadFile, useEntityFiles } from '@/hooks/use-upload';
 import { fileTypeLabel, formatFileSize } from '@/lib/file-presentation';
+import { useI18n } from '@/i18n/provider';
 import { Button } from '../ui/button';
 import { FileUpload } from '../ui/file-upload';
 
@@ -13,6 +14,7 @@ type ClientDocumentsProps = {
 };
 
 export function ClientDocuments({ clientId }: ClientDocumentsProps) {
+  const { t, messages } = useI18n();
   const { user } = useAuth();
   const canRead = user?.permissions.includes('files:read') ?? false;
   const canUpload = user?.permissions.includes('files:upload') ?? false;
@@ -22,7 +24,7 @@ export function ClientDocuments({ clientId }: ClientDocumentsProps) {
 
   if (!canRead) {
     return (
-      <SectionMessage>Недостаточно прав для просмотра документов.</SectionMessage>
+      <SectionMessage>{t('clients.documents.forbidden')}</SectionMessage>
     );
   }
 
@@ -30,9 +32,9 @@ export function ClientDocuments({ clientId }: ClientDocumentsProps) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-950">Документы клиента</h3>
+          <h3 className="text-sm font-semibold text-slate-950">{t('clients.documents.title')}</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Файлы, прикреплённые непосредственно к карточке клиента.
+            {t('clients.documents.hint')}
           </p>
         </div>
         {canUpload ? (
@@ -41,12 +43,12 @@ export function ClientDocuments({ clientId }: ClientDocumentsProps) {
       </div>
 
       {filesQuery.isLoading ? (
-        <SectionMessage>Загрузка документов...</SectionMessage>
+        <SectionMessage>{t('clients.documents.loading')}</SectionMessage>
       ) : null}
 
       {filesQuery.isError ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          <span>Не удалось загрузить документы клиента.</span>
+          <span>{t('clients.documents.loadFailed')}</span>
           <Button
             type="button"
             variant="outline"
@@ -54,13 +56,13 @@ export function ClientDocuments({ clientId }: ClientDocumentsProps) {
             onClick={() => void filesQuery.refetch()}
           >
             <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
-            Повторить
+            {t('common.retry')}
           </Button>
         </div>
       ) : null}
 
       {!filesQuery.isLoading && !filesQuery.isError && files.length === 0 ? (
-        <SectionMessage>Документов пока нет.</SectionMessage>
+        <SectionMessage>{t('clients.documents.empty')}</SectionMessage>
       ) : null}
 
       {!filesQuery.isLoading && !filesQuery.isError && files.length > 0 ? (
@@ -68,11 +70,11 @@ export function ClientDocuments({ clientId }: ClientDocumentsProps) {
           <table className="min-w-[680px] w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50">
               <tr>
-                <ColumnHeader>Документ</ColumnHeader>
-                <ColumnHeader>Тип</ColumnHeader>
-                <ColumnHeader>Размер</ColumnHeader>
-                <ColumnHeader>Контекст</ColumnHeader>
-                <ColumnHeader className="text-right">Действие</ColumnHeader>
+                <ColumnHeader>{t('clients.documents.document')}</ColumnHeader>
+                <ColumnHeader>{t('common.type')}</ColumnHeader>
+                <ColumnHeader>{t('common.size')}</ColumnHeader>
+                <ColumnHeader>{t('clients.documents.context')}</ColumnHeader>
+                <ColumnHeader className="text-right">{t('clients.action')}</ColumnHeader>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -92,12 +94,12 @@ export function ClientDocuments({ clientId }: ClientDocumentsProps) {
                       </span>
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {fileTypeLabel(file)}
+                      {fileTypeLabel(file, messages)}
                     </td>
                     <td className="px-3 py-3 text-slate-700">
-                      {formatFileSize(file.size)}
+                      {formatFileSize(file.size, messages)}
                     </td>
-                    <td className="px-3 py-3 text-slate-700">Клиент</td>
+                    <td className="px-3 py-3 text-slate-700">{t('common.client')}</td>
                     <td className="px-3 py-3 text-right">
                       <Button
                         type="button"
@@ -107,7 +109,7 @@ export function ClientDocuments({ clientId }: ClientDocumentsProps) {
                         onClick={() => download.mutate(file)}
                       >
                         <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                        {isDownloading ? 'Скачивание...' : 'Скачать'}
+                        {isDownloading ? t('common.downloading') : t('common.download')}
                       </Button>
                     </td>
                   </tr>

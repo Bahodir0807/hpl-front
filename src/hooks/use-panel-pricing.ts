@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
+import { useI18n } from '@/i18n/provider';
 import { HplListResponse, unwrapHplList } from '../types/hpl';
 
 export const PANEL_PRICING_MANAGE_PERMISSION = 'panel_pricing:manage';
@@ -71,6 +72,7 @@ function invalidatePricingQueries(queryClient: ReturnType<typeof useQueryClient>
 
 export function useCreateThicknessPricing() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -83,7 +85,7 @@ export function useCreateThicknessPricing() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess('Закупочная цена сохранена');
+      showSuccess(t('panels.toastPriceSaved'));
       invalidatePricingQueries(queryClient);
     },
     onError: (error) => {
@@ -94,6 +96,7 @@ export function useCreateThicknessPricing() {
 
 export function useUpdateThicknessPricing() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (
@@ -107,7 +110,7 @@ export function useUpdateThicknessPricing() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess('Закупочная цена обновлена');
+      showSuccess(t('panels.toastPriceUpdated'));
       invalidatePricingQueries(queryClient);
     },
     onError: (error) => {

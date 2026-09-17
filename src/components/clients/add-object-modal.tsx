@@ -1,26 +1,29 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo } from "react";
+import { Resolver, useForm } from "react-hook-form";
 import { z } from "zod";
 import { useAddProjectObject } from "../../hooks/use-clients";
+import { useI18n } from "@/i18n/provider";
 
-const addObjectSchema = z.object({
-  name: z.string().trim().min(2, "Укажите название объекта"),
-  address: z.string().trim().optional(),
-  type: z.string().trim().optional(),
-  stage: z.string().trim().optional(),
-  approximateArea: z.coerce
-    .number()
-    .positive("Площадь должна быть больше 0")
-    .optional()
-    .or(z.literal("")),
-  expectedDate: z.string().trim().optional(),
-});
+type AddObjectFormInput = {
+  name: string;
+  address?: string;
+  type?: string;
+  stage?: string;
+  approximateArea?: number | "";
+  expectedDate?: string;
+};
 
-type AddObjectFormInput = z.input<typeof addObjectSchema>;
-type AddObjectFormValues = z.output<typeof addObjectSchema>;
+type AddObjectFormValues = {
+  name: string;
+  address?: string;
+  type?: string;
+  stage?: string;
+  approximateArea?: number | "";
+  expectedDate?: string;
+};
 
 type AddObjectModalProps = {
   clientId: string | null;
@@ -34,13 +37,34 @@ export function AddObjectModal({
   onClose,
 }: AddObjectModalProps) {
   const addObject = useAddProjectObject();
+  const { t } = useI18n();
+  const addObjectSchema = useMemo(
+    () =>
+      z.object({
+        name: z.string().trim().min(2, t("validation.objectNameRequired")),
+        address: z.string().trim().optional(),
+        type: z.string().trim().optional(),
+        stage: z.string().trim().optional(),
+        approximateArea: z.coerce
+          .number()
+          .positive(t("validation.areaPositive"))
+          .optional()
+          .or(z.literal("")),
+        expectedDate: z.string().trim().optional(),
+      }),
+    [t],
+  );
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors, isValid },
   } = useForm<AddObjectFormInput, unknown, AddObjectFormValues>({
-    resolver: zodResolver(addObjectSchema),
+    resolver: zodResolver(addObjectSchema) as Resolver<
+      AddObjectFormInput,
+      unknown,
+      AddObjectFormValues
+    >,
     mode: "onChange",
     defaultValues: {
       name: "",
@@ -87,7 +111,7 @@ export function AddObjectModal({
       <div className="w-full max-w-xl rounded border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4">
           <h2 className="text-base font-semibold text-slate-950">
-            Добавить объект
+            {t("clients.objectModal.title")}
           </h2>
         </div>
 
@@ -100,7 +124,7 @@ export function AddObjectModal({
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label className="md:col-span-2">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Название
+                {t("common.titleField")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -115,7 +139,7 @@ export function AddObjectModal({
 
             <label className="md:col-span-2">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Адрес
+                {t("common.address")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -125,7 +149,7 @@ export function AddObjectModal({
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Тип
+                {t("clients.objectType")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -135,7 +159,7 @@ export function AddObjectModal({
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Стадия
+                {t("clients.objectStage")}
               </span>
               <input
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
@@ -145,7 +169,7 @@ export function AddObjectModal({
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Площадь м²
+                {t("clients.areaM2")}
               </span>
               <input
                 type="number"
@@ -162,7 +186,7 @@ export function AddObjectModal({
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Срок
+                {t("clients.objectDeadline")}
               </span>
               <input
                 type="date"
@@ -173,7 +197,7 @@ export function AddObjectModal({
           </div>
 
           {addObject.isError ? (
-            <p className="text-sm text-red-600">Не удалось добавить объект.</p>
+            <p className="text-sm text-red-600">{t("clients.objectModal.createFailed")}</p>
           ) : null}
 
           <div className="flex justify-end gap-2">
@@ -182,14 +206,14 @@ export function AddObjectModal({
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Отмена
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
               disabled={!isValid || addObject.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              Добавить
+              {t("common.add")}
             </button>
           </div>
         </form>

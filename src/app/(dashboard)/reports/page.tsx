@@ -17,16 +17,11 @@ import {
   useUpsertSalesPlan,
 } from "../../../hooks/use-reports";
 import { formatNumber } from "../../../lib/format";
-import { dealStageLabels, enumLabel } from "../../../lib/labels";
+import { enumLabel } from "../../../lib/labels";
+import { useI18n } from "@/i18n/provider";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 type TabId = "overview" | "funnel" | "overdues" | "kpi";
-
-const tabs: { id: TabId; label: string }[] = [
-  { id: "overview", label: "Обзор" },
-  { id: "funnel", label: "Воронка" },
-  { id: "overdues", label: "Просрочки" },
-  { id: "kpi", label: "KPI менеджеров" },
-];
 
 function exportCsv(filename: string, rows: string[][]): void {
   const csv = rows
@@ -44,40 +39,48 @@ function exportCsv(filename: string, rows: string[][]): void {
 }
 
 function ReportLoading() {
+  const { t } = useI18n();
+
   return (
     <div className="flex items-center justify-center py-10">
       <div
         className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900"
-        aria-label="Загрузка"
+        aria-label={t("common.loading")}
       />
     </div>
   );
 }
 
 function ReportError({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n();
+
   return (
     <div className="py-10 text-center">
-      <p className="text-sm text-red-700">Ошибка загрузки данных</p>
+      <p className="text-sm text-red-700">{t("common.loadError")}</p>
       <button
         type="button"
         onClick={onRetry}
         className="mt-3 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
       >
-        Повторить
+        {t("common.retry")}
       </button>
     </div>
   );
 }
 
 function ReportEmpty() {
+  const { t } = useI18n();
+
   return (
     <div className="rounded border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
-      Данных для отчета нет.
+      {t("reports.empty")}
     </div>
   );
 }
 
 export default function ReportsPage() {
+  const { t, locale } = useI18n();
+  const labels = useLabelMaps();
   const router = useRouter();
   const { user, isInitialized } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -114,17 +117,26 @@ export default function ReportsPage() {
     ...funnelStages.map((stage) => stage.count),
     1,
   );
+  const tabs = useMemo(
+    (): { id: TabId; label: string }[] => [
+      { id: "overview", label: t("reports.overview") },
+      { id: "funnel", label: t("reports.funnel") },
+      { id: "overdues", label: t("reports.overdues") },
+      { id: "kpi", label: t("reports.kpi") },
+    ],
+    [t],
+  );
 
   const exportActiveTab = (): void => {
     if (activeTab === "overview") {
       const overview = overviewQuery.data;
       exportCsv("overview.csv", [
-        ["Показатель", "Значение"],
-        ["Лиды", String(overview?.leads?.total ?? "")],
-        ["Проигранные лиды", String(overview?.leads?.lost ?? "")],
-        ["Коммерчески выиграны", String(overview?.deals?.won ?? "")],
+        [t("reports.metric"), t("reports.value")],
+        [t("reports.leads"), String(overview?.leads?.total ?? "")],
+        [t("reports.lostLeads"), String(overview?.leads?.lost ?? "")],
+        [t("reports.commerciallyWon"), String(overview?.deals?.won ?? "")],
         [
-          "Операционно завершены",
+          t("reports.operationallyCompleted"),
           String(overview?.deals?.operationallyCompleted ?? ""),
         ],
       ]);
@@ -132,9 +144,14 @@ export default function ReportsPage() {
     }
     if (activeTab === "funnel") {
       exportCsv("funnel.csv", [
-        ["Этап", "Количество", "Суммы по валютам", "Конверсия"],
+        [
+          t("reports.stage"),
+          t("reports.count"),
+          t("reports.amountsByCurrency"),
+          t("reports.conversion"),
+        ],
         ...funnelStages.map((stage: FunnelStageMetric) => [
-          enumLabel(dealStageLabels, stage.stage),
+          enumLabel(labels.dealStageLabels, stage.stage),
           String(stage.count),
           stage.amounts
             .map((item) => `${item.amount} ${item.currency}`)
@@ -147,7 +164,12 @@ export default function ReportsPage() {
 
     if (activeTab === "overdues") {
       exportCsv("overdues.csv", [
-        ["Менеджер", "Просрочки", "Критические", "Средняя задержка, ч"],
+        [
+          t("reports.manager"),
+          t("reports.overdue"),
+          t("reports.critical"),
+          t("reports.avgDelay"),
+        ],
         ...overdueManagers.map((manager: OverdueManagerMetric) => [
           manager.managerName,
           String(manager.overdueCount),
@@ -160,13 +182,13 @@ export default function ReportsPage() {
 
     exportCsv("kpi.csv", [
       [
-        "Менеджер",
-        "План продаж 40%",
-        "Лиды 15%",
-        "Конверсия 15%",
-        "Сроки 15%",
-        "CRM 15%",
-        "Итог",
+        t("reports.manager"),
+        t("reports.salesPlan40"),
+        t("reports.leads15"),
+        t("reports.conversion15"),
+        t("reports.deadlines15"),
+        t("reports.crm15"),
+        t("reports.total"),
       ],
       ...kpiManagers.map((manager: KpiManagerMetric) => [
         manager.managerName,
@@ -195,7 +217,7 @@ export default function ReportsPage() {
   if (!canAccess) {
     return (
       <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        Нет доступа к отчётам и KPI.
+        {t("reports.noAccess")}
       </div>
     );
   }
@@ -204,17 +226,17 @@ export default function ReportsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-slate-950">Отчеты и KPI</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Операционный обзор, воронка продаж, просрочки и KPI менеджеров.
-          </p>
+          <h2 className="text-xl font-semibold text-slate-950">
+            {t("reports.title")}
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">{t("reports.subtitle")}</p>
         </div>
         <button
           type="button"
           onClick={exportActiveTab}
           className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
         >
-          Экспорт в CSV
+          {t("reports.exportCsv")}
         </button>
       </div>
 
@@ -244,9 +266,7 @@ export default function ReportsPage() {
                 (item) => !item.fromCurrency || !item.rateToPlanCurrency,
               )
             ) {
-              setPlanMessage(
-                "Укажите UUID менеджера, месяц, сумму и курсы в формате USD=12500.",
-              );
+              setPlanMessage(t("reports.planHelp"));
               return;
             }
             void upsertSalesPlan
@@ -260,46 +280,41 @@ export default function ReportsPage() {
                   rateToPlanCurrency: item.rateToPlanCurrency,
                 })),
               })
-              .then(() => setPlanMessage("План и явные KPI-курсы сохранены."))
-              .catch(() =>
-                setPlanMessage("Не удалось сохранить план. Проверьте данные."),
-              );
+              .then(() => setPlanMessage(t("reports.planSaved")))
+              .catch(() => setPlanMessage(t("reports.planSaveFailed")));
           }}
         >
           <div className="font-medium text-slate-950">
-            План продаж и KPI-курсы
+            {t("reports.planTitle")}
           </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Валюта плана и каждый курс задаются явно; при отсутствии курса KPI
-            помечается как неполный.
-          </p>
+          <p className="mt-1 text-xs text-slate-500">{t("reports.planHint")}</p>
           <div className="mt-3 grid gap-3 md:grid-cols-4">
             <input
               type="month"
               value={planPeriod}
               onChange={(event) => setPlanPeriod(event.target.value)}
               className="rounded border border-slate-300 px-3 py-2 text-sm"
-              aria-label="Месяц плана"
+              aria-label={t("reports.planMonth")}
             />
             <input
               value={planTarget}
               onChange={(event) => setPlanTarget(event.target.value)}
               className="rounded border border-slate-300 px-3 py-2 text-sm"
-              placeholder="Сумма плана"
+              placeholder={t("reports.planAmount")}
               inputMode="decimal"
             />
             <input
               value={planCurrency}
               onChange={(event) => setPlanCurrency(event.target.value)}
               className="rounded border border-slate-300 px-3 py-2 text-sm uppercase"
-              placeholder="Валюта плана"
+              placeholder={t("reports.planCurrency")}
               maxLength={3}
             />
             <textarea
               value={planRates}
               onChange={(event) => setPlanRates(event.target.value)}
               className="min-h-20 rounded border border-slate-300 px-3 py-2 text-sm"
-              aria-label="KPI-курсы"
+              aria-label={t("reports.kpiRates")}
             />
           </div>
           <div className="mt-3 flex items-center gap-3">
@@ -308,7 +323,9 @@ export default function ReportsPage() {
               disabled={upsertSalesPlan.isPending}
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
-              {upsertSalesPlan.isPending ? "Сохранение…" : "Сохранить план"}
+              {upsertSalesPlan.isPending
+                ? t("reports.savingPlan")
+                : t("reports.savePlan")}
             </button>
             {planMessage ? (
               <span className="text-sm text-slate-600">{planMessage}</span>
@@ -333,7 +350,7 @@ export default function ReportsPage() {
         <input
           value={managerId}
           onChange={(event) => setManagerId(event.target.value)}
-          placeholder="UUID менеджера"
+          placeholder={t("reports.managerUuid")}
           className="rounded border border-slate-300 px-3 py-2 text-sm"
         />
       </div>
@@ -392,10 +409,10 @@ export default function ReportsPage() {
                   <div key={stage.stage}>
                     <div className="mb-1 flex justify-between text-sm">
                       <span className="font-medium text-slate-900">
-                        {enumLabel(dealStageLabels, stage.stage)}
+                        {enumLabel(labels.dealStageLabels, stage.stage)}
                       </span>
                       <span className="text-slate-600">
-                        {stage.count} · {formatNumber(stage.conversionPercent)}%
+                        {stage.count} · {formatNumber(stage.conversionPercent, locale)}%
                       </span>
                     </div>
                     <div className="h-4 rounded bg-slate-100">
@@ -411,7 +428,7 @@ export default function ReportsPage() {
                         {stage.amounts
                           .map(
                             (item) =>
-                              `${formatNumber(item.amount)} ${item.currency}`,
+                              `${formatNumber(item.amount, locale)} ${item.currency}`,
                           )
                           .join(" · ")}
                       </div>
@@ -420,8 +437,8 @@ export default function ReportsPage() {
                 ))}
                 {funnelQuery.data ? (
                   <div className="pt-3 text-sm font-medium text-slate-900">
-                    Конверсия в выигрыш:{" "}
-                    {formatNumber(funnelQuery.data.winConversionPercent)}%
+                    {t("reports.winConversion")}{" "}
+                    {formatNumber(funnelQuery.data.winConversionPercent, locale)}%
                   </div>
                 ) : null}
               </div>
@@ -444,10 +461,12 @@ export default function ReportsPage() {
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-3 py-2 text-left">Менеджер</th>
-                      <th className="px-3 py-2 text-left">Просрочки</th>
-                      <th className="px-3 py-2 text-left">Критические</th>
-                      <th className="px-3 py-2 text-left">Средняя задержка</th>
+                      <th className="px-3 py-2 text-left">{t("reports.manager")}</th>
+                      <th className="px-3 py-2 text-left">{t("reports.overdue")}</th>
+                      <th className="px-3 py-2 text-left">{t("reports.critical")}</th>
+                      <th className="px-3 py-2 text-left">
+                        {t("reports.avgDelayShort")}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -459,7 +478,9 @@ export default function ReportsPage() {
                           {manager.criticalOverdueCount}
                         </td>
                         <td className="px-3 py-2">
-                          {formatNumber(manager.averageDelayHours)} ч
+                          {t("common.hoursShort", {
+                            count: formatNumber(manager.averageDelayHours, locale),
+                          })}
                         </td>
                       </tr>
                     ))}
@@ -485,13 +506,15 @@ export default function ReportsPage() {
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-3 py-2 text-left">Менеджер</th>
-                      <th className="px-3 py-2 text-left">План 40%</th>
-                      <th className="px-3 py-2 text-left">Лиды 15%</th>
-                      <th className="px-3 py-2 text-left">Конверсия 15%</th>
-                      <th className="px-3 py-2 text-left">Сроки 15%</th>
-                      <th className="px-3 py-2 text-left">CRM 15%</th>
-                      <th className="px-3 py-2 text-left">Итог</th>
+                      <th className="px-3 py-2 text-left">{t("reports.manager")}</th>
+                      <th className="px-3 py-2 text-left">{t("reports.plan40Short")}</th>
+                      <th className="px-3 py-2 text-left">{t("reports.leads15")}</th>
+                      <th className="px-3 py-2 text-left">
+                        {t("reports.conversion15")}
+                      </th>
+                      <th className="px-3 py-2 text-left">{t("reports.deadlines15")}</th>
+                      <th className="px-3 py-2 text-left">{t("reports.crm15")}</th>
+                      <th className="px-3 py-2 text-left">{t("reports.total")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -507,29 +530,29 @@ export default function ReportsPage() {
                               title={manager.missingFxCurrencies.join(", ")}
                             >
                               {manager.salesPlanStatus === "NOT_CONFIGURED"
-                                ? "Нет плана"
-                                : "Неполные курсы"}
+                                ? t("reports.noPlan")
+                                : t("reports.incompleteRates")}
                             </span>
                           ) : (
-                            `${formatNumber(manager.salesPlanPercent)}%`
+                            `${formatNumber(manager.salesPlanPercent, locale)}%`
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          {formatNumber(manager.qualifiedLeadsPercent)}%
+                          {formatNumber(manager.qualifiedLeadsPercent, locale)}%
                         </td>
                         <td className="px-3 py-2">
-                          {formatNumber(manager.conversionPercent)}%
+                          {formatNumber(manager.conversionPercent, locale)}%
                         </td>
                         <td className="px-3 py-2">
-                          {formatNumber(manager.deadlineCompliancePercent)}%
+                          {formatNumber(manager.deadlineCompliancePercent, locale)}%
                         </td>
                         <td className="px-3 py-2">
-                          {formatNumber(manager.crmDisciplinePercent)}%
+                          {formatNumber(manager.crmDisciplinePercent, locale)}%
                         </td>
                         <td className="px-3 py-2 font-semibold">
                           {manager.totalScore === null
-                            ? "—"
-                            : formatNumber(manager.totalScore)}
+                            ? t("common.dash")
+                            : formatNumber(manager.totalScore, locale)}
                         </td>
                       </tr>
                     ))}

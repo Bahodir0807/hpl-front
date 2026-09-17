@@ -63,18 +63,11 @@ import {
 import { useUsersList } from '@/hooks/use-users';
 import { finalizeCalculationBeforeQuote } from '@/lib/calculation-quote';
 import {
-  COMMERCIAL_CALCULATION_WAITING_COPY,
   canConvertCalculationToQuote,
   canRunCommercialCalculation,
   shouldWaitForCommercialCalculation,
 } from '@/lib/calculation-presentation';
-import {
-  QUALITY_LINE_PLACEHOLDER,
-  QUALITY_LINES_EMPTY_MESSAGE,
-  QUALITY_LINES_LOAD_ERROR_MESSAGE,
-  QUALITY_LINES_NOT_FOUND,
-  qualityLineLabel,
-} from '@/lib/quality-line-presentation';
+import { qualityLineLabel } from '@/lib/quality-line-presentation';
 import { formatMoney } from '@/lib/currency';
 import {
   displayContactValue,
@@ -104,21 +97,18 @@ import {
   panelTypeCodeFromApplication,
   panelTypeLabel,
 } from '@/lib/hpl-domain';
-import { formatSupplierName, leadStatusLabels } from '@/lib/labels';
-import {
-  HANDOFF_DONE_LABEL,
-  HANDOFF_TO_HEAD_LABEL,
-  MANAGER_CUSTOMER_NOTE_HEAD_LABEL,
-  MANAGER_CUSTOMER_NOTE_HELPER,
-  MANAGER_CUSTOMER_NOTE_LABEL,
-  canWriteManagerCommercialNote,
-} from '@/lib/manager-commercial-note';
+import { formatSupplierName } from '@/lib/labels';
+import { canWriteManagerCommercialNote } from '@/lib/manager-commercial-note';
 import { dealWorkspaceHref } from '@/lib/entity-routes';
 import { getErrorMessage } from '@/lib/errors';
+import { useI18n } from '@/i18n/provider';
+import { useLabelMaps } from '@/i18n/use-label-maps';
+import type { TranslateFn } from '@/i18n/translate';
+import type { Messages } from '@/i18n/types';
 import { getApiErrorCode, QUOTE_PRICE_NOT_APPROVED } from '@/lib/hpl-errors';
 import { lossReasonLabel } from '@/lib/loss-reasons';
-import { QuoteAction, quoteStatusLabels } from '@/lib/quote-presentation';
-import { MIXED_CURRENCY_TOTAL_HINT, quoteUsesMixedCurrencies } from '@/lib/quote-pricing';
+import { QuoteAction } from '@/lib/quote-presentation';
+import { quoteUsesMixedCurrencies } from '@/lib/quote-pricing';
 import {
   CalculationSession,
   LeadActivity,
@@ -145,11 +135,11 @@ const statusClassName: Record<LeadStatus, string> = {
   LOST: 'bg-red-50 text-red-700 border-red-200',
 };
 
-const TABS: { id: WorkspaceTab; label: string }[] = [
-  { id: 'info', label: 'Инфо' },
-  { id: 'timeline', label: 'Timeline' },
-  { id: 'calculations', label: 'Расчёты' },
-  { id: 'quotes', label: 'КП' },
+const TABS: { id: WorkspaceTab; key: string }[] = [
+  { id: 'info', key: 'leads.tabs.info' },
+  { id: 'timeline', key: 'leads.tabs.timeline' },
+  { id: 'calculations', key: 'leads.tabs.calculations' },
+  { id: 'quotes', key: 'leads.tabs.quotes' },
 ];
 
 type TimelineItem = {
@@ -176,23 +166,24 @@ function sourceBadgeClass(source: string): string {
   return 'border-slate-200 bg-slate-100 text-slate-700';
 }
 
-function sourceLabel(source: string): string {
+function sourceLabel(source: string, t: TranslateFn): string {
   if (source === 'telegram') {
     return 'Telegram';
   }
 
   if (source === 'website') {
-    return 'Сайт';
+    return t('leads.website');
   }
 
   if (source === 'manual') {
-    return 'Вручную';
+    return t('leads.manual');
   }
 
-  return source || '—';
+  return source || t('common.dash');
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const { leadStatusLabels } = useLabelMaps();
   const leadStatus = status as LeadStatus;
 
   return (
@@ -208,13 +199,14 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function SourceBadge({ source }: { source?: string | null }) {
+  const { t } = useI18n();
   const normalized = normalizeSource(source);
 
   return (
     <span
       className={`inline-flex rounded border px-2 py-0.5 text-xs font-semibold ${sourceBadgeClass(normalized)}`}
     >
-      {sourceLabel(normalized)}
+      {sourceLabel(normalized, t)}
     </span>
   );
 }
@@ -226,16 +218,17 @@ function Field({
   label: string;
   value?: string | number | null;
 }) {
+  const { t } = useI18n();
   const display =
     value === undefined || value === null || value === ''
-      ? '—'
+      ? t('common.dash')
       : String(value);
 
   return (
     <div>
       <div className="text-xs font-medium uppercase text-slate-500">{label}</div>
       <div className="mt-1 break-words text-sm text-slate-950">
-        {display === '[object Object]' ? '—' : display}
+        {display === '[object Object]' ? t('common.dash') : display}
       </div>
     </div>
   );
@@ -274,6 +267,8 @@ function buildTimeline(
   notes: { id: string; createdAt: string; text: string; actorName?: string | null; createdBy?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null }[],
   calculations: CalculationSession[],
   quotes: Quote[],
+  t: TranslateFn,
+  quoteStatusLabels: Record<string, string>,
 ): TimelineItem[] {
   if (activities.length > 0) {
     return activities
@@ -292,7 +287,7 @@ function buildTimeline(
       id: `created-${lead.id}`,
       type: 'created',
       createdAt: lead.createdAt,
-      description: 'Лид создан',
+      description: t('leads.createdEvent'),
       actor: resolveUserName(lead.owner, lead.ownerId),
     },
   ];
@@ -303,8 +298,8 @@ function buildTimeline(
       type: 'call',
       createdAt: call.createdAt,
       description: call.dialUri
-        ? `Звонок ${call.dialUri.replace('tel:', '')}`
-        : 'Звонок',
+        ? t('leads.callEvent', { phone: call.dialUri.replace('tel:', '') })
+        : t('leads.call'),
       actor: call.actorName || formatPersonName(call.createdBy),
     });
   }
@@ -324,8 +319,10 @@ function buildTimeline(
       id: `calc-${calculation.id}`,
       type: 'calculation',
       createdAt: calculation.createdAt,
-      description: `Расчёт на ${formatMoney(calculation.totalAmount)}`,
-      actor: '—',
+      description: t('leads.calculationEvent', {
+        amount: formatMoney(calculation.totalAmount),
+      }),
+      actor: t('common.dash'),
     });
   }
 
@@ -334,12 +331,14 @@ function buildTimeline(
       id: `quote-${quote.id}`,
       type: 'quote',
       createdAt: quote.createdAt,
-      description: `КП ${quote.number ?? ''} · ${quoteStatusLabels[quote.status] ?? quote.status} · ${
-        quoteUsesMixedCurrencies(quote)
-          ? MIXED_CURRENCY_TOTAL_HINT
-          : formatMoney(quote.totalAmount)
-      }`,
-      actor: '—',
+      description: t('leads.quoteEvent', {
+        number: quote.number ?? '',
+        status: quoteStatusLabels[quote.status] ?? quote.status,
+        amount: quoteUsesMixedCurrencies(quote)
+          ? t('quotes.mixedCurrencyHint')
+          : formatMoney(quote.totalAmount),
+      }),
+      actor: t('common.dash'),
     });
   }
 
@@ -360,18 +359,23 @@ function calculationSheetsCount(
   }, 0);
 }
 
-function calculationSummary(calculation: CalculationSession) {
+function calculationSummary(
+  calculation: CalculationSession,
+  messages: Messages,
+  supplierDisplayNames: Record<string, string>,
+) {
   const item = calculation.items?.[0];
 
   return {
-    typeName: panelTypeLabel(item?.panelType),
+    typeName: panelTypeLabel(item?.panelType, messages),
     supplierName: formatSupplierName(
       item?.supplier?.code,
       item?.supplier?.name,
-      '—',
+      messages.common.dash,
+      supplierDisplayNames,
     ),
-    sizeLabel: panelSizeLabel(item?.panelSize),
-    thickness: formatThicknessMm(item?.thicknessMm),
+    sizeLabel: panelSizeLabel(item?.panelSize, messages),
+    thickness: formatThicknessMm(item?.thicknessMm, messages),
     sheets: calculationSheetsCount(calculation),
     total: calculation.totalAmount,
   };
@@ -387,8 +391,8 @@ function panelCodeForQualification(
   );
 }
 
-const QUALIFICATION_CONTEXT_TITLE = 'Квалификация клиента';
-const SAVED_CALCULATION_ACTION_LABEL = 'Новый расчёт';
+const QUALIFICATION_CONTEXT_TITLE_KEY = 'leads.qualificationTitle';
+const SAVED_CALCULATION_ACTION_KEY = 'leads.newCalculation';
 
 function QualificationContext({
   qualification,
@@ -399,6 +403,7 @@ function QualificationContext({
   projectObject?: Lead['projectObject'];
   customerNeed?: string | null;
 }) {
+  const { t, messages } = useI18n();
   const items = qualification?.items;
   const showLegacyScalars = items === undefined;
 
@@ -407,7 +412,7 @@ function QualificationContext({
       {items?.length ? (
         <div className="space-y-3">
           <div className="text-sm font-semibold text-slate-900">
-            HPL-позиции ({items.length})
+            {t('leads.hplItems', { count: items.length })}
           </div>
           {items.map((item, index) => (
             <div
@@ -415,88 +420,89 @@ function QualificationContext({
               className="rounded border border-slate-200 bg-slate-50 p-3"
             >
               <div className="mb-2 text-xs font-semibold uppercase text-slate-500">
-                Позиция {index + 1}
+                {t('leads.itemPosition', { number: index + 1 })}
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <Field
-                  label="Применение / тип HPL"
-                  value={hplApplicationLabel(item.application)}
+                  label={t('hpl.applicationField')}
+                  value={hplApplicationLabel(item.application, messages)}
                 />
-                <Field label="Размер" value={formatQualificationSize(item)} />
+                <Field label={t('calculations.size')} value={formatQualificationSize(item, messages)} />
                 <Field
-                  label="Толщина"
-                  value={formatThicknessMm(item.thicknessMm)}
+                  label={t('calculations.thickness')}
+                  value={formatThicknessMm(item.thicknessMm, messages)}
                 />
-                <Field label="Цвет" value={formatColorLabel(item)} />
-                <Field label="Покрытие" value={item.coating} />
-                <Field label="Текстура" value={item.texture} />
+                <Field label={t('common.color')} value={formatColorLabel(item, messages)} />
+                <Field label={t('calculations.coating')} value={item.coating} />
+                <Field label={t('calculations.texture')} value={item.texture} />
                 <Field
-                  label="Площадь"
-                  value={formatAreaM2(item.requiredAreaM2)}
+                  label={t('leads.area')}
+                  value={formatAreaM2(item.requiredAreaM2, messages)}
                 />
               </div>
             </div>
           ))}
         </div>
       ) : items ? (
-        <p className="text-sm text-slate-500">HPL-позиции не добавлены.</p>
+        <p className="text-sm text-slate-500">{t('leads.hplItemsNotAdded')}</p>
       ) : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {showLegacyScalars ? (
           <>
             <Field
-              label="Применение / тип HPL"
-              value={hplApplicationLabel(qualification?.application)}
+              label={t('hpl.applicationField')}
+              value={hplApplicationLabel(qualification?.application, messages)}
             />
             <Field
-              label="Размер"
-              value={formatQualificationSize(qualification)}
+              label={t('calculations.size')}
+              value={formatQualificationSize(qualification, messages)}
             />
             <Field
-              label="Толщина"
-              value={formatThicknessMm(qualification?.thicknessMm)}
+              label={t('calculations.thickness')}
+              value={formatThicknessMm(qualification?.thicknessMm, messages)}
             />
             <Field
-              label="Цвет"
-              value={formatColorLabel(qualification)}
+              label={t('common.color')}
+              value={formatColorLabel(qualification, messages)}
             />
             <Field
-              label="Площадь"
-              value={formatAreaM2(qualification?.requiredAreaM2)}
+              label={t('leads.area')}
+              value={formatAreaM2(qualification?.requiredAreaM2, messages)}
             />
           </>
         ) : null}
         <Field
-          label="Дедлайн клиента"
+          label={t('leads.customerDeadline')}
           value={
             projectObject?.expectedDate
               ? formatDate(projectObject.expectedDate)
               : undefined
           }
         />
-        <Field label="Стадия объекта" value={projectObject?.stage} />
+        <Field label={t('leads.objectStage')} value={projectObject?.stage} />
         <Field
-          label="Срочность"
+          label={t('leads.urgency')}
           value={urgencyLabel(
             qualification?.urgent,
             qualification?.willingToWait,
+            t,
           )}
         />
         <Field
-          label="Вентфасад уже есть?"
-          value={triStateLabel(qualification?.ventFacadeExists)}
+          label={t('leads.ventilatedFacade')}
+          value={triStateLabel(qualification?.ventFacadeExists, t)}
         />
         <Field
-          label="Комплектация вентфасада"
-          value={triStateLabel(qualification?.ventFacadeKitRequired)}
+          label={t('leads.facadeKit')}
+          value={triStateLabel(qualification?.ventFacadeKitRequired, t)}
         />
         <Field
-          label="Монтаж"
-          value={installationLabel(qualification?.installationRequired)}
+          label={t('navigation.installation')}
+          value={installationLabel(qualification?.installationRequired, t)}
         />
         <div className="md:col-span-2">
           <Field
-            label="Потребность"
+            label={t('leads.need')}
             value={
               qualification?.customerRequirements?.trim() || customerNeed
             }
@@ -508,38 +514,39 @@ function QualificationContext({
 }
 
 function urgencyLabel(
-  urgent?: boolean | null,
-  willingToWait?: boolean | null,
+  urgent: boolean | null | undefined,
+  willingToWait: boolean | null | undefined,
+  t: TranslateFn,
 ): string {
   if (urgent) {
-    return 'Срочно';
+    return t('leads.urgent');
   }
   if (willingToWait) {
-    return 'Готов ждать';
+    return t('leads.willingToWait');
   }
-  return 'Не указано';
+  return t('common.notSpecifiedNeuter');
 }
 
-function triStateLabel(value?: boolean | null): string {
+function triStateLabel(value: boolean | null | undefined, t: TranslateFn): string {
   if (value === true) {
-    return 'Да';
+    return t('common.yes');
   }
   if (value === false) {
-    return 'Нет';
+    return t('common.no');
   }
-  return 'Неизвестно';
+  return t('common.unknown');
 }
 
-function installationLabel(value?: boolean | null): string {
+function installationLabel(value: boolean | null | undefined, t: TranslateFn): string {
   if (value === true) {
-    return 'Да';
+    return t('common.yes');
   }
 
   if (value === false) {
-    return 'Нет';
+    return t('common.no');
   }
 
-  return 'Не указано';
+  return t('common.notSpecifiedNeuter');
 }
 
 function ManagerCustomerNotePanel({
@@ -549,6 +556,7 @@ function ManagerCustomerNotePanel({
   lead: Lead;
   canWrite: boolean;
 }) {
+  const { t } = useI18n();
   const saveNote = useUpdateLeadManagerCommercialNote();
   const handoff = useHandoffLeadToHead();
   const [note, setNote] = useState(lead.managerCommercialNote ?? '');
@@ -559,8 +567,8 @@ function ManagerCustomerNotePanel({
     optimisticReadyAt ?? lead.managerCommercialInputReadyAt ?? null;
 
   const label = canWrite
-    ? MANAGER_CUSTOMER_NOTE_LABEL
-    : MANAGER_CUSTOMER_NOTE_HEAD_LABEL;
+    ? t('calculations.managerNote')
+    : t('calculations.managerNoteHead');
   const canHandoff =
     canWrite && lead.status === 'QUALIFIED' && !handedOffAt && !handoff.isPending;
   const visibleNote = lead.managerCommercialNote?.trim() || '';
@@ -577,11 +585,11 @@ function ManagerCustomerNotePanel({
       {canWrite ? (
         <>
           <p className="mt-1 text-xs text-slate-500">
-            {MANAGER_CUSTOMER_NOTE_HELPER}
+            {t('calculations.managerNoteHelper')}
           </p>
           <textarea
             value={note}
-            aria-label={MANAGER_CUSTOMER_NOTE_LABEL}
+            aria-label={t('calculations.managerNote')}
             rows={4}
             onChange={(event) => setNote(event.target.value)}
             className="mt-3 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
@@ -599,7 +607,7 @@ function ManagerCustomerNotePanel({
                 });
               }}
             >
-              {saveNote.isPending ? 'Сохранение...' : 'Сохранить'}
+              {saveNote.isPending ? t('common.saving') : t('common.save')}
             </Button>
             {canHandoff ? (
               <Button
@@ -615,12 +623,12 @@ function ManagerCustomerNotePanel({
                   });
                 }}
               >
-                {handoff.isPending ? 'Отправка...' : HANDOFF_TO_HEAD_LABEL}
+                {handoff.isPending ? t('common.sending') : t('calculations.sendToHead')}
               </Button>
             ) : null}
             {handedOffAt ? (
               <p className="text-sm font-medium text-emerald-800">
-                {HANDOFF_DONE_LABEL}
+                {t('statuses.leadWorkflow.handedToHead')}
                 <span className="ml-1 font-normal text-slate-600">
                   {formatDateTime(handedOffAt)}
                 </span>
@@ -630,7 +638,7 @@ function ManagerCustomerNotePanel({
         </>
       ) : (
         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-900">
-          {visibleNote || '—'}
+          {visibleNote || t('common.dash')}
         </p>
       )}
     </div>
@@ -650,6 +658,8 @@ function CommercialQualificationPanel({
   currentQualityClassId?: string | null;
   currentTargetDate?: string | null;
 }) {
+  const { t, messages } = useI18n();
+  const { supplierDisplayNames } = useLabelMaps();
   const suppliersQuery = useSuppliers();
   const confirmCommercial = useConfirmLeadCommercialQualification();
   const [supplierId, setSupplierId] = useState(currentSupplierId ?? '');
@@ -670,12 +680,17 @@ function CommercialQualificationPanel({
 
   const supplierOptions = suppliers.map((supplier) => ({
     value: supplier.id,
-    label: formatSupplierName(supplier.code, supplier.name),
+    label: formatSupplierName(
+      supplier.code,
+      supplier.name,
+      messages.suppliers.fallback,
+      supplierDisplayNames,
+    ),
     description: supplier.code,
   }));
   const qualityOptions = qualityClasses.map((quality) => ({
     value: quality.id,
-    label: qualityLineLabel(quality),
+    label: qualityLineLabel(quality, messages),
     description: quality.code ?? undefined,
   }));
 
@@ -685,10 +700,10 @@ function CommercialQualificationPanel({
   return (
     <div className="mt-6 border-t border-slate-200 pt-4">
       <h4 className="text-sm font-semibold text-slate-900">
-        Коммерческая квалификация
+        {t('leads.commercialQualification')}
       </h4>
       <p className="mt-1 text-xs text-slate-500">
-        Коммерческий выбор не меняет потребность клиента.
+        {t('leads.commercialChoiceHint')}
       </p>
       <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
         <SearchCombobox
@@ -698,39 +713,39 @@ function CommercialQualificationPanel({
             setQualityClassId('');
           }}
           options={supplierOptions}
-          placeholder="Поставщик"
-          searchPlaceholder="Поиск поставщика"
-          emptyLabel="Поставщики не найдены"
+          placeholder={t('common.supplier')}
+          searchPlaceholder={t('common.searchSupplier')}
+          emptyLabel={t('common.suppliersEmpty')}
           loading={suppliersQuery.isFetching}
         />
         <div>
           <SearchCombobox
-            ariaLabel="Линейка"
+            ariaLabel={t('calculations.qualityLine')}
             value={qualityClassId}
             onChange={setQualityClassId}
             options={qualityOptions}
-            placeholder={QUALITY_LINE_PLACEHOLDER}
-            searchPlaceholder="Поиск линейки"
-            emptyLabel={QUALITY_LINES_NOT_FOUND}
+            placeholder={messages.hpl.qualityLinePlaceholder}
+            searchPlaceholder={t('calculations.searchLine')}
+            emptyLabel={messages.hpl.qualityLinesNotFound}
             disabled={!supplierId || !panelTypeCode}
             loading={qualityQuery.isFetching}
           />
           {qualityQuery.isError ? (
             <p className="mt-1 text-sm text-red-600">
-              {QUALITY_LINES_LOAD_ERROR_MESSAGE}
+              {messages.hpl.qualityLinesLoadError}
             </p>
           ) : null}
           {supplierId &&
           qualityQuery.isSuccess &&
           qualityClasses.length === 0 ? (
             <p className="mt-1 text-sm text-amber-700">
-              {QUALITY_LINES_EMPTY_MESSAGE}
+              {messages.hpl.qualityLinesEmpty}
             </p>
           ) : null}
         </div>
         <label>
           <span className="mb-1 block text-sm font-medium text-slate-700">
-            Срок реализации
+            {t('leads.targetDate')}
           </span>
           <input
             type="date"
@@ -742,7 +757,7 @@ function CommercialQualificationPanel({
         <input
           value={comment}
           onChange={(event) => setComment(event.target.value)}
-          placeholder="Комментарий"
+          placeholder={t('common.comment')}
           className="rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 md:col-span-2"
         />
       </div>
@@ -762,13 +777,15 @@ function CommercialQualificationPanel({
           });
         }}
       >
-        {confirmCommercial.isPending ? 'Сохранение...' : 'Подтвердить'}
+        {confirmCommercial.isPending ? t('common.saving') : t('common.confirm')}
       </Button>
     </div>
   );
 }
 
 export function LeadWorkspace({ leadId }: { leadId: string }) {
+  const { t, messages } = useI18n();
+  const { quoteStatusLabels, supplierDisplayNames } = useLabelMaps();
   const { user } = useAuth();
   const router = useRouter();
   const leadQuery = useLead(leadId);
@@ -842,7 +859,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const clientName =
     contactPresentation.clientName !== '—'
       ? contactPresentation.clientName
-      : (lead?.title ?? 'Лид');
+      : (lead?.title ?? t('leads.leadFallback'));
 
   const canAssign =
     Boolean(lead) &&
@@ -871,8 +888,10 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
       workspace?.notes ?? [],
       calculations,
       quotes,
+      t,
+      quoteStatusLabels,
     );
-  }, [calculations, lead, quotes, workspace]);
+  }, [calculations, lead, quotes, workspace, t, quoteStatusLabels]);
 
   const pendingQuoteAction = (quoteId: string): QuoteAction | null => {
     if (
@@ -923,7 +942,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   if (leadQuery.isLoading) {
     return (
       <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
-        Загрузка рабочего места лида...
+        {t('leads.loadingWorkspace')}
       </div>
     );
   }
@@ -931,7 +950,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   if (leadQuery.isError || !lead) {
     return (
       <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        Не удалось загрузить лид.
+        {t('leads.loadOneFailed')}
       </div>
     );
   }
@@ -945,7 +964,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               href="/leads"
               className="text-sm font-medium text-slate-600 hover:text-slate-950"
             >
-              Назад к лидам
+              {t('leads.backToLeads')}
             </Link>
             <h2 className="mt-2 text-xl font-semibold text-slate-950">
               {clientName}
@@ -955,7 +974,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               <SourceBadge source={source} />
               {lead.managerCommercialInputReadyAt ? (
                 <span className="inline-flex rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                  {HANDOFF_DONE_LABEL}
+                  {t('statuses.leadWorkflow.handedToHead')}
                 </span>
               ) : null}
               <span className="text-sm text-slate-600">{lead.title}</span>
@@ -971,7 +990,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               }}
               disabled={createCall.isPending}
             >
-              Позвонить
+              {t('leads.callAction')}
             </Button>
             <Button
               type="button"
@@ -979,10 +998,10 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               onClick={() => setQualifyingLead(lead)}
               disabled={lead.status === 'CONVERTED'}
             >
-              Квалифицировать
+              {t('leads.qualify')}
             </Button>
             <Button type="button" variant="outline" onClick={openNoteTab}>
-              Добавить заметку
+              {t('leads.addNote')}
             </Button>
           </div>
         </div>
@@ -1000,7 +1019,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                     : 'border-transparent text-slate-600 hover:text-slate-950'
                 }`}
               >
-                {item.label}
+                {t(item.key)}
               </button>
             ))}
           </div>
@@ -1009,43 +1028,43 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
         {tab === 'info' ? (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
             <section className="rounded border border-slate-200 bg-white p-5">
-              <h3 className="text-base font-semibold text-slate-950">Контакт</h3>
+              <h3 className="text-base font-semibold text-slate-950">{t('leads.contact')}</h3>
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Клиент" value={clientName} />
+                <Field label={t('common.client')} value={clientName} />
                 <Field
-                  label="Контакт"
+                  label={t('leads.contact')}
                   value={displayContactValue(contactPresentation.contactName)}
                 />
                 <Field
-                  label="Телефон"
+                  label={t('leads.phone')}
                   value={displayContactValue(contactPresentation.phone)}
                 />
                 <Field
-                  label="Email"
+                  label={t('common.email')}
                   value={displayContactValue(contactPresentation.email)}
                 />
-                <Field label="Источник" value={sourceLabel(normalizeSource(source))} />
+                <Field label={t('leads.source')} value={sourceLabel(normalizeSource(source), t)} />
                 <Field
-                  label="Ответственный"
+                  label={t('leads.owner')}
                   value={resolveUserName(lead.owner, lead.ownerId, usersById)}
                 />
                 <Field
-                  label="Объект"
+                  label={t('leads.object')}
                   value={resolveEntityName(lead.projectObject, lead.projectObjectId)}
                 />
                 <Field
-                  label="Адрес объекта"
+                  label={t('leads.objectAddress')}
                   value={lead.projectObject?.address}
                 />
                 <Field
-                  label="Сделка"
+                  label={t('leads.deal')}
                   value={resolveEntityName(lead.deal, lead.dealId)}
                 />
-                <Field label="Оценка суммы" value={formatMoney(lead.estimatedAmount)} />
+                <Field label={t('leads.estimatedAmount')} value={formatMoney(lead.estimatedAmount)} />
               </div>
               <div className="mt-6 border-t border-slate-200 pt-4">
                 <h4 className="text-sm font-semibold text-slate-900">
-                  {QUALIFICATION_CONTEXT_TITLE}
+                  {t(QUALIFICATION_CONTEXT_TITLE_KEY)}
                 </h4>
                 <div className="mt-4">
                   <QualificationContext
@@ -1071,37 +1090,38 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               {commercialQualification ? (
                 <div className="mt-6 border-t border-slate-200 pt-4">
                   <h4 className="text-sm font-semibold text-slate-900">
-                    Коммерческие данные
+                    {t('leads.commercialData')}
                   </h4>
                   <p className="mt-1 text-xs text-slate-500">
-                    Подтверждено руководителем на Stage 2
+                    {t('leads.confirmedByHead')}
                   </p>
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                     <Field
-                      label="Поставщик"
+                      label={t('common.supplier')}
                       value={formatSupplierName(
                         commercialQualification.supplier?.code,
                         commercialQualification.supplier?.name,
-                        '—',
+                        messages.common.dash,
+                        supplierDisplayNames,
                       )}
                     />
                     <Field
-                      label="Линейка"
+                      label={t('calculations.qualityLine')}
                       value={
                         commercialQualification.qualityClass
-                          ? qualityLineLabel(commercialQualification.qualityClass)
-                          : '—'
+                          ? qualityLineLabel(commercialQualification.qualityClass, messages)
+                          : messages.common.dash
                       }
                     />
                     <Field
-                      label="Срок реализации"
+                      label={t('leads.targetDate')}
                       value={
                         lead.targetDate || commercialQualification.targetDate
                           ? formatDate(
                               lead.targetDate ??
                                 commercialQualification.targetDate,
                             )
-                          : '—'
+                          : messages.common.dash
                       }
                     />
                   </div>
@@ -1129,9 +1149,9 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                         value={ownerId}
                         onChange={setOwnerId}
                         options={ownerOptions}
-                        placeholder="Выберите менеджера"
-                        searchPlaceholder="Поиск сотрудника"
-                        emptyLabel="Сотрудники не найдены"
+                        placeholder={t('leads.selectManager')}
+                        searchPlaceholder={t('clients.searchEmployee')}
+                        emptyLabel={t('clients.employeesEmpty')}
                       />
                       <div className="flex gap-2">
                         <Button
@@ -1145,7 +1165,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                             }).then(() => setIsAssignOpen(false));
                           }}
                         >
-                          Сохранить
+                          {t('common.save')}
                         </Button>
                         <Button
                           type="button"
@@ -1153,7 +1173,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                           size="sm"
                           onClick={() => setIsAssignOpen(false)}
                         >
-                          Отмена
+                          {t('common.cancel')}
                         </Button>
                       </div>
                     </div>
@@ -1167,7 +1187,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                         setIsAssignOpen(true);
                       }}
                     >
-                      Назначить на менеджера
+                      {t('leads.assignToManager')}
                     </Button>
                   )}
                 </div>
@@ -1175,28 +1195,28 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
             </section>
 
             <section className="rounded border border-slate-200 bg-white p-5">
-              <h3 className="text-base font-semibold text-slate-950">Статус</h3>
+              <h3 className="text-base font-semibold text-slate-950">{t('common.status')}</h3>
               <div className="mt-4 space-y-4">
-                <Field label="Создан" value={formatDateTime(lead.createdAt)} />
-                <Field label="Обновлён" value={formatDateTime(lead.updatedAt)} />
-                <Field label="ЛПР" value={lead.decisionMakerContact} />
-                <Field label="Причина неквалификации" value={lead.unqualificationReason} />
+                <Field label={t('common.created')} value={formatDateTime(lead.createdAt)} />
+                <Field label={t('common.updatedShort')} value={formatDateTime(lead.updatedAt)} />
+                <Field label={t('leads.lpr')} value={lead.decisionMakerContact} />
+                <Field label={t('leads.unqualificationReason')} value={lead.unqualificationReason} />
                 {lead.status === 'LOST' || lead.lostReasonCode ? (
                   <>
                     <Field
-                      label="Причина проигрыша"
-                      value={lossReasonLabel(lead.lostReasonCode)}
+                      label={t('leads.lossReason')}
+                      value={lossReasonLabel(lead.lostReasonCode, messages)}
                     />
-                    <Field label="Комментарий" value={lead.lostComment} />
+                    <Field label={t('common.comment')} value={lead.lostComment} />
                     <Field
-                      label="Проигран"
-                      value={lead.lostAt ? formatDateTime(lead.lostAt) : '—'}
+                      label={t('leads.lost')}
+                      value={lead.lostAt ? formatDateTime(lead.lostAt) : t('common.dash')}
                     />
                   </>
                 ) : null}
                 {waitingForCommercialCalculation ? (
                   <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    {COMMERCIAL_CALCULATION_WAITING_COPY}
+                    {t('calculations.waitingCopy')}
                   </p>
                 ) : null}
                 {user?.permissions.includes('leads:update') &&
@@ -1208,7 +1228,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                     size="sm"
                     onClick={() => setLosingLead(lead)}
                   >
-                    Проигран
+                    {t('leads.lost')}
                   </Button>
                 ) : null}
                 <Button
@@ -1218,7 +1238,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                   disabled={lead.status === 'UNQUALIFIED' || lead.status === 'LOST'}
                   onClick={() => setUnqualifyingLead(lead)}
                 >
-                  Не квалифицирован
+                  {t('leads.unqualify')}
                 </Button>
               </div>
             </section>
@@ -1228,14 +1248,14 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
         {tab === 'timeline' ? (
           <section className="rounded border border-slate-200 bg-white p-5">
             <h3 className="text-base font-semibold text-slate-950">
-              История активностей
+              {t('leads.activityHistory')}
             </h3>
             <div className="mt-4 space-y-3">
               <textarea
                 ref={noteRef}
                 value={noteText}
                 onChange={(event) => setNoteText(event.target.value)}
-                placeholder="Новая заметка по лиду"
+                placeholder={t('leads.newNotePlaceholder')}
                 rows={3}
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
               />
@@ -1246,13 +1266,13 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                   void onAddNote();
                 }}
               >
-                {createNote.isPending ? 'Сохранение...' : 'Добавить заметку'}
+                {createNote.isPending ? t('common.saving') : t('leads.addNote')}
               </Button>
             </div>
 
             <div className="mt-6 space-y-3">
               {workspaceQuery.isLoading ? (
-                <p className="text-sm text-slate-600">Загрузка истории...</p>
+                <p className="text-sm text-slate-600">{t('leads.loadingHistory')}</p>
               ) : null}
               {timeline.map((item) => {
                 const Icon = activityIcon(item.type);
@@ -1275,7 +1295,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 );
               })}
               {!workspaceQuery.isLoading && timeline.length === 0 ? (
-                <p className="text-sm text-slate-500">Событий пока нет.</p>
+                <p className="text-sm text-slate-500">{t('leads.noEvents')}</p>
               ) : null}
             </div>
           </section>
@@ -1290,36 +1310,36 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
             />
             <div className="border-t border-slate-200 pt-4">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-slate-950">Сохранённые расчёты</h3>
+              <h3 className="text-base font-semibold text-slate-950">{t('leads.savedCalculations')}</h3>
               {canRunCalculation ? (
                 <Button type="button" size="sm" onClick={() => setIsCalculatorOpen(true)}>
-                  {SAVED_CALCULATION_ACTION_LABEL}
+                  {t(SAVED_CALCULATION_ACTION_KEY)}
                 </Button>
               ) : null}
             </div>
             {calculationsQuery.isLoading ? (
-              <p className="text-sm text-slate-600">Загрузка расчётов...</p>
+              <p className="text-sm text-slate-600">{t('leads.loadingCalculations')}</p>
             ) : null}
             {calculationsQuery.isError ? (
-              <p className="text-sm text-red-600">Не удалось загрузить расчёты.</p>
+              <p className="text-sm text-red-600">{t('leads.loadCalculationsFailed')}</p>
             ) : null}
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Дата</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Тип</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Поставщик</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Размер</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Толщина</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Листы</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">Итого</th>
-                    <th className="px-3 py-2 text-right font-semibold text-slate-700">Действия</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('common.date')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('leads.panelType')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('common.supplier')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('calculations.size')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('calculations.thickness')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('common.sheets')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('common.total')}</th>
+                    <th className="px-3 py-2 text-right font-semibold text-slate-700">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {calculations.map((calculation) => {
-                    const summary = calculationSummary(calculation);
+                    const summary = calculationSummary(calculation, messages, supplierDisplayNames);
 
                     return (
                       <tr key={calculation.id}>
@@ -1378,11 +1398,11 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                             >
                               {convertToQuote.isPending ||
                               finalizeCalculation.isPending
-                                ? 'Создание КП...'
-                                : 'Конвертировать в КП'}
+                                ? t('calculations.creatingQuote')
+                                : t('quotes.convertToQuote')}
                             </Button>
                           ) : (
-                            <span className="text-xs text-slate-500">Только просмотр</span>
+                            <span className="text-xs text-slate-500">{t('leads.viewOnly')}</span>
                           )}
                         </td>
                       </tr>
@@ -1393,8 +1413,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               {!calculationsQuery.isLoading && calculations.length === 0 ? (
                 <div className="p-6 text-center text-sm text-slate-500">
                   {waitingForCommercialCalculation
-                    ? COMMERCIAL_CALCULATION_WAITING_COPY
-                    : 'Расчётов пока нет.'}
+                    ? t('calculations.waitingCopy')
+                    : t('leads.noCalculations')}
                 </div>
               ) : null}
             </div>
@@ -1407,21 +1427,21 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-slate-950">
-                  Коммерческие предложения
+                  {t('quotes.listTitle')}
                 </h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  История предложений по этому лиду
+                  {t('quotes.listSubtitle')}
                 </p>
               </div>
             </div>
             {quotesQuery.isLoading ? (
-              <p className="mt-4 text-sm text-slate-600">Загрузка КП...</p>
+              <p className="mt-4 text-sm text-slate-600">{t('quotes.loading')}</p>
             ) : null}
             {quotesQuery.isError ? (
               <div className="mt-4 flex items-center justify-between gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                <span>Не удалось загрузить КП.</span>
+                <span>{t('quotes.loadFailed')}</span>
                 <Button type="button" variant="outline" size="sm" onClick={() => void quotesQuery.refetch()}>
-                  Повторить
+                  {t('common.retry')}
                 </Button>
               </div>
             ) : null}
@@ -1543,7 +1563,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               })}
               {!quotesQuery.isLoading && !quotesQuery.isError && quotes.length === 0 ? (
                 <div className="border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                  КП пока нет.
+                  {t('quotes.empty')}
                 </div>
               ) : null}
             </div>
@@ -1564,7 +1584,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
       <LoseOpportunityModal
         isOpen={Boolean(losingLead)}
         title={losingLead?.title ?? ''}
-        entityLabel="лид"
+        entityLabel={t('leads.entityLabel')}
         pending={loseLead.isPending}
         error={
           loseLead.isError ? getErrorMessage(loseLead.error) : null

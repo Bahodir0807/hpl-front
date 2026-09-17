@@ -1,22 +1,23 @@
+import { ru } from '@/i18n/ru';
+import { getActiveMessages } from '@/i18n/active-messages';
+import type { Messages } from '@/i18n/types';
 import { dateInputToIso, formatDate, toDateInputValue } from './format';
 
-export const COMMERCIAL_TERMS_SECTION_LABEL = 'Коммерческие условия КП';
-export const PRODUCTION_PERIOD_LABEL = 'Срок производства';
-export const DELIVERY_PERIOD_LABEL = 'Срок доставки';
-export const VALID_UNTIL_LABEL = 'КП действительно до';
-export const DOCUMENT_DATE_LABEL = 'Дата КП';
-export const COMMERCIAL_NOTE_LABEL = 'Примечание';
-export const CONVERT_TO_QUOTE_LABEL = 'Конвертировать в КП';
+export const COMMERCIAL_TERMS_SECTION_LABEL = ru.quotes.commercialTerms;
+export const PRODUCTION_PERIOD_LABEL = ru.quotes.productionTerms;
+export const DELIVERY_PERIOD_LABEL = ru.quotes.deliveryTerms;
+export const VALID_UNTIL_LABEL = ru.quotes.validUntil;
+export const DOCUMENT_DATE_LABEL = ru.quotes.documentDate;
+export const COMMERCIAL_NOTE_LABEL = ru.quotes.commercialNote;
+export const CONVERT_TO_QUOTE_LABEL = ru.quotes.convertToQuote;
 
 export const DEFAULT_QUOTE_VALIDITY_DAYS = 14;
 
-export const DAY_RANGE_REQUIRED_MESSAGE =
-  'Укажите срок в целых днях больше 0';
-export const PRODUCTION_REQUIRED_MESSAGE = 'Заполните срок производства';
-export const DELIVERY_REQUIRED_MESSAGE = 'Заполните срок доставки';
-export const DAY_RANGE_ORDER_MESSAGE =
-  'Начало срока не может быть больше окончания';
-export const VALID_UNTIL_REQUIRED_MESSAGE = 'Укажите дату действия КП';
+export const DAY_RANGE_REQUIRED_MESSAGE = ru.validation.dayRangeRequired;
+export const PRODUCTION_REQUIRED_MESSAGE = ru.validation.productionRequired;
+export const DELIVERY_REQUIRED_MESSAGE = ru.validation.deliveryRequired;
+export const DAY_RANGE_ORDER_MESSAGE = ru.validation.dayRangeOrder;
+export const VALID_UNTIL_REQUIRED_MESSAGE = ru.validation.validUntilRequired;
 export const QUOTE_COMMERCIAL_TERMS_INCOMPLETE =
   'QUOTE_COMMERCIAL_TERMS_INCOMPLETE';
 
@@ -100,15 +101,19 @@ export function parsePositiveInt(value: string): number | null {
   return amount;
 }
 
-export function validateDayRange(from: string, to: string): string | null {
+export function validateDayRange(
+  from: string,
+  to: string,
+  messages: Messages = getActiveMessages(),
+): string | null {
   const fromDays = parsePositiveInt(from);
   const toDays = parsePositiveInt(to);
   if (fromDays == null || toDays == null) {
-    return DAY_RANGE_REQUIRED_MESSAGE;
+    return messages.validation.dayRangeRequired;
   }
 
   if (fromDays > toDays) {
-    return DAY_RANGE_ORDER_MESSAGE;
+    return messages.validation.dayRangeOrder;
   }
 
   return null;
@@ -142,26 +147,29 @@ export function isCompleteQuoteDayRange(
   );
 }
 
-export function quoteCustomerDocumentIssues(quote: {
-  productionTerms?: string | null;
-  deliveryTerms?: string | null;
-  productionDaysFrom?: number | null;
-  productionDaysTo?: number | null;
-  deliveryDaysFrom?: number | null;
-  deliveryDaysTo?: number | null;
-}): string[] {
+export function quoteCustomerDocumentIssues(
+  quote: {
+    productionTerms?: string | null;
+    deliveryTerms?: string | null;
+    productionDaysFrom?: number | null;
+    productionDaysTo?: number | null;
+    deliveryDaysFrom?: number | null;
+    deliveryDaysTo?: number | null;
+  },
+  messages: Messages = getActiveMessages(),
+): string[] {
   const issues: string[] = [];
   if (
     !quote.productionTerms?.trim() &&
     !isCompleteQuoteDayRange(quote.productionDaysFrom, quote.productionDaysTo)
   ) {
-    issues.push(PRODUCTION_REQUIRED_MESSAGE);
+    issues.push(messages.validation.productionRequired);
   }
   if (
     !quote.deliveryTerms?.trim() &&
     !isCompleteQuoteDayRange(quote.deliveryDaysFrom, quote.deliveryDaysTo)
   ) {
-    issues.push(DELIVERY_REQUIRED_MESSAGE);
+    issues.push(messages.validation.deliveryRequired);
   }
   return issues;
 }
@@ -179,16 +187,17 @@ export function hasCompleteQuoteClientTerms(quote: {
 
 export function validateQuoteCommercialTerms(
   form: QuoteCommercialTermsForm,
+  messages: Messages = getActiveMessages(),
 ): string | null {
   if (!form.productionTerms?.trim()) {
-    return PRODUCTION_REQUIRED_MESSAGE;
+    return messages.validation.productionRequired;
   }
   if (!form.deliveryTerms?.trim()) {
-    return DELIVERY_REQUIRED_MESSAGE;
+    return messages.validation.deliveryRequired;
   }
 
   if (!form.validUntil.trim()) {
-    return VALID_UNTIL_REQUIRED_MESSAGE;
+    return messages.validation.validUntilRequired;
   }
 
   return null;

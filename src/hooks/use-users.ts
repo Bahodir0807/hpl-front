@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/errors";
 import { showError, showSuccess } from "../lib/toast";
+import { useI18n } from "@/i18n/provider";
 
 export type RoleName =
   | 'ADMIN'
@@ -13,7 +14,7 @@ export type RoleName =
   | 'MANAGER'
   | 'ACCOUNTANT'
   | 'STOREKEEPER'
-  | 'INSTALLER';
+;
 
 export type User = {
   id: string;
@@ -103,6 +104,7 @@ export function useUsersList(enabled = true, filters: UsersFilter = {}) {
 
 export function useCreateUser() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: CreateUserPayload): Promise<User> => {
@@ -111,7 +113,7 @@ export function useCreateUser() {
       return response.data;
     },
     onSuccess: () => {
-      showSuccess("Сотрудник создан");
+      showSuccess(t("users.toastCreated"));
       void queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error) => {
@@ -122,6 +124,7 @@ export function useCreateUser() {
 
 export function useUpdateUser() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   return useMutation({
     mutationFn: async (payload: UpdateUserPayload): Promise<User> => {
@@ -137,8 +140,8 @@ export function useUpdateUser() {
     onSuccess: (updatedUser) => {
       showSuccess(
         updatedUser.isActive
-          ? "Доступ сотрудника активирован"
-          : "Доступ сотрудника заблокирован",
+          ? t("users.toastActivated")
+          : t("users.toastBlocked"),
       );
       void queryClient.invalidateQueries({ queryKey: ["users"] });
     },

@@ -4,6 +4,8 @@ import { Bell, ExternalLink, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
+import { useI18n } from '@/i18n/provider';
+import { localizeSystemText } from '@/i18n/system-labels';
 import {
   useMarkNotificationRead,
   useNotifications,
@@ -21,6 +23,7 @@ const RECENT_NOTIFICATIONS_LIMIT = 20;
 export function NotificationCenter() {
   const router = useRouter();
   const { user } = useAuth();
+  const { t, locale } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const notificationsQuery = useNotifications(user?.id, {
@@ -91,8 +94,8 @@ export function NotificationCenter() {
         className="relative inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
         aria-label={
           hasRecentUnread
-            ? 'Уведомления, среди последних есть непрочитанные'
-            : 'Уведомления'
+            ? t('header.notificationsUnread')
+            : t('header.notifications')
         }
         aria-expanded={isOpen}
       >
@@ -109,22 +112,22 @@ export function NotificationCenter() {
         <div
           className="absolute right-0 z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] border border-slate-200 bg-white shadow-xl"
           role="dialog"
-          aria-label="Уведомления"
+          aria-label={t('header.notifications')}
         >
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <div>
               <h2 className="text-sm font-semibold text-slate-950">
-                Уведомления
+                {t('notifications.title')}
               </h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                Последние {RECENT_NOTIFICATIONS_LIMIT}
+                {t('notifications.recent', { count: RECENT_NOTIFICATIONS_LIMIT })}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setIsOpen(false)}
               className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
-              aria-label="Закрыть уведомления"
+              aria-label={t('notifications.close')}
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -132,27 +135,27 @@ export function NotificationCenter() {
 
           {notificationsQuery.isFetching && !notificationsQuery.isLoading ? (
             <div className="border-b border-slate-100 px-4 py-2 text-xs text-slate-500">
-              Обновление...
+              {t('notifications.updating')}
             </div>
           ) : null}
 
           {notificationsQuery.isLoading ? (
             <div className="px-4 py-8 text-center text-sm text-slate-600">
-              Загрузка уведомлений...
+              {t('notifications.loading')}
             </div>
           ) : null}
 
           {notificationsQuery.isError ? (
             <div className="space-y-3 px-4 py-6 text-center">
               <p className="text-sm text-red-700">
-                Не удалось загрузить уведомления.
+                {t('notifications.loadFailed')}
               </p>
               <button
                 type="button"
                 onClick={() => void notificationsQuery.refetch()}
                 className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Повторить
+                {t('common.retry')}
               </button>
             </div>
           ) : null}
@@ -162,10 +165,10 @@ export function NotificationCenter() {
           notifications.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <p className="text-sm font-medium text-slate-900">
-                Пока нет уведомлений
+                {t('notifications.empty')}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Новые события появятся здесь.
+                {t('notifications.emptyHint')}
               </p>
             </div>
           ) : null}
@@ -199,7 +202,7 @@ export function NotificationCenter() {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-start justify-between gap-2">
                           <span className="text-sm font-medium text-slate-950">
-                            {notification.title}
+                            {localizeSystemText(notification.title)}
                           </span>
                           {destination ? (
                             <ExternalLink
@@ -210,14 +213,14 @@ export function NotificationCenter() {
                         </span>
                         {notification.message ? (
                           <span className="mt-1 block text-xs leading-5 text-slate-600">
-                            {notification.message}
+                            {localizeSystemText(notification.message)}
                           </span>
                         ) : null}
                         <span className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500">
-                          <span>{formatDateTime(notification.createdAt)}</span>
+                          <span>{formatDateTime(notification.createdAt, locale)}</span>
                           {!notification.isRead ? (
                             <span className="font-medium text-blue-700">
-                              Новое
+                              {t('notifications.unread')}
                             </span>
                           ) : null}
                         </span>
@@ -232,8 +235,10 @@ export function NotificationCenter() {
           {notificationsQuery.data &&
           notificationsQuery.data.total > RECENT_NOTIFICATIONS_LIMIT ? (
             <div className="border-t border-slate-200 px-4 py-2 text-center text-xs text-slate-500">
-              Показаны последние {RECENT_NOTIFICATIONS_LIMIT} из{' '}
-              {notificationsQuery.data.total}
+              {t('notifications.shownOf', {
+                limit: RECENT_NOTIFICATIONS_LIMIT,
+                total: notificationsQuery.data.total,
+              })}
             </div>
           ) : null}
         </div>

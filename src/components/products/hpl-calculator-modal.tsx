@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Product } from "@/hooks/use-inventory";
 import { formatNumber } from "@/lib/format";
+import { useI18n } from "@/i18n/provider";
 
 type HplCalculatorModalProps = {
   product: Product | null;
@@ -48,6 +49,7 @@ function HplCalculatorContent({
   product: Product;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [requiredAreaM2, setRequiredAreaM2] = useState("");
   const [wastePercent, setWastePercent] = useState(String(DEFAULT_WASTE_PERCENT));
 
@@ -89,13 +91,19 @@ function HplCalculatorContent({
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-slate-950">
-              Калькулятор HPL
+              {t("inventory.calculatorTitle")}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              {product.sku} · {formatNumber(product.sheetArea)} м²/лист
+              {product.sku} ·{" "}
+              {t("inventory.areaPerSheet", {
+                area: formatNumber(product.sheetArea),
+              })}
             </p>
             <p className="mt-0.5 text-xs text-slate-500">
-              {product.length} × {product.width} мм
+              {t("inventory.mmSize", {
+                length: product.length,
+                width: product.width,
+              })}
             </p>
           </div>
           <button
@@ -103,14 +111,14 @@ function HplCalculatorContent({
             onClick={onClose}
             className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
           >
-            Закрыть
+            {t("common.close")}
           </button>
         </div>
 
         <div className="space-y-4">
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Нужная площадь, м²
+              {t("inventory.requiredArea")}
             </span>
             <input
               type="number"
@@ -118,14 +126,14 @@ function HplCalculatorContent({
               step="0.01"
               value={requiredAreaM2}
               onChange={(event) => setRequiredAreaM2(event.target.value)}
-              placeholder="Например, 48.5"
+              placeholder={t("inventory.areaPlaceholder")}
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
             />
           </label>
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">
-              Запас на раскрой, %
+              {t("inventory.wastePercent")}
             </span>
             <input
               type="number"
@@ -140,27 +148,27 @@ function HplCalculatorContent({
           {calculation ? (
             <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm">
               <div className="flex justify-between gap-4">
-                <span className="text-slate-600">Площадь с запасом</span>
+                <span className="text-slate-600">{t("inventory.areaWithWaste")}</span>
                 <span className="font-medium text-slate-900">
-                  {formatNumber(calculation.areaWithWaste)} м²
+                  {t("common.m2", { value: formatNumber(calculation.areaWithWaste) })}
                 </span>
               </div>
               <div className="mt-2 flex justify-between gap-4">
-                <span className="text-slate-600">Листов (целых)</span>
+                <span className="text-slate-600">{t("inventory.wholeSheets")}</span>
                 <span className="text-lg font-semibold text-slate-950">
                   {calculation.sheets}
                 </span>
               </div>
               <div className="mt-2 flex justify-between gap-4">
-                <span className="text-slate-600">Итоговая площадь</span>
+                <span className="text-slate-600">{t("inventory.totalArea")}</span>
                 <span className="font-medium text-slate-900">
-                  {formatNumber(calculation.totalAreaM2)} м²
+                  {t("common.m2", { value: formatNumber(calculation.totalAreaM2) })}
                 </span>
               </div>
             </div>
           ) : (
             <p className="text-sm text-slate-500">
-              Введите площадь в м² для расчёта количества листов.
+              {t("inventory.enterAreaHint")}
             </p>
           )}
         </div>

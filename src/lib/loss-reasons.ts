@@ -1,3 +1,7 @@
+import { getActiveMessages } from '@/i18n/active-messages';
+import { ru } from '@/i18n/ru';
+import type { Messages } from '@/i18n/types';
+
 export const LOSS_REASONS = [
   'PRICE',
   'NO_STOCK',
@@ -12,26 +16,29 @@ export const LOSS_REASONS = [
 export type LossReason = (typeof LOSS_REASONS)[number];
 
 export const lossReasonLabels: Record<LossReason, string> = {
-  PRICE: 'Цена',
-  NO_STOCK: 'Нет в наличии',
-  LEAD_TIME: 'Срок поставки',
-  COMPETITOR: 'Конкурент',
-  QUALITY: 'Качество',
-  SIZE: 'Размер',
-  CLIENT_CANCELLED: 'Клиент отказался',
-  OTHER: 'Другое',
+  PRICE: ru.lossReasons.PRICE,
+  NO_STOCK: ru.lossReasons.NO_STOCK,
+  LEAD_TIME: ru.lossReasons.LEAD_TIME,
+  COMPETITOR: ru.lossReasons.COMPETITOR,
+  QUALITY: ru.lossReasons.QUALITY,
+  SIZE: ru.lossReasons.SIZE,
+  CLIENT_CANCELLED: ru.lossReasons.CLIENT_CANCELLED,
+  OTHER: ru.lossReasons.OTHER,
 };
 
 export const OTHER_LOSS_COMMENT_REQUIRED_MESSAGE =
-  'Для причины «Другое» нужен комментарий.';
+  ru.lossReasons.otherCommentRequired;
 
-export function lossReasonLabel(reason?: string | null): string {
+export function lossReasonLabel(
+  reason?: string | null,
+  messages: Messages = getActiveMessages(),
+): string {
   if (!reason) {
-    return '—';
+    return messages.common.dash;
   }
 
-  if (reason in lossReasonLabels) {
-    return lossReasonLabels[reason as LossReason];
+  if (reason in messages.lossReasons && reason !== 'otherCommentRequired') {
+    return messages.lossReasons[reason as LossReason];
   }
 
   return reason;
@@ -41,12 +48,15 @@ export function isOtherLossReason(reason?: string | null): boolean {
   return reason === 'OTHER';
 }
 
-export function validateLossPayload(input: {
-  reason: LossReason;
-  comment?: string;
-}): string | null {
+export function validateLossPayload(
+  input: {
+    reason: LossReason;
+    comment?: string;
+  },
+  messages: Messages = getActiveMessages(),
+): string | null {
   if (input.reason === 'OTHER' && !input.comment?.trim()) {
-    return OTHER_LOSS_COMMENT_REQUIRED_MESSAGE;
+    return messages.lossReasons.otherCommentRequired;
   }
 
   return null;

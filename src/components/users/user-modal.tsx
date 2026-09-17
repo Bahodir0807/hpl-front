@@ -7,47 +7,54 @@ import { z } from "zod";
 import { SearchCombobox } from "../ui/search-combobox";
 import { RoleName, User, useCreateUser, useUpdateUser, useUsersList } from "../../hooks/use-users";
 import { formatPersonName } from "../../lib/display-names";
-import { ADMIN_PROVISIONABLE_ROLES, roleLabels } from "../../lib/labels";
-import { optionalPhoneSchema } from "../../lib/validations/phone";
+import { ADMIN_PROVISIONABLE_ROLES } from "../../lib/labels";
+import { createOptionalPhoneSchema } from "../../lib/validations/phone";
+import { useI18n } from "@/i18n/provider";
+import type { Messages } from "@/i18n/types";
+import { useLabelMaps } from "@/i18n/use-label-maps";
 
 const roles: RoleName[] = ADMIN_PROVISIONABLE_ROLES;
 
-const optionalUuid = z
-  .string()
-  .trim()
-  .optional()
-  .refine((value) => !value || z.string().uuid().safeParse(value).success, {
-    message: "Укажите корректный UUID",
-  });
-
-const userBaseSchema = z.object({
-  email: z.string().trim().email("Некорректный email"),
-  firstName: z.string().trim().min(1, "Укажите имя"),
-  lastName: z.string().trim().min(1, "Укажите фамилию"),
-  phone: optionalPhoneSchema,
-  managerId: optionalUuid,
-  roleName: z.enum(["ADMIN", "MANAGER", "STOREKEEPER", "INSTALLER"]),
-  isActive: z.boolean(),
-});
-
-const userFormSchema = userBaseSchema.extend({
-  password: z.string(),
-});
-
-const createUserSchema = userFormSchema.superRefine((values, ctx) => {
-  if (values.password.length < 8) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["password"],
-      message: "Минимум 8 символов",
+function createUserFormSchema(messages: Messages) {
+  const optionalUuid = z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || z.string().uuid().safeParse(value).success, {
+      message: messages.validation.uuidInvalid,
     });
-  }
-});
 
-type UserFormValues = z.infer<typeof userFormSchema>;
+  return z.object({
+    email: z.string().trim().email(messages.validation.invalidEmail),
+    firstName: z.string().trim().min(1, messages.validation.firstNameRequired),
+    lastName: z.string().trim().min(1, messages.validation.lastNameRequired),
+    phone: createOptionalPhoneSchema(messages),
+    managerId: optionalUuid,
+    roleName: z.enum(["ADMIN", "MANAGER", "STOREKEEPER"]),
+    isActive: z.boolean(),
+    password: z.string(),
+  });
+}
 
-function getUserFormResolver(isEditing: boolean): Resolver<UserFormValues> {
-  return zodResolver(isEditing ? userFormSchema : createUserSchema);
+function createUserSchema(messages: Messages) {
+  return createUserFormSchema(messages).superRefine((values, ctx) => {
+    if (values.password.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: messages.validation.passwordMin8,
+      });
+    }
+  });
+}
+
+type UserFormValues = z.infer<ReturnType<typeof createUserFormSchema>>;
+
+function getUserFormResolver(
+  isEditing: boolean,
+  messages: Messages,
+): Resolver<UserFormValues> {
+  return zodResolver(isEditing ? createUserFormSchema(messages) : createUserSchema(messages));
 }
 
 type UserModalProps = {
@@ -59,6 +66,8 @@ type UserModalProps = {
 export function UserModal({ user, isOpen, onClose }: UserModalProps) {
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
+  const { t, messages } = useI18n();
+  const { roleLabels } = useLabelMaps();
   const { users } = useUsersList();
   const isEditing = Boolean(user);
   const managerOptions = useMemo(
@@ -72,6 +81,10 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
         })),
     [user?.id, users],
   );
+  const resolver = useMemo(
+    () => getUserFormResolver(isEditing, messages),
+    [isEditing, messages],
+  );
   const {
     register,
     handleSubmit,
@@ -79,7 +92,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
     control,
     formState: { errors, isValid },
   } = useForm<UserFormValues>({
-    resolver: getUserFormResolver(isEditing),
+    resolver,
     mode: "onChange",
     defaultValues: {
       email: "",
@@ -143,12 +156,11 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-slate-950">
-              {isEditing ? "Редактировать сотрудника" : "Создать сотрудника"}
+              {isEditing ? t("users.editTitle") : t("users.createTitle")}
             </h2>
             {isEditing ? (
               <p className="mt-1 text-sm text-slate-600">
-                Текущий backend поддерживает изменение статуса через
-                /users/:id/status.
+                {t("users.editHint")}
               </p>
             ) : null}
           </div>
@@ -157,7 +169,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
             onClick={onClose}
             className="rounded border border-slate-300 px-2 py-1 text-sm text-slate-700"
           >
-            Закрыть
+            {t("common.close")}
           </button>
         </div>
 
@@ -186,7 +198,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Пароль
+                {t("common.password")}
               </span>
               <input
                 disabled={isEditing}
@@ -197,7 +209,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
               />
               {!isEditing ? (
                 <span className="mt-1 block text-xs text-slate-500">
-                  Минимум 8 символов
+                  {t("users.passwordHint")}
                 </span>
               ) : null}
               {errors.password ? (
@@ -209,7 +221,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Имя
+                {t("common.firstName")}
               </span>
               <input
                 disabled={isEditing}
@@ -220,7 +232,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Фамилия
+                {t("common.lastName")}
               </span>
               <input
                 disabled={isEditing}
@@ -231,7 +243,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Телефон
+                {t("common.phone")}
               </span>
               <input
                 disabled={isEditing}
@@ -248,7 +260,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Роль
+                {t("users.role")}
               </span>
               {isEditing ? (
                 <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
@@ -275,7 +287,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Руководитель
+                {t("users.supervisor")}
               </span>
               <Controller
                 name="managerId"
@@ -285,9 +297,9 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
                     value={field.value ?? ""}
                     onChange={field.onChange}
                     options={managerOptions}
-                    placeholder="Выберите руководителя"
-                    searchPlaceholder="Поиск сотрудника"
-                    emptyLabel="Сотрудники не найдены"
+                    placeholder={t("users.selectSupervisor")}
+                    searchPlaceholder={t("users.searchEmployee")}
+                    emptyLabel={t("users.employeesEmpty")}
                     disabled={isEditing}
                   />
                 )}
@@ -305,7 +317,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
                 className="h-4 w-4"
                 {...register("isActive")}
               />
-              Активен
+              {t("users.active")}
             </label>
           </div>
 
@@ -315,13 +327,13 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
               disabled
               className="rounded border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500"
             >
-              Сброс пароля недоступен в текущем API
+              {t("users.passwordResetUnavailable")}
             </button>
           ) : null}
 
           {createUser.isError || updateUser.isError ? (
             <p className="text-sm text-red-600">
-              Не удалось сохранить пользователя.
+              {t("users.saveFailed")}
             </p>
           ) : null}
 
@@ -331,7 +343,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
               onClick={onClose}
               className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700"
             >
-              Отмена
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
@@ -340,7 +352,7 @@ export function UserModal({ user, isOpen, onClose }: UserModalProps) {
               }
               className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-500"
             >
-              Сохранить
+              {t("common.save")}
             </button>
           </div>
         </form>
