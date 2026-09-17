@@ -30,12 +30,12 @@ export type User = {
   roles?: { role?: { name: RoleName } }[];
 };
 
-export type UsersListResponse =
-  | {
-      items: User[];
-      total: number;
-    }
-  | User[];
+export type UsersListResponse = {
+  items: User[];
+  total: number;
+  page?: number;
+  limit?: number;
+};
 
 export type UsersFilter = {
   page?: number;
@@ -60,27 +60,16 @@ export type UpdateUserPayload = {
   isActive: boolean;
 };
 
-export function normalizeUsersList(data?: UsersListResponse): User[] {
-  if (!data) {
-    return [];
-  }
-
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  return Array.isArray(data.items) ? data.items : [];
-}
-
 export function useUsers(enabled = true, filters: UsersFilter = {}) {
   return useQuery({
     queryKey: ["users", filters],
-    queryFn: async (): Promise<UsersListResponse> => {
+    queryFn: async (): Promise<User[]> => {
       const response = await apiClient.get<UsersListResponse>("/users", {
         params: filters,
       });
+      const users = response.data?.items ?? response.data;
 
-      return response.data;
+      return Array.isArray(users) ? users : [];
     },
     enabled,
     staleTime: 10 * 60 * 1000,
@@ -89,7 +78,10 @@ export function useUsers(enabled = true, filters: UsersFilter = {}) {
 
 export function useUsersList(enabled = true, filters: UsersFilter = {}) {
   const query = useUsers(enabled, filters);
-  const users = useMemo(() => normalizeUsersList(query.data), [query.data]);
+  const users = useMemo(
+    () => (Array.isArray(query.data) ? query.data : []),
+    [query.data],
+  );
   const usersById = useMemo(
     () => new Map(users.map((user) => [user.id, user])),
     [users],

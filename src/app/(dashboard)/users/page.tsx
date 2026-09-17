@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserModal } from "../../../components/users/user-modal";
 import { useAuth } from "../../../context/auth-context";
-import { User, normalizeUsersList, useUsers } from "../../../hooks/use-users";
+import { User, useUsers } from "../../../hooks/use-users";
 import { getDefaultAuthenticatedPath } from "../../../lib/auth-routing";
 import { resolveUserName } from "../../../lib/display-names";
 import { enumLabel } from "../../../lib/labels";
@@ -32,8 +32,8 @@ export default function UsersPage() {
   const usersQuery = useUsers(canAccess);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const rawUsers = usersQuery.data;
-  const usersList = normalizeUsersList(rawUsers);
+  const users = usersQuery.data ?? [];
+  const usersList = Array.isArray(users) ? users : [];
   const usersById = new Map(usersList.map((user) => [user.id, user]));
 
   useEffect(() => {
