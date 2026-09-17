@@ -30,7 +30,14 @@ function createUserFormSchema(messages: Messages) {
     lastName: z.string().trim().min(1, messages.validation.lastNameRequired),
     phone: createOptionalPhoneSchema(messages),
     managerId: optionalUuid,
-    roleName: z.enum(["ADMIN", "MANAGER", "STOREKEEPER"]),
+    roleName: z.enum([
+      "ADMIN",
+      "DIRECTOR",
+      "HEAD",
+      "MANAGER",
+      "ACCOUNTANT",
+      "STOREKEEPER",
+    ]),
     isActive: z.boolean(),
     password: z.string(),
   });

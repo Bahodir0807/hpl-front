@@ -9,21 +9,21 @@ vi.mock('../../hooks/use-users', () => ({
 }));
 
 describe('UserModal role assignment', () => {
-  it('offers only ADMIN-assignable roles and never OBSERVER or FINANCIER', async () => {
+  it('offers every canonical role and never OBSERVER or FINANCIER', async () => {
     render(<UserModal user={null} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('option', { name: 'Администратор' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Директор' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Руководитель' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Менеджер' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Бухгалтер' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Кладовщик' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Наблюдатель' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Финансист' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Директор' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Руководитель' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Бухгалтер' })).not.toBeInTheDocument();
     expect(screen.queryByText('OBSERVER')).not.toBeInTheDocument();
     expect(screen.queryByText('FINANCIER')).not.toBeInTheDocument();
 
-    expect(screen.getAllByRole('option')).toHaveLength(3);
+    expect(screen.getAllByRole('option')).toHaveLength(6);
   });
 
   it('displays protected role labels when editing an existing user', () => {

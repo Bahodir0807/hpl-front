@@ -26,21 +26,22 @@ describe('user role labels and assignment policy', () => {
     expect(roleLabels).not.toHaveProperty('FINANCIER');
   });
 
-  it('lets ADMIN assign only non-protected roles', () => {
-    expect(ADMIN_PROVISIONABLE_ROLES).toEqual([
-      'ADMIN',
-      'MANAGER',
-      'STOREKEEPER',
-    ]);
+  it('lets ADMIN assign every canonical role', () => {
+    expect(ADMIN_PROVISIONABLE_ROLES).toEqual(CANONICAL_ROLES);
     expect(ADMIN_PROTECTED_ASSIGNMENT_ROLES).toEqual([
       'DIRECTOR',
       'HEAD',
       'ACCOUNTANT',
     ]);
+    expect(ADMIN_PROVISIONABLE_ROLES).toEqual([
+      'ADMIN',
+      'DIRECTOR',
+      'HEAD',
+      'MANAGER',
+      'ACCOUNTANT',
+      'STOREKEEPER',
+    ]);
     expect(ADMIN_PROVISIONABLE_ROLES).not.toContain('OBSERVER');
     expect(ADMIN_PROVISIONABLE_ROLES).not.toContain('FINANCIER');
-    expect(ADMIN_PROVISIONABLE_ROLES).not.toContain('DIRECTOR');
-    expect(ADMIN_PROVISIONABLE_ROLES).not.toContain('HEAD');
-    expect(ADMIN_PROVISIONABLE_ROLES).not.toContain('ACCOUNTANT');
   });
 });

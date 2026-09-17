@@ -92,18 +92,6 @@ export const roleLabels: Record<RoleName, string> = {
   ...ru.roles,
 };
 
-export const ADMIN_PROVISIONABLE_ROLES: RoleName[] = [
-  'ADMIN',
-  'MANAGER',
-  'STOREKEEPER',
-];
-
-export const ADMIN_PROTECTED_ASSIGNMENT_ROLES: RoleName[] = [
-  'DIRECTOR',
-  'HEAD',
-  'ACCOUNTANT',
-];
-
 export const CANONICAL_ROLES: RoleName[] = [
   'ADMIN',
   'DIRECTOR',
@@ -111,6 +99,15 @@ export const CANONICAL_ROLES: RoleName[] = [
   'MANAGER',
   'ACCOUNTANT',
   'STOREKEEPER',
+];
+
+export const ADMIN_PROVISIONABLE_ROLES: RoleName[] = [...CANONICAL_ROLES];
+
+/** Roles whose password cannot be reset through the user-administration UI/API. */
+export const ADMIN_PROTECTED_ASSIGNMENT_ROLES: RoleName[] = [
+  'DIRECTOR',
+  'HEAD',
+  'ACCOUNTANT',
 ];
 
 export const relatedTypeLabels: Record<string, string> = {
