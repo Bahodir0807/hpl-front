@@ -5,7 +5,7 @@ import { useEffect, useMemo } from "react";
 import { Controller, Resolver, useForm } from "react-hook-form";
 import { z } from "zod";
 import { SearchCombobox } from "../ui/search-combobox";
-import { RoleName, User, useCreateUser, useUpdateUser, useUsersList } from "../../hooks/use-users";
+import { User, useCreateUser, useUpdateUser, useUsersList } from "../../hooks/use-users";
 import { formatPersonName } from "../../lib/display-names";
 import { ADMIN_PROVISIONABLE_ROLES } from "../../lib/labels";
 import { createOptionalPhoneSchema } from "../../lib/validations/phone";
@@ -13,7 +13,7 @@ import { useI18n } from "@/i18n/provider";
 import type { Messages } from "@/i18n/types";
 import { useLabelMaps } from "@/i18n/use-label-maps";
 
-const roles: RoleName[] = ADMIN_PROVISIONABLE_ROLES;
+const roles = ADMIN_PROVISIONABLE_ROLES;
 
 function createUserFormSchema(messages: Messages) {
   const optionalUuid = z
@@ -30,14 +30,7 @@ function createUserFormSchema(messages: Messages) {
     lastName: z.string().trim().min(1, messages.validation.lastNameRequired),
     phone: createOptionalPhoneSchema(messages),
     managerId: optionalUuid,
-    roleName: z.enum([
-      "ADMIN",
-      "DIRECTOR",
-      "HEAD",
-      "MANAGER",
-      "ACCOUNTANT",
-      "STOREKEEPER",
-    ]),
+    roleName: z.enum(ADMIN_PROVISIONABLE_ROLES),
     isActive: z.boolean(),
     password: z.string(),
   });

@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { ADMIN_PROVISIONABLE_ROLES } from '../../lib/labels';
 import { UserModal } from './user-modal';
 
 vi.mock('../../hooks/use-users', () => ({
@@ -23,6 +24,11 @@ describe('UserModal role assignment', () => {
     expect(screen.queryByText('OBSERVER')).not.toBeInTheDocument();
     expect(screen.queryByText('FINANCIER')).not.toBeInTheDocument();
 
+    const optionValues = screen
+      .getAllByRole('option')
+      .map((option) => (option as HTMLOptionElement).value);
+
+    expect(optionValues).toEqual([...ADMIN_PROVISIONABLE_ROLES]);
     expect(screen.getAllByRole('option')).toHaveLength(6);
   });
 
