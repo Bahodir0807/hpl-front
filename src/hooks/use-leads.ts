@@ -5,6 +5,7 @@ import { apiClient } from '../lib/api-client';
 import { getErrorMessage } from '../lib/errors';
 import { showError, showSuccess } from '../lib/toast';
 import { useI18n } from '@/i18n/provider';
+import type { EngineeringAssignment } from './use-engineering';
 import type { NormalizedLeadWorkspace } from './use-lead-workspace';
 import type {
   HplApplication,
@@ -91,6 +92,7 @@ export type Lead = {
   deal?: LeadDeal | null;
   qualification?: LeadQualification | null;
   commercialQualification?: LeadCommercialQualification | null;
+  engineeringAssignments?: EngineeringAssignment[];
 };
 
 export type LeadsFilter = {

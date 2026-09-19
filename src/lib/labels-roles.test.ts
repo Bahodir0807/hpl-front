@@ -14,6 +14,7 @@ const EXPECTED_ADMIN_ASSIGNABLE_ROLES = [
   'MANAGER',
   'ACCOUNTANT',
   'STOREKEEPER',
+  'ENGINEER',
 ] as const;
 
 describe('user role labels and assignment policy', () => {
@@ -25,6 +26,7 @@ describe('user role labels and assignment policy', () => {
     expect(roleLabels.MANAGER).toBe('Менеджер');
     expect(roleLabels.ACCOUNTANT).toBe('Бухгалтер');
     expect(roleLabels.STOREKEEPER).toBe('Кладовщик');
+    expect(roleLabels.ENGINEER).toBe('Инженер');
     expect(roleLabels).not.toHaveProperty('OBSERVER');
     expect(roleLabels).not.toHaveProperty('FINANCIER');
   });

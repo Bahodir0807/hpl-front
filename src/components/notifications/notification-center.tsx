@@ -70,7 +70,7 @@ export function NotificationCenter() {
   const handleNotification = async (
     notification: Notification,
   ): Promise<void> => {
-    const destination = getNotificationRoute(notification);
+    const destination = getNotificationRoute(notification, user?.permissions);
 
     if (shouldMarkNotificationRead(notification)) {
       try {
@@ -178,7 +178,7 @@ export function NotificationCenter() {
           notifications.length > 0 ? (
             <div className="max-h-[28rem] divide-y divide-slate-100 overflow-y-auto">
               {notifications.map((notification) => {
-                const destination = getNotificationRoute(notification);
+                const destination = getNotificationRoute(notification, user?.permissions);
                 const canInteract = !notification.isRead || Boolean(destination);
 
                 return (
@@ -247,10 +247,14 @@ export function NotificationCenter() {
   );
 }
 
-function getNotificationRoute(notification: Notification): string | null {
+function getNotificationRoute(
+  notification: Notification,
+  permissions?: readonly string[] | null,
+): string | null {
   const relatedHref = getRelatedEntityHref(
     notification.relatedType,
     notification.relatedId,
+    permissions,
   );
 
   if (relatedHref) {

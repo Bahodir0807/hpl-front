@@ -7,6 +7,7 @@ import {
   TaskComputedStatus,
   TaskPriority,
 } from '../../hooks/use-tasks';
+import { useAuth } from '../../context/auth-context';
 import { getRelatedEntityHref } from '../../lib/entity-routes';
 import { formatDateTime } from '../../lib/format';
 import { enumLabel } from '../../lib/labels';
@@ -38,6 +39,7 @@ const computedStatusClassNames: Record<TaskComputedStatus, string> = {
 
 export function TasksTable({ tasks }: TasksTableProps) {
   const { t } = useI18n();
+  const { user } = useAuth();
   const {
     taskTypeLabels,
     taskComputedStatusLabels,
@@ -125,9 +127,9 @@ export function TasksTable({ tasks }: TasksTableProps) {
                   <div className="text-slate-700">
                     {enumLabel(relatedTypeLabels, task.relatedType)}
                   </div>
-                  {getRelatedHref(task.relatedType, task.relatedId) ? (
+                  {getRelatedHref(task.relatedType, task.relatedId, user?.permissions) ? (
                     <Link
-                      href={getRelatedHref(task.relatedType, task.relatedId)}
+                      href={getRelatedHref(task.relatedType, task.relatedId, user?.permissions)}
                       className="text-sm text-blue-700 hover:underline"
                     >
                       {relatedLabel(task)}
@@ -195,6 +197,10 @@ export function TasksTable({ tasks }: TasksTableProps) {
   );
 }
 
-function getRelatedHref(relatedType: string, relatedId: string): string {
-  return getRelatedEntityHref(relatedType, relatedId) ?? '';
+function getRelatedHref(
+  relatedType: string,
+  relatedId: string,
+  permissions?: readonly string[] | null,
+): string {
+  return getRelatedEntityHref(relatedType, relatedId, permissions) ?? '';
 }

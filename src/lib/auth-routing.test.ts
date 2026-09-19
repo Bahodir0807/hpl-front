@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ACCOUNTANT_PERMISSION_SHAPE,
+  ENGINEER_PERMISSION_SHAPE,
   STOREKEEPER_PERMISSION_SHAPE,
   getDefaultAuthenticatedPath,
   prefersAccountantWorkspace,
@@ -53,6 +54,14 @@ describe('getDefaultAuthenticatedPath', () => {
         ],
       }),
     ).toBe('/leads');
+  });
+
+  it('routes real ENGINEER permissions to the engineering queue', () => {
+    expect(
+      getDefaultAuthenticatedPath({
+        permissions: [...ENGINEER_PERMISSION_SHAPE],
+      }),
+    ).toBe('/engineering');
   });
 
   it('falls back to the authenticated dashboard for users without module permissions', () => {

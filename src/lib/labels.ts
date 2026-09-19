@@ -100,6 +100,7 @@ export const CANONICAL_ROLES = [
   'MANAGER',
   'ACCOUNTANT',
   'STOREKEEPER',
+  'ENGINEER',
 ] as const satisfies readonly RoleName[];
 
 export const ADMIN_PROVISIONABLE_ROLES = CANONICAL_ROLES;

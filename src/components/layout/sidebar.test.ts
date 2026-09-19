@@ -31,6 +31,20 @@ describe("sidebar permissions", () => {
     expect(hrefs.every((href) => !href.includes("calculat"))).toBe(true);
   });
 
+  it("shows the engineering queue by engineering:read and hides commercial lists for engineers", () => {
+    const hrefs = visibleHrefs([
+      "leads:read",
+      "clients:read",
+      "tasks:read",
+      "engineering:read",
+    ]);
+
+    expect(hrefs).toContain("/engineering");
+    expect(hrefs).not.toContain("/leads");
+    expect(hrefs).not.toContain("/clients");
+    expect(hrefs).toContain("/tasks");
+  });
+
   it("shows the installation workspace for management permissions", () => {
     expect(
       visibleHrefs(["deals:read", "installation:assess"]),

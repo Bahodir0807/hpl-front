@@ -37,6 +37,9 @@ describe('entity routes', () => {
 
   it('opens a Manager-to-HEAD handoff notification into the Lead workspace', () => {
     expect(getRelatedEntityHref('Lead', 'lead-1')).toBe('/leads/lead-1');
+    expect(
+      getRelatedEntityHref('Lead', 'lead-1', ['engineering:read']),
+    ).toBe('/engineering/leads/lead-1');
     expect(getRelatedEntityHref('lead', 'lead-1')).toBe('/leads/lead-1');
   });
 

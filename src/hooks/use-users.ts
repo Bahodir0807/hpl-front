@@ -14,6 +14,7 @@ export type RoleName =
   | 'MANAGER'
   | 'ACCOUNTANT'
   | 'STOREKEEPER'
+  | 'ENGINEER'
 ;
 
 export type User = {

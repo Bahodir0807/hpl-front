@@ -73,3 +73,12 @@ export function getErrorMessage(
 
   return normalized.message;
 }
+
+export function getErrorStatus(error: unknown): number {
+  return normalizeError(error).statusCode;
+}
+
+export function isHttpAccessDenied(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  return status === 403 || status === 404;
+}

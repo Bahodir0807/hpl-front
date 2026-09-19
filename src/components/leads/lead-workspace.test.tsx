@@ -129,6 +129,11 @@ vi.mock("@/hooks/use-users", () => ({
   useUsersList: () => useUsersListMock(),
 }));
 
+vi.mock("@/hooks/use-engineering", () => ({
+  useEngineers: () => ({ data: { items: [] }, isLoading: false }),
+  useAssignEngineer: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
 const useSuppliersMock = vi.fn();
 const useSupplierQualityClassesMock = vi.fn();
 

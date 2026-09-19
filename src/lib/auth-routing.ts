@@ -44,6 +44,30 @@ export function prefersAccountantWorkspace(
   return set.has('payments:confirm') && set.has('orders:read') && !set.has('leads:read');
 }
 
+export const ENGINEER_PERMISSION_SHAPE = [
+  'auth:me',
+  'leads:read',
+  'clients:read',
+  'tasks:read',
+  'tasks:update',
+  'files:read',
+  'engineering:read',
+  'engineering:return',
+  'engineering:complete',
+  'engineering:update_technical',
+] as const;
+
+export function prefersEngineerWorkspace(
+  permissions: readonly string[] | null | undefined,
+): boolean {
+  const set = new Set(permissions ?? []);
+  return (
+    set.has('engineering:read') &&
+    !set.has('leads:read_all') &&
+    !set.has('leads:update')
+  );
+}
+
 export function prefersStorekeeperWorkspace(
   permissions: readonly string[] | null | undefined,
 ): boolean {
@@ -65,6 +89,10 @@ export function getDefaultAuthenticatedPath(user: AuthRoutingUser): string {
 
   if (prefersStorekeeperWorkspace(permissions)) {
     return '/receipts';
+  }
+
+  if (prefersEngineerWorkspace(permissions)) {
+    return '/engineering';
   }
 
   const permissionSet = new Set(permissions);

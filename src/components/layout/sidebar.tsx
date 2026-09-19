@@ -3,6 +3,7 @@
 import { X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { prefersEngineerWorkspace } from '@/lib/engineering';
 import { useAuth } from '../../context/auth-context';
 import { useI18n } from '@/i18n/provider';
 
@@ -11,6 +12,7 @@ type NavigationItem = {
   labelKey:
     | 'overview'
     | 'leads'
+    | 'engineering'
     | 'deals'
     | 'installation'
     | 'clients'
@@ -37,6 +39,11 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       { href: '/', labelKey: 'overview' },
       { href: '/leads', labelKey: 'leads', permission: 'leads:read' },
+      {
+        href: '/engineering',
+        labelKey: 'engineering',
+        permission: 'engineering:read',
+      },
       { href: '/deals', labelKey: 'deals', permission: 'deals:read' },
       {
         href: '/installations',
@@ -144,6 +151,12 @@ export function getVisibleNavigationGroups(
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
+        if (
+          prefersEngineerWorkspace([...permissionSet]) &&
+          (item.href === '/leads' || item.href === '/clients')
+        ) {
+          return false;
+        }
         if (item.permission && permissionSet.has(item.permission)) {
           return true;
         }

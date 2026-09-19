@@ -1,3 +1,5 @@
+import { prefersEngineerWorkspace } from './engineering';
+
 export function dealWorkspaceHref(params: {
   dealId?: string | null;
   supplierOrderId?: string | null;
@@ -42,6 +44,7 @@ export function installationWorkspaceHref(params: {
 export function getRelatedEntityHref(
   relatedType: string | null | undefined,
   relatedId: string | null | undefined,
+  permissions?: readonly string[] | null,
 ): string | null {
   if (!relatedType || !relatedId) {
     return null;
@@ -50,7 +53,9 @@ export function getRelatedEntityHref(
   switch (relatedType) {
     case 'Lead':
     case 'lead':
-      return `/leads/${relatedId}`;
+      return prefersEngineerWorkspace(permissions)
+        ? `/engineering/leads/${relatedId}`
+        : `/leads/${relatedId}`;
     case 'Client':
     case 'client':
       return `/clients/${relatedId}`;

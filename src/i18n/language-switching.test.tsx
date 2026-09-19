@@ -125,5 +125,20 @@ describe('language switching presentation', () => {
       'Quote created',
     );
     expect(dictionaries.en.roles.STOREKEEPER).toBe('Storekeeper');
+    expect(dictionaries.ru.roles.ENGINEER).toBe('Инженер');
+    expect(dictionaries.en.roles.ENGINEER).toBe('Engineer');
+    expect(dictionaries.uz.roles.ENGINEER).toBe('Muhandis');
+    expect(dictionaries.ru.leads.assignToEngineer).toBe('Передать инженеру');
+    expect(dictionaries.en.leads.assignToEngineer).toBe('Hand off to engineer');
+    expect(dictionaries.uz.leads.assignToEngineer).toBe('Muhandisga topshirish');
+    expect(dictionaries.ru.engineering.workspaceReturned).toContain(
+      'возвращён менеджеру',
+    );
+    expect(dictionaries.en.engineering.workspaceCompleted).toContain(
+      'workspace is closed',
+    );
+    expect(dictionaries.uz.engineering.workspaceNoAccess).toContain(
+      'ruxsat yo‘q',
+    );
   });
 });
