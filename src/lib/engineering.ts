@@ -4,6 +4,8 @@ export const ENGINEERING_READ_PERMISSION = 'engineering:read';
 export const ENGINEERING_ASSIGN_PERMISSION = 'engineering:assign';
 export const ENGINEERING_RETURN_PERMISSION = 'engineering:return';
 export const ENGINEERING_COMPLETE_PERMISSION = 'engineering:complete';
+export const ENGINEERING_UPDATE_TECHNICAL_PERMISSION =
+  'engineering:update_technical';
 
 const ASSIGNABLE_LEAD_STATUSES: readonly LeadStatus[] = [
   'NEW',

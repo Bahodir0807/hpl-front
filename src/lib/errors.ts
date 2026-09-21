@@ -1,6 +1,7 @@
 import { AxiosError } from 'axios';
 import { getActiveMessages } from '@/i18n/active-messages';
 import type { Messages } from '@/i18n/types';
+import { localizeEngineeringError } from './engineering-errors';
 import { localizeHplBusinessError } from './hpl-errors';
 import { localizeInstallationError } from './installation-errors';
 import { localizeOperationalError } from './operational-errors';
@@ -60,6 +61,7 @@ export function getErrorMessage(
     localizeHplBusinessError(error, catalog) ??
     localizeSupplierOrderError(error, catalog) ??
     localizeInstallationError(error, catalog) ??
+    localizeEngineeringError(error, catalog) ??
     localizeOperationalError(error, catalog);
   if (localized) {
     return localized;

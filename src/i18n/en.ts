@@ -212,7 +212,7 @@ export const en = {
     engineeringAssignment: {
       ACTIVE: 'With engineer',
       RETURNED: 'Returned to manager',
-      COMPLETED: 'Primary qualification completed',
+      COMPLETED: 'Engineering work closed',
       SUPERSEDED: 'Replaced by another engineer',
     },
     task: {
@@ -938,16 +938,82 @@ export const en = {
     returnReasonPlaceholder: 'What the manager needs to clarify',
     completeQualification: 'Complete primary qualification',
     completeHint:
-      'This completes the primary engineering review. Subsystem and installation calculators will come in a later stage.',
+      'Primary qualification does not close subsystem calculator access. Full engineering close is a separate action.',
+    finishEngineering: 'Finish engineering work',
+    finishHint:
+      'After this the engineer loses access until a manager assigns the lead again.',
     toastReturned: 'Lead returned to manager',
     toastCompleted: 'Primary engineering qualification completed',
+    toastFinished: 'Engineering work closed',
     noAccess: 'No access to the engineering section.',
     workspaceReturned:
       'The lead was returned to the manager. The engineering workspace is closed.',
     workspaceCompleted:
-      'Primary engineering qualification is complete. The engineering workspace is closed.',
+      'Engineering work is closed. The engineering workspace is closed.',
     workspaceNoAccess:
       'You no longer have access to this lead. The assignment was completed, returned, or handed to another engineer.',
+    primaryQualificationDone:
+      'Primary qualification is complete. You can continue the subsystem calculation.',
+    facadeTitle: 'Subsystem',
+    facadeSubtitle:
+      'Material takeoff for the base facade subsystem using consumption rates per 1 m² of HPL.',
+    facadeLoading: 'Loading the subsystem calculator...',
+    facadeLoadFailed: 'Could not open the subsystem calculator.',
+    facadeArea: 'HPL cladding area, m²',
+    facadeAreaSource: 'Area source',
+    facadeAreaSourceEngineer: 'Entered by engineer',
+    facadeAreaSourceQualification: 'From HPL qualification',
+    facadeAreaAmbiguous:
+      'This lead has several cladding areas. Confirm the calculation area manually.',
+    facadeConfig: 'Facade configuration',
+    facadeCalculate: 'Calculate automatically',
+    facadeRecalculate: 'Recalculate and keep adjustments',
+    facadeSaveDraft: 'Save draft',
+    facadeSaved: 'Calculation draft saved',
+    facadeCalculated: 'Materials calculated',
+    facadeUnsupportedSaved: 'Configuration saved without an automatic takeoff',
+    facadeUnsaved: 'Unsaved changes',
+    facadeSaveState: 'All changes saved',
+    facadeAddMaterial: 'Add a catalog material',
+    facadeAdd: 'Add',
+    facadeMaterial: 'Material',
+    facadeUnit: 'Unit',
+    facadeNorm: 'Rate per 1 m²',
+    facadeCalculatedQty: 'Calculated qty',
+    facadeFinalQty: 'Final qty',
+    facadeManual: 'Manual adjustment',
+    facadeHasManual:
+      'This takeoff has manual adjustments. Changing the area will not drop them without confirmation.',
+    facadeNote: 'Note',
+    facadeNotes: 'Technical notes',
+    facadeEmpty: 'Automatic calculation has not been run yet.',
+    facadeUnsupported: 'This configuration has no approved consumption rates.',
+    facadeUnsupportedHint:
+      'An incomplete takeoff is not marked ready. No automatic quantities are issued.',
+    facadeNoNorms: 'no rates',
+    facadeInstallationOnly:
+      'Only installation was ordered. A subsystem takeoff is not created automatically.',
+    facadeNotRequested: 'A subsystem was not ordered for this lead.',
+    facadeNoPrice: 'Price is missing and is not treated as zero',
+    facadeRecalcConfirm: 'Confirm recalculation: the takeoff has manual adjustments.',
+    facadeRecalcConfirmHint:
+      'The area will change and calculated quantities will be rebuilt. Manual final quantities will be kept.',
+    facadeRevisionConflict:
+      'The takeoff was changed on another device. Refresh and save again.',
+    facadeNotApplicable:
+      'Automatic subsystem calculation is created only when a subsystem is ordered.',
+    facadeEditForbidden:
+      'Only the assigned engineer can edit the subsystem calculation.',
+    facadeConfigUnknown: 'Unknown facade configuration',
+    facadeAreaInvalid: 'Enter a cladding area greater than 0',
+    facadeQtyInvalid: 'Quantity cannot be negative',
+    facadeMaterialUnknown: 'Material was not found in the catalog',
+    facadeNotFound: 'Subsystem calculation has not been created yet',
+    facadeItemAdded: 'Material added to the calculation',
+    facadeConfirmLeave: 'You have unsaved changes. Leave this page?',
+    facadeUnitM2: 'm²',
+    facadeUnitPcs: 'pcs',
+    facadeUnitLm: 'lm',
   },
   deals: {
     title: 'Deals / Sales funnel',

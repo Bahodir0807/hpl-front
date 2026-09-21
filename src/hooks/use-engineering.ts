@@ -32,6 +32,8 @@ export type EngineeringAssignment = {
   returnedBy?: EngineeringPerson | null;
   completedAt?: string | null;
   completedBy?: EngineeringPerson | null;
+  primaryQualificationCompletedAt?: string | null;
+  primaryQualificationCompletedBy?: EngineeringPerson | null;
 };
 
 export type EngineeringQueueItem = {
@@ -182,8 +184,36 @@ export function useCompleteEngineeringQualification() {
       );
       return response.data;
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, leadId) => {
       showSuccess(t('engineering.toastCompleted'));
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['engineering', 'leads'],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['engineering', 'workspace', leadId],
+        }),
+      ]);
+    },
+    onError: (error) => {
+      showError(getErrorMessage(error));
+    },
+  });
+}
+
+export function useFinishEngineeringWork() {
+  const queryClient = useQueryClient();
+  const { t } = useI18n();
+
+  return useMutation({
+    mutationFn: async (leadId: string) => {
+      const response = await apiClient.post(
+        `/engineering/leads/${leadId}/finish`,
+      );
+      return response.data;
+    },
+    onSuccess: async () => {
+      showSuccess(t('engineering.toastFinished'));
       await queryClient.invalidateQueries({
         queryKey: ['engineering', 'leads'],
       });

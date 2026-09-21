@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ENGINEERING_COMPLETE_PERMISSION,
@@ -11,8 +11,10 @@ import { isHttpAccessDenied } from '@/lib/errors';
 import {
   useCompleteEngineeringQualification,
   useEngineeringWorkspace,
+  useFinishEngineeringWork,
   useReturnEngineeringLead,
 } from '@/hooks/use-engineering';
+import { FacadeCalculator } from '@/components/engineering/facade-calculator';
 import { useAuth } from '@/context/auth-context';
 import { useDownloadFile } from '@/hooks/use-upload';
 import {
@@ -25,7 +27,7 @@ import { formatDateTime } from '@/lib/format';
 import { useI18n } from '@/i18n/provider';
 import { useLabelMaps } from '@/i18n/use-label-maps';
 
-type WorkspaceOutcome = 'returned' | 'completed';
+type WorkspaceOutcome = 'returned' | 'finished';
 
 function yesNo(value: boolean | null | undefined, t: (key: string) => string) {
   if (value === true) {
@@ -75,13 +77,34 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
   const workspaceQuery = useEngineeringWorkspace(leadId, outcome === null);
   const returnLead = useReturnEngineeringLead();
   const complete = useCompleteEngineeringQualification();
+  const finish = useFinishEngineeringWork();
   const download = useDownloadFile();
   const [returnReason, setReturnReason] = useState('');
   const [isReturnOpen, setIsReturnOpen] = useState(false);
+  const [facadeDirty, setFacadeDirty] = useState(false);
 
   const permissions = user?.permissions ?? [];
   const canReturn = permissions.includes(ENGINEERING_RETURN_PERMISSION);
   const canComplete = permissions.includes(ENGINEERING_COMPLETE_PERMISSION);
+
+  useEffect(() => {
+    if (!facadeDirty) {
+      return;
+    }
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [facadeDirty]);
+
+  function confirmLeave() {
+    if (!facadeDirty) {
+      return true;
+    }
+    return window.confirm(t('engineering.facadeConfirmLeave'));
+  }
 
   if (outcome === 'returned') {
     return (
@@ -92,7 +115,7 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
     );
   }
 
-  if (outcome === 'completed') {
+  if (outcome === 'finished') {
     return (
       <EngineeringClosedState
         variant="success"
@@ -148,6 +171,11 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
         <Link
           href="/engineering"
           className="text-sm font-medium text-slate-600 hover:text-slate-950"
+          onClick={(event) => {
+            if (!confirmLeave()) {
+              event.preventDefault();
+            }
+          }}
         >
           {t('engineering.backToQueue')}
         </Link>
@@ -304,21 +332,44 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
         )}
       </section>
 
+      {engineering?.primaryQualificationCompletedAt ? (
+        <p className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          {t('engineering.primaryQualificationDone')}
+        </p>
+      ) : null}
+
+      <FacadeCalculator leadId={leadId} onDirtyChange={setFacadeDirty} />
+
       {isActive ? (
         <section className="rounded border border-slate-200 bg-white p-4">
           <p className="text-xs text-slate-500">{t('engineering.completeHint')}</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            {canComplete ? (
+            {canComplete && !engineering?.primaryQualificationCompletedAt ? (
               <Button
                 type="button"
                 disabled={complete.isPending}
                 onClick={() => {
-                  void complete.mutateAsync(leadId).then(() => {
-                    setOutcome('completed');
-                  });
+                  void complete.mutateAsync(leadId);
                 }}
               >
                 {t('engineering.completeQualification')}
+              </Button>
+            ) : null}
+            {canComplete ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={finish.isPending}
+                onClick={() => {
+                  if (!confirmLeave()) {
+                    return;
+                  }
+                  void finish.mutateAsync(leadId).then(() => {
+                    setOutcome('finished');
+                  });
+                }}
+              >
+                {t('engineering.finishEngineering')}
               </Button>
             ) : null}
             {canReturn ? (
@@ -331,6 +382,7 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
               </Button>
             ) : null}
           </div>
+          <p className="mt-2 text-xs text-slate-500">{t('engineering.finishHint')}</p>
           {isReturnOpen ? (
             <div className="mt-3 space-y-2">
               <label className="block text-sm text-slate-700">
@@ -349,6 +401,9 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
                   size="sm"
                   disabled={returnReason.trim().length < 3 || returnLead.isPending}
                   onClick={() => {
+                    if (!confirmLeave()) {
+                      return;
+                    }
                     void returnLead
                       .mutateAsync({ leadId, reason: returnReason.trim() })
                       .then(() => {

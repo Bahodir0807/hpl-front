@@ -212,7 +212,7 @@ export const uz = {
     engineeringAssignment: {
       ACTIVE: 'Muhandisda ishda',
       RETURNED: 'Menejerga qaytarilgan',
-      COMPLETED: 'Dastlabki malaka yakunlangan',
+      COMPLETED: 'Muhandislik ishi yakunlangan',
       SUPERSEDED: 'Boshqa muhandis bilan almashtirilgan',
     },
     task: {
@@ -938,16 +938,82 @@ export const uz = {
     returnReasonPlaceholder: 'Menejer nima aniqlashi kerak',
     completeQualification: 'Dastlabki malakani yakunlash',
     completeHint:
-      'Bu dastlabki muhandislik tahlilini yakunlaydi. Podsistema va montaj kalkulyatorlari keyingi bosqichda qo‘shiladi.',
+      'Dastlabki malaka podsistema kalkulyatoriga kirishni yopmaydi. To‘liq muhandislik ishini yopish alohida amal.',
+    finishEngineering: 'Muhandislik ishini yakunlash',
+    finishHint:
+      'Shundan so‘ng muhandis lidga kirishni yo‘qotadi, toki menejer ishni qayta biriktirmaguncha.',
     toastReturned: 'Lid menejerga qaytarildi',
     toastCompleted: 'Dastlabki muhandislik malakasi yakunlandi',
+    toastFinished: 'Muhandislik ishi yopildi',
     noAccess: 'Muhandislik bo‘limiga ruxsat yo‘q.',
     workspaceReturned:
       'Lid menejerga qaytarildi. Muhandis ish joyi yopildi.',
     workspaceCompleted:
-      'Dastlabki muhandislik malakasi yakunlandi. Muhandis ish joyi yopildi.',
+      'Muhandislik ishi yakunlandi. Muhandis ish joyi yopildi.',
     workspaceNoAccess:
       'Bu lidga ruxsat yo‘q. Tayinlov yakunlangan, qaytarilgan yoki boshqa muhandisga o‘tkazilgan.',
+    primaryQualificationDone:
+      'Dastlabki malaka yakunlandi. Podsistema hisobini davom ettirish mumkin.',
+    facadeTitle: 'Podsistema',
+    facadeSubtitle:
+      'Asosiy fasad podsistemasi materiallarini 1 m² HPL me’yorlari bo‘yicha hisoblash.',
+    facadeLoading: 'Podsistema kalkulyatori yuklanmoqda...',
+    facadeLoadFailed: 'Podsistema kalkulyatorini ochib bo‘lmadi.',
+    facadeArea: 'HPL qoplama maydoni, m²',
+    facadeAreaSource: 'Maydon manbai',
+    facadeAreaSourceEngineer: 'Muhandis kiritgan',
+    facadeAreaSourceQualification: 'HPL malakasidan',
+    facadeAreaAmbiguous:
+      'Lidda bir nechta qoplama maydoni bor. Hisob maydonini qo‘lda tasdiqlang.',
+    facadeConfig: 'Fasad konfiguratsiyasi',
+    facadeCalculate: 'Avtomatik hisoblash',
+    facadeRecalculate: 'Qayta hisoblash va tuzatishlarni saqlash',
+    facadeSaveDraft: 'Qoralamani saqlash',
+    facadeSaved: 'Hisob qoralamasi saqlandi',
+    facadeCalculated: 'Materiallar hisoblandi',
+    facadeUnsupportedSaved: 'Konfiguratsiya avtomatik hisobsiz saqlandi',
+    facadeUnsaved: 'Saqlanmagan o‘zgarishlar bor',
+    facadeSaveState: 'Barcha o‘zgarishlar saqlangan',
+    facadeAddMaterial: 'Katalogdan material qo‘shish',
+    facadeAdd: 'Qo‘shish',
+    facadeMaterial: 'Material',
+    facadeUnit: 'Birlik',
+    facadeNorm: '1 m² uchun me’yor',
+    facadeCalculatedQty: 'Hisoblangan miqdor',
+    facadeFinalQty: 'Yakuniy miqdor',
+    facadeManual: 'Qo‘lda tuzatish',
+    facadeHasManual:
+      'Hisobda qo‘lda tuzatishlar bor. Maydon o‘zgarganda ular tasdiqsiz o‘chirilmaydi.',
+    facadeNote: 'Izoh',
+    facadeNotes: 'Texnik izohlar',
+    facadeEmpty: 'Avtomatik hisob hali bajarilmagan.',
+    facadeUnsupported: 'Bu konfiguratsiya uchun tasdiqlangan sarf me’yorlari yo‘q.',
+    facadeUnsupportedHint:
+      'To‘liq bo‘lmagan hisob tayyor deb belgilanmaydi. Avtomatik miqdor berilmaydi.',
+    facadeNoNorms: 'me’yor yo‘q',
+    facadeInstallationOnly:
+      'Faqat montaj buyurtma qilingan. Podsistema avtomatik hisobi yaratilmaydi.',
+    facadeNotRequested: 'Bu lid uchun podsistema buyurtma qilinmagan.',
+    facadeNoPrice: 'Narx berilmagan va nol deb qabul qilinmaydi',
+    facadeRecalcConfirm: 'Qayta hisobni tasdiqlang: hisobda qo‘lda tuzatishlar bor.',
+    facadeRecalcConfirmHint:
+      'Maydon o‘zgaradi va hisoblangan miqdorlar yangilanadi. Yakuniy qo‘lda qiymatlar saqlanadi.',
+    facadeRevisionConflict:
+      'Hisob boshqa qurilmada o‘zgartirilgan. Ma’lumotni yangilang va qayta saqlang.',
+    facadeNotApplicable:
+      'Podsistema avtomatik hisobi faqat podsistema buyurtma qilinganda yaratiladi.',
+    facadeEditForbidden:
+      'Podsistema hisobini faqat biriktirilgan muhandis tahrirlay oladi.',
+    facadeConfigUnknown: 'Noma’lum fasad konfiguratsiyasi',
+    facadeAreaInvalid: '0 dan katta qoplama maydonini kiriting',
+    facadeQtyInvalid: 'Miqdor manfiy bo‘lishi mumkin emas',
+    facadeMaterialUnknown: 'Material katalogda topilmadi',
+    facadeNotFound: 'Podsistema hisobi hali yaratilmagan',
+    facadeItemAdded: 'Material hisobga qo‘shildi',
+    facadeConfirmLeave: 'Saqlanmagan o‘zgarishlar bor. Sahifadan chiqasizmi?',
+    facadeUnitM2: 'm²',
+    facadeUnitPcs: 'dona',
+    facadeUnitLm: 'pog‘ona m',
   },
   deals: {
     title: 'Bitimlar / Savdo voronkasi',

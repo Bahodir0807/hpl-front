@@ -14,6 +14,7 @@ vi.mock('@/lib/api-client', () => ({
   apiClient: {
     get: vi.fn(),
     post: vi.fn(),
+    patch: vi.fn(),
   },
 }));
 
@@ -124,15 +125,36 @@ describe('EngineerWorkspace closed states', () => {
           'engineering:read',
           'engineering:return',
           'engineering:complete',
+          'engineering:update_technical',
         ],
       },
     });
   });
 
-  it('shows a success state and stops workspace requests after complete', async () => {
+  it('keeps the workspace open after primary qualification so the calculator stays available', async () => {
     const user = userEvent.setup();
-    vi.mocked(apiClient.get).mockResolvedValue({ data: workspace() });
-    vi.mocked(apiClient.post).mockResolvedValue({ data: { status: 'COMPLETED' } });
+    vi.mocked(apiClient.get).mockImplementation(async (url) => {
+      if (String(url).includes('/facade')) {
+        return {
+          data: {
+            applicable: false,
+            reason: 'INSTALLATION_ONLY',
+            canEdit: true,
+            assignmentId: 'assign-1',
+            suggestedArea: { value: null, source: null, ambiguous: false },
+            configs: [],
+            catalog: [],
+            calculation: null,
+            quoteCreated: false,
+            dealCreated: false,
+          },
+        };
+      }
+      return { data: workspace() };
+    });
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { status: 'ACTIVE', accessRetained: true },
+    });
 
     render(<EngineerWorkspace leadId="lead-1" />, { wrapper: createWrapper() });
 
@@ -146,9 +168,51 @@ describe('EngineerWorkspace closed states', () => {
       screen.getByRole('button', { name: 'Завершить первичную квалификацию' }),
     );
 
+    expect(await screen.findByText('Фасад школы')).toBeInTheDocument();
+    expect(screen.getByText('Подсистема')).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Инженерная работа завершена. Инженерное рабочее место закрыто.',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a success state and stops workspace requests after finishing engineering work', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.get).mockImplementation(async (url) => {
+      if (String(url).includes('/facade')) {
+        return {
+          data: {
+            applicable: false,
+            reason: 'INSTALLATION_ONLY',
+            canEdit: true,
+            assignmentId: 'assign-1',
+            suggestedArea: { value: null, source: null, ambiguous: false },
+            configs: [],
+            catalog: [],
+            calculation: null,
+            quoteCreated: false,
+            dealCreated: false,
+          },
+        };
+      }
+      return { data: workspace() };
+    });
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { status: 'COMPLETED' } });
+
+    render(<EngineerWorkspace leadId="lead-1" />, { wrapper: createWrapper() });
+
+    expect(
+      await screen.findByRole('button', { name: 'Завершить инженерную работу' }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Завершить инженерную работу' }),
+    );
+
     expect(
       await screen.findByText(
-        'Первичная инженерная квалификация завершена. Инженерное рабочее место закрыто.',
+        'Инженерная работа завершена. Инженерное рабочее место закрыто.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -166,7 +230,25 @@ describe('EngineerWorkspace closed states', () => {
 
   it('shows a success state and stops workspace requests after return', async () => {
     const user = userEvent.setup();
-    vi.mocked(apiClient.get).mockResolvedValue({ data: workspace() });
+    vi.mocked(apiClient.get).mockImplementation(async (url) => {
+      if (String(url).includes('/facade')) {
+        return {
+          data: {
+            applicable: false,
+            reason: 'INSTALLATION_ONLY',
+            canEdit: true,
+            assignmentId: 'assign-1',
+            suggestedArea: { value: null, source: null, ambiguous: false },
+            configs: [],
+            catalog: [],
+            calculation: null,
+            quoteCreated: false,
+            dealCreated: false,
+          },
+        };
+      }
+      return { data: workspace() };
+    });
     vi.mocked(apiClient.post).mockResolvedValue({ data: { status: 'RETURNED' } });
 
     render(<EngineerWorkspace leadId="lead-1" />, { wrapper: createWrapper() });
