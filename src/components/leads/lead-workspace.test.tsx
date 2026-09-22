@@ -138,6 +138,10 @@ vi.mock("@/components/leads/facade-commercial-panel", () => ({
   FacadeCommercialPanel: () => <div>Стоимость подсистемы</div>,
 }));
 
+vi.mock("@/components/leads/installation-commercial-panel", () => ({
+  InstallationCommercialPanel: () => <div>Стоимость монтажа</div>,
+}));
+
 const useSuppliersMock = vi.fn();
 const useSupplierQualityClassesMock = vi.fn();
 

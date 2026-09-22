@@ -31,6 +31,10 @@ vi.mock('@/hooks/use-upload', () => ({
   useDownloadFile: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+vi.mock('@/components/engineering/installation-calculator', () => ({
+  InstallationCalculator: () => <div>Монтаж</div>,
+}));
+
 function axiosError(status: number, message: string): AxiosError {
   return new AxiosError(message, 'ERR_BAD_REQUEST', undefined, undefined, {
     status,

@@ -15,6 +15,7 @@ import {
   useReturnEngineeringLead,
 } from '@/hooks/use-engineering';
 import { FacadeCalculator } from '@/components/engineering/facade-calculator';
+import { InstallationCalculator } from '@/components/engineering/installation-calculator';
 import { useAuth } from '@/context/auth-context';
 import { useDownloadFile } from '@/hooks/use-upload';
 import {
@@ -82,13 +83,15 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
   const [returnReason, setReturnReason] = useState('');
   const [isReturnOpen, setIsReturnOpen] = useState(false);
   const [facadeDirty, setFacadeDirty] = useState(false);
+  const [installationDirty, setInstallationDirty] = useState(false);
+  const unsavedDirty = facadeDirty || installationDirty;
 
   const permissions = user?.permissions ?? [];
   const canReturn = permissions.includes(ENGINEERING_RETURN_PERMISSION);
   const canComplete = permissions.includes(ENGINEERING_COMPLETE_PERMISSION);
 
   useEffect(() => {
-    if (!facadeDirty) {
+    if (!unsavedDirty) {
       return;
     }
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -97,10 +100,10 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [facadeDirty]);
+  }, [unsavedDirty]);
 
   function confirmLeave() {
-    if (!facadeDirty) {
+    if (!unsavedDirty) {
       return true;
     }
     return window.confirm(t('engineering.facadeConfirmLeave'));
@@ -339,6 +342,10 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
       ) : null}
 
       <FacadeCalculator leadId={leadId} onDirtyChange={setFacadeDirty} />
+      <InstallationCalculator
+        leadId={leadId}
+        onDirtyChange={setInstallationDirty}
+      />
 
       {isActive ? (
         <section className="rounded border border-slate-200 bg-white p-4">

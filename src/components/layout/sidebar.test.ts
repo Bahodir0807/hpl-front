@@ -63,6 +63,15 @@ describe("sidebar permissions", () => {
     );
   });
 
+  it("shows installation rates for manage_contractors and hides them otherwise", () => {
+    expect(
+      visibleHrefs(["installation_pricing:manage_contractors"]),
+    ).toContain("/references/installation-rates");
+    expect(visibleHrefs(["panel_catalog:read"])).not.toContain(
+      "/references/installation-rates",
+    );
+  });
+
   it("shows reports and receipts only with their explicit permissions", () => {
     expect(visibleHrefs(["reports:read", "inventory:read"])).toEqual([
       "/",

@@ -14,6 +14,7 @@ type NavigationItem = {
     | 'leads'
     | 'engineering'
     | 'facadeOffers'
+    | 'installationRates'
     | 'deals'
     | 'installation'
     | 'clients'
@@ -68,6 +69,11 @@ const navigationGroups: NavigationGroup[] = [
         href: '/references/facade-offers',
         labelKey: 'facadeOffers',
         permission: 'facade_pricing:manage_offers',
+      },
+      {
+        href: '/references/installation-rates',
+        labelKey: 'installationRates',
+        permission: 'installation_pricing:manage_contractors',
       },
     ],
   },
@@ -181,6 +187,7 @@ function getItemClassName(pathname: string, href: string): string {
     pathname === itemPath ||
     (itemPath !== '/references/panels' &&
       itemPath !== '/references/facade-offers' &&
+      itemPath !== '/references/installation-rates' &&
       pathname.startsWith(`${itemPath}/`)) ||
     (itemPath === '/references/panels' &&
       (pathname === '/references/panels' ||
