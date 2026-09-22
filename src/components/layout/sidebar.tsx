@@ -13,6 +13,7 @@ type NavigationItem = {
     | 'overview'
     | 'leads'
     | 'engineering'
+    | 'facadeOffers'
     | 'deals'
     | 'installation'
     | 'clients'
@@ -63,6 +64,11 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       { href: '/references/panels', labelKey: 'panels', permission: 'panel_catalog:read' },
       { href: '/references/panels#suppliers', labelKey: 'suppliers', permission: 'panel_catalog:read' },
+      {
+        href: '/references/facade-offers',
+        labelKey: 'facadeOffers',
+        permission: 'facade_pricing:manage_offers',
+      },
     ],
   },
   {
@@ -173,8 +179,12 @@ function getItemClassName(pathname: string, href: string): string {
   const itemPath = href.split('#')[0];
   const isActive =
     pathname === itemPath ||
-    (itemPath !== '/references/panels' && pathname.startsWith(`${itemPath}/`)) ||
-    (itemPath === '/references/panels' && pathname.startsWith('/references/'));
+    (itemPath !== '/references/panels' &&
+      itemPath !== '/references/facade-offers' &&
+      pathname.startsWith(`${itemPath}/`)) ||
+    (itemPath === '/references/panels' &&
+      (pathname === '/references/panels' ||
+        pathname.startsWith('/references/panels/')));
   const baseClassName =
     'block rounded px-2 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-slate-950';
 

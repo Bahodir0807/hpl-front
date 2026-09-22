@@ -13,6 +13,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { AssignEngineerPanel } from '@/components/leads/assign-engineer-panel';
+import { FacadeCommercialPanel } from '@/components/leads/facade-commercial-panel';
 import { QualifyLeadModal } from '@/components/leads/qualify-lead-modal';
 import { UnqualifyLeadModal } from '@/components/leads/unqualify-lead-modal';
 import { LoseOpportunityModal } from '@/components/opportunities/lose-opportunity-modal';
@@ -1142,6 +1143,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 />
               ) : null}
               <AssignEngineerPanel lead={lead} permissions={permissions} />
+              <FacadeCommercialPanel leadId={lead.id} />
               {canAssign ? (
                 <div className="mt-5 border-t border-slate-200 pt-4">
                   {isAssignOpen ? (

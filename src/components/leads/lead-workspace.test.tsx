@@ -134,6 +134,10 @@ vi.mock("@/hooks/use-engineering", () => ({
   useAssignEngineer: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
+vi.mock("@/components/leads/facade-commercial-panel", () => ({
+  FacadeCommercialPanel: () => <div>Стоимость подсистемы</div>,
+}));
+
 const useSuppliersMock = vi.fn();
 const useSupplierQualityClassesMock = vi.fn();
 

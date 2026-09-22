@@ -54,6 +54,15 @@ describe("sidebar permissions", () => {
     ).toContain("/installations");
   });
 
+  it("shows facade offers for manage_offers and hides them otherwise", () => {
+    expect(
+      visibleHrefs(["facade_pricing:manage_offers"]),
+    ).toContain("/references/facade-offers");
+    expect(visibleHrefs(["panel_catalog:read"])).not.toContain(
+      "/references/facade-offers",
+    );
+  });
+
   it("shows reports and receipts only with their explicit permissions", () => {
     expect(visibleHrefs(["reports:read", "inventory:read"])).toEqual([
       "/",
