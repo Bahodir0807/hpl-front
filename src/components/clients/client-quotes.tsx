@@ -228,7 +228,9 @@ export function ClientQuotes({ clientId }: ClientQuotesProps) {
               pricingPending={approvePricing.isPending}
               pricingPreviewPending={previewPricing.isPending}
               onFinalize={() => handleFinalize(openQuote.id)}
-              onCreateVersion={() => createQuoteVersion.mutateAsync(openQuote.id)}
+              onCreateVersion={() =>
+                createQuoteVersion.mutateAsync({ id: openQuote.id })
+              }
               createVersionPending={createQuoteVersion.isPending}
               finalizePending={finalizeQuote.isPending}
               highlightUnapproved={highlightUnapproved}

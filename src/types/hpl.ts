@@ -374,6 +374,41 @@ export type Quote = {
     lastName?: string | null;
     email?: string | null;
   } | null;
+  composition?: QuoteComposition;
+};
+
+export type QuoteComponentKind = 'HPL' | 'FACADE' | 'INSTALLATION';
+
+export type QuoteComponentReadiness =
+  | 'NOT_REQUIRED'
+  | 'READY'
+  | 'AWAITING_APPROVAL'
+  | 'STALE_APPROVED'
+  | 'MISSING';
+
+export type QuoteCompositionComponent = {
+  kind: QuoteComponentKind;
+  label: string;
+  description?: string | null;
+  amount?: string | null;
+  currency?: string | null;
+  sourceRevision?: number | null;
+  technicalRevision?: number | null;
+  required?: boolean;
+  readiness?: QuoteComponentReadiness;
+  includeInQuote?: boolean;
+  staleTechnicalBasis?: boolean;
+  warning?: string | null;
+};
+
+export type QuoteComposition = {
+  components: QuoteCompositionComponent[];
+  totals: {
+    byCurrency: Array<{ currency: string; amount: string }>;
+    grandTotal: { currency: string; amount: string } | null;
+  };
+  canCreateQuote?: boolean;
+  staleAcknowledgementRequired?: boolean;
 };
 
 export type QuotePricingPreview = {

@@ -36,6 +36,7 @@ export type ConvertCalculationToQuotePayload = {
   productionDaysTo?: number;
   deliveryDaysFrom?: number;
   deliveryDaysTo?: number;
+  acknowledgeStaleComponents?: boolean;
 };
 
 export function useQuotes(leadId?: string) {
@@ -124,6 +125,9 @@ export function useConvertCalculationToQuote(calculationId?: string) {
           ...(payload?.deliveryDaysTo !== undefined
             ? { deliveryDaysTo: payload.deliveryDaysTo }
             : {}),
+          ...(payload?.acknowledgeStaleComponents
+            ? { acknowledgeStaleComponents: true }
+            : {}),
         },
       );
 
@@ -133,6 +137,7 @@ export function useConvertCalculationToQuote(calculationId?: string) {
       showSuccess(t('quotes.toastCreatedFromCalculation'));
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({ queryKey: ['calculations'] });
+      void queryClient.invalidateQueries({ queryKey: ['quote-composition'] });
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', quote.leadId],
       });
@@ -312,8 +317,16 @@ export function useCreateQuoteVersion() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
   return useMutation({
-    mutationFn: async (id: string): Promise<Quote> => {
-      const response = await apiClient.post<Quote>(`/quotes/${id}/versions`);
+    mutationFn: async (payload: {
+      id: string;
+      acknowledgeStaleComponents?: boolean;
+    }): Promise<Quote> => {
+      const response = await apiClient.post<Quote>(
+        `/quotes/${payload.id}/versions`,
+        payload.acknowledgeStaleComponents
+          ? { acknowledgeStaleComponents: true }
+          : {},
+      );
       return response.data;
     },
     onSuccess: (quote) => {
@@ -323,6 +336,7 @@ export function useCreateQuoteVersion() {
         }),
       );
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      void queryClient.invalidateQueries({ queryKey: ['quote-composition'] });
       void queryClient.invalidateQueries({ queryKey: ['lead-workspace', quote.leadId] });
     },
     onError: (error) => showError(getErrorMessage(error)),

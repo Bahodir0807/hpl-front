@@ -58,7 +58,16 @@ export function quoteItemCurrencies(quote: Pick<Quote, 'items'>): string[] {
   return [...codes];
 }
 
-export function quoteUsesMixedCurrencies(quote: Pick<Quote, 'items'>): boolean {
+export function quoteUsesMixedCurrencies(
+  quote: Pick<Quote, 'items' | 'composition' | 'displayCurrency'>,
+): boolean {
+  if (
+    quote.composition?.totals.byCurrency &&
+    quote.composition.totals.byCurrency.length > 1 &&
+    !quote.composition.totals.grandTotal
+  ) {
+    return true;
+  }
   return quoteItemCurrencies(quote).length > 1;
 }
 

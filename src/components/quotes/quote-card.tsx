@@ -272,6 +272,43 @@ export function QuoteCard({
         <MetaField label={t('quotes.itemCount')} value={String(quote.items.length)} />
       </dl>
 
+      {quote.composition?.components.some((component) => component.kind !== 'HPL') ? (
+        <ul className="space-y-1 border-b border-slate-200 px-4 py-3 text-sm dark:border-slate-700">
+          {quote.composition.components
+            .filter((component) => component.kind !== 'HPL' || component.amount)
+            .map((component) => (
+              <li
+                key={component.kind}
+                className="flex flex-wrap items-baseline justify-between gap-2 text-slate-800 dark:text-slate-200"
+              >
+                <span>
+                  {component.kind === 'HPL'
+                    ? t('quotes.compositionHpl')
+                    : component.kind === 'FACADE'
+                      ? t('quotes.compositionFacade')
+                      : t('quotes.compositionInstallation')}
+                </span>
+                {component.amount && component.currency ? (
+                  <span className="font-medium">
+                    {formatMoney(component.amount, normalizeCurrency(component.currency))}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          {quote.composition.totals.grandTotal ? (
+            <li className="flex justify-between font-semibold text-slate-950 dark:text-slate-50">
+              <span>{t('quotes.compositionGrandTotal')}</span>
+              <span>
+                {formatMoney(
+                  quote.composition.totals.grandTotal.amount,
+                  normalizeCurrency(quote.composition.totals.grandTotal.currency),
+                )}
+              </span>
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+
       {(canApprovePricing || locked) && quote.items.length > 0 ? (
         <QuoteApprovedPricing
           quote={quote}

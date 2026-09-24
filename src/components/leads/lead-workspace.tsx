@@ -20,6 +20,7 @@ import { UnqualifyLeadModal } from '@/components/leads/unqualify-lead-modal';
 import { LoseOpportunityModal } from '@/components/opportunities/lose-opportunity-modal';
 import { CalculationRequestPanel } from '@/components/calculations/calculation-request-panel';
 import { QuoteCard } from '@/components/quotes/quote-card';
+import { QuoteCompositionPanel } from '@/components/quotes/quote-composition-panel';
 import { RejectQuoteModal } from '@/components/quotes/reject-quote-modal';
 import { Button } from '@/components/ui/button';
 import { SearchCombobox } from '@/components/ui/search-combobox';
@@ -63,6 +64,7 @@ import {
   useUpdateQuoteStatus,
   isQuoteTermsLockedError,
 } from '@/hooks/use-quotes';
+import { useQuoteComposition } from '@/hooks/use-quote-composition';
 import { useUsersList } from '@/hooks/use-users';
 import { finalizeCalculationBeforeQuote } from '@/lib/calculation-quote';
 import {
@@ -796,6 +798,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const calculationsQuery = useCalculationsByLead(leadId);
   const requestsQuery = useCalculationRequests({ leadId });
   const quotesQuery = useQuotes(leadId);
+  const quoteCompositionQuery = useQuoteComposition(leadId);
   const canReadUsers = user?.permissions.includes('users:read') ?? false;
   const { users, usersById } = useUsersList(canReadUsers);
   const createCall = useCreateLeadCall();
@@ -828,6 +831,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const [unqualifyingLead, setUnqualifyingLead] = useState<Lead | null>(null);
   const [losingLead, setLosingLead] = useState<Lead | null>(null);
   const [rejectingQuote, setRejectingQuote] = useState<Quote | null>(null);
+  const [acknowledgeStaleQuote, setAcknowledgeStaleQuote] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
   const lead = leadQuery.data;
@@ -1393,6 +1397,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                                       convert: (calculationId) =>
                                         convertToQuote.mutateAsync({
                                           calculationId,
+                                          acknowledgeStaleComponents:
+                                            acknowledgeStaleQuote,
                                         }),
                                     });
                                   } catch {
@@ -1438,6 +1444,15 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                   {t('quotes.listSubtitle')}
                 </p>
               </div>
+            </div>
+            <div className="mt-4">
+              <QuoteCompositionPanel
+                composition={quoteCompositionQuery.data}
+                loading={quoteCompositionQuery.isLoading}
+                error={quoteCompositionQuery.isError}
+                acknowledgeStale={acknowledgeStaleQuote}
+                onAcknowledgeStaleChange={setAcknowledgeStaleQuote}
+              />
             </div>
             {quotesQuery.isLoading ? (
               <p className="mt-4 text-sm text-slate-600">{t('quotes.loading')}</p>
@@ -1552,11 +1567,14 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                       }
                     }}
                     onCreateVersion={() =>
-                      createQuoteVersion.mutateAsync(quote.id)
+                      createQuoteVersion.mutateAsync({
+                        id: quote.id,
+                        acknowledgeStaleComponents: acknowledgeStaleQuote,
+                      })
                     }
                     createVersionPending={
                       createQuoteVersion.isPending &&
-                      createQuoteVersion.variables === quote.id
+                      createQuoteVersion.variables?.id === quote.id
                     }
                     finalizePending={
                       finalizeQuote.isPending &&

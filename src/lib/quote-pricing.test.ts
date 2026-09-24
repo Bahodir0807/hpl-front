@@ -93,6 +93,29 @@ describe('quote approved pricing', () => {
     expect(unapprovedQuoteItemIds(draft)).toEqual(['a']);
   });
 
+  it('does not invent a grand total across mixed composition currencies', () => {
+    expect(
+      quoteUsesMixedCurrencies(
+        quote({
+          items: [{ id: 'a', areaM2: '1', currencyCode: 'USD' }],
+          composition: {
+            components: [
+              { kind: 'HPL', label: 'HPL', amount: '12000', currency: 'USD' },
+              { kind: 'FACADE', label: 'Facade', amount: '8000', currency: 'EUR' },
+            ],
+            totals: {
+              byCurrency: [
+                { currency: 'USD', amount: '12000.00' },
+                { currency: 'EUR', amount: '8000.00' },
+              ],
+              grandTotal: null,
+            },
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it('locks a quote when finalizedAt is set', () => {
     expect(isQuoteFinalized(quote({ finalizedAt: null }))).toBe(false);
     expect(

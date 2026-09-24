@@ -117,6 +117,25 @@ vi.mock("@/hooks/use-quotes", () => ({
   isQuoteTermsLockedError: () => false,
 }));
 
+vi.mock("@/hooks/use-quote-composition", () => ({
+  useQuoteComposition: () => ({
+    data: {
+      components: [
+        {
+          kind: "HPL",
+          label: "HPL",
+          readiness: "READY",
+          required: true,
+          includeInQuote: true,
+        },
+      ],
+      totals: { byCurrency: [], grandTotal: null },
+    },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 vi.mock("@/components/calculations/calculation-request-panel", () => ({
   CalculationRequestPanel: () => (
     <div>
