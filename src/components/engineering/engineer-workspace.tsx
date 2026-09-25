@@ -14,9 +14,11 @@ import {
   useFinishEngineeringWork,
   useReturnEngineeringLead,
 } from '@/hooks/use-engineering';
+import { ExecutionHandoffPanel } from '@/components/quotes/execution-handoff-panel';
 import { FacadeCalculator } from '@/components/engineering/facade-calculator';
 import { InstallationCalculator } from '@/components/engineering/installation-calculator';
 import { useAuth } from '@/context/auth-context';
+import { useLeadExecution } from '@/hooks/use-quotes';
 import { useDownloadFile } from '@/hooks/use-upload';
 import {
   displayContactValue,
@@ -76,6 +78,9 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
   const { user } = useAuth();
   const [outcome, setOutcome] = useState<WorkspaceOutcome | null>(null);
   const workspaceQuery = useEngineeringWorkspace(leadId, outcome === null);
+  const executionQuery = useLeadExecution(
+    workspaceQuery.isSuccess ? leadId : null,
+  );
   const returnLead = useReturnEngineeringLead();
   const complete = useCompleteEngineeringQualification();
   const finish = useFinishEngineeringWork();
@@ -197,6 +202,8 @@ export function EngineerWorkspace({ leadId }: { leadId: string }) {
           ) : null}
         </div>
       </div>
+
+      <ExecutionHandoffPanel view={executionQuery.data} />
 
       <section className="rounded border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-950">

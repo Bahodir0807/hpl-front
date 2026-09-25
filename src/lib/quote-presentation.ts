@@ -55,10 +55,16 @@ export function getQuoteActions({
   const canWrite =
     hasPermission('quotes:update') &&
     (isOwner || hasPermission('quotes:read_all'));
+  const canMarkAcceptance =
+    (isOwner &&
+      (hasPermission('quotes:client_accept') ||
+        hasPermission('quotes:mark_customer_accepted'))) ||
+    (hasPermission('quotes:mark_customer_accepted') &&
+      hasPermission('quotes:read_all'));
   const canRecordClientAcceptance =
     !quote.clientAcceptedAt &&
-    isOwner &&
-    hasPermission('quotes:client_accept') &&
+    Boolean(quote.finalizedAt) &&
+    canMarkAcceptance &&
     (quote.status === 'approved' || quote.status === 'converted');
 
   if (quote.status === 'draft') {

@@ -19,6 +19,8 @@ import { QualifyLeadModal } from '@/components/leads/qualify-lead-modal';
 import { UnqualifyLeadModal } from '@/components/leads/unqualify-lead-modal';
 import { LoseOpportunityModal } from '@/components/opportunities/lose-opportunity-modal';
 import { CalculationRequestPanel } from '@/components/calculations/calculation-request-panel';
+import { AcceptQuoteModal } from '@/components/quotes/accept-quote-modal';
+import { ExecutionHandoffPanel } from '@/components/quotes/execution-handoff-panel';
 import { QuoteCard } from '@/components/quotes/quote-card';
 import { QuoteCompositionPanel } from '@/components/quotes/quote-composition-panel';
 import { RejectQuoteModal } from '@/components/quotes/reject-quote-modal';
@@ -58,6 +60,7 @@ import {
   useDownloadQuoteDocx,
   useFinalizeQuote,
   useCreateQuoteVersion,
+  useLeadExecution,
   useQuotes,
   useRecordQuoteClientAcceptance,
   useUpdateQuoteCommercialTerms,
@@ -798,6 +801,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const calculationsQuery = useCalculationsByLead(leadId);
   const requestsQuery = useCalculationRequests({ leadId });
   const quotesQuery = useQuotes(leadId);
+  const executionQuery = useLeadExecution(leadId);
   const quoteCompositionQuery = useQuoteComposition(leadId);
   const canReadUsers = user?.permissions.includes('users:read') ?? false;
   const { users, usersById } = useUsersList(canReadUsers);
@@ -831,6 +835,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
   const [unqualifyingLead, setUnqualifyingLead] = useState<Lead | null>(null);
   const [losingLead, setLosingLead] = useState<Lead | null>(null);
   const [rejectingQuote, setRejectingQuote] = useState<Quote | null>(null);
+  const [acceptingQuote, setAcceptingQuote] = useState<Quote | null>(null);
   const [acknowledgeStaleQuote, setAcknowledgeStaleQuote] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
@@ -911,7 +916,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
     }
     if (
       recordClientAcceptance.isPending &&
-      recordClientAcceptance.variables === quoteId
+      recordClientAcceptance.variables?.id === quoteId
     ) {
       return 'client-accept';
     }
@@ -1465,6 +1470,9 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 </Button>
               </div>
             ) : null}
+            <div className="mt-4">
+              <ExecutionHandoffPanel view={executionQuery.data} />
+            </div>
             <div className="mt-4 space-y-3">
               {quotes.map((quote, index) => {
                 const manager = usersById.get(quote.managerId);
@@ -1490,9 +1498,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                       void updateQuoteStatus.mutateAsync({ id: quote.id, status: 'approved' }).catch(() => undefined);
                     }}
                     onReject={() => setRejectingQuote(quote)}
-                    onClientAccept={() => {
-                      void recordClientAcceptance.mutateAsync(quote.id).catch(() => undefined);
-                    }}
+                    onClientAccept={() => setAcceptingQuote(quote)}
                     onConvert={() => {
                       void convertQuoteToDeal
                         .mutateAsync(quote.id)
@@ -1640,6 +1646,23 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               rejectionReason,
             });
             setRejectingQuote(null);
+          }}
+        />
+      ) : null}
+      {acceptingQuote ? (
+        <AcceptQuoteModal
+          quote={acceptingQuote}
+          isPending={
+            recordClientAcceptance.isPending &&
+            recordClientAcceptance.variables?.id === acceptingQuote.id
+          }
+          onCancel={() => setAcceptingQuote(null)}
+          onSubmit={async (note) => {
+            await recordClientAcceptance.mutateAsync({
+              id: acceptingQuote.id,
+              note: note || undefined,
+            });
+            setAcceptingQuote(null);
           }}
         />
       ) : null}

@@ -84,7 +84,10 @@ describe('quote presentation', () => {
   it('keeps manager client acceptance distinct from HEAD conversion', () => {
     expect(
       getQuoteActions({
-        quote: quote({ status: 'approved' }),
+        quote: quote({
+          status: 'approved',
+          finalizedAt: '2026-08-19T12:00:00.000Z',
+        }),
         currentUserId: 'manager-1',
         permissions: ['quotes:update', 'quotes:client_accept'],
       }),
@@ -102,12 +105,66 @@ describe('quote presentation', () => {
   it('hides conversion when a known lead requirement blocks it', () => {
     expect(
       getQuoteActions({
-        quote: quote({ status: 'approved' }),
+        quote: quote({
+          status: 'approved',
+          finalizedAt: '2026-08-19T12:00:00.000Z',
+        }),
         currentUserId: 'manager-1',
         permissions: ['quotes:update', 'quotes:client_accept'],
         conversionAllowed: false,
       }),
     ).toEqual(['client-accept']);
+  });
+
+  it('hides acceptance until the quote is finalized', () => {
+    expect(
+      getQuoteActions({
+        quote: quote({ status: 'approved' }),
+        currentUserId: 'manager-1',
+        permissions: ['quotes:update', 'quotes:client_accept'],
+      }),
+    ).toEqual([]);
+  });
+
+  it('lets HEAD mark acceptance of a finalized quote without quote approval for DIRECTOR', () => {
+    expect(
+      getQuoteActions({
+        quote: quote({
+          status: 'approved',
+          finalizedAt: '2026-08-19T12:00:00.000Z',
+          versionNumber: 2,
+        }),
+        currentUserId: 'head-1',
+        permissions: [
+          'quotes:update',
+          'quotes:read_all',
+          'quotes:approve',
+          'quotes:mark_customer_accepted',
+        ],
+      }),
+    ).toContain('client-accept');
+
+    expect(
+      getQuoteActions({
+        quote: quote({
+          status: 'approved',
+          finalizedAt: '2026-08-19T12:00:00.000Z',
+        }),
+        currentUserId: 'director-1',
+        permissions: ['quotes:read', 'quotes:read_all'],
+      }),
+    ).toEqual([]);
+
+    expect(
+      getQuoteActions({
+        quote: quote({
+          status: 'approved',
+          finalizedAt: '2026-08-19T12:00:00.000Z',
+        }),
+        currentUserId: 'engineer-1',
+        permissions: ['engineering:read', 'leads:read'],
+      }),
+    ).toEqual([]);
   });
 
   it('does not expose conversion again for a converted Quote', () => {

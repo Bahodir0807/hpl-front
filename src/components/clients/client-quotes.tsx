@@ -189,7 +189,7 @@ export function ClientQuotes({ clientId }: ClientQuotesProps) {
               onReject={() => undefined}
               onClientAccept={() => {
                 void recordClientAcceptance
-                  .mutateAsync(openQuote.id)
+                  .mutateAsync({ id: openQuote.id })
                   .catch(() => undefined);
               }}
               onConvert={() => {

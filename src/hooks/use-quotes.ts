@@ -393,8 +393,14 @@ export function useRecordQuoteClientAcceptance() {
   const { t } = useI18n();
 
   return useMutation({
-    mutationFn: async (id: string): Promise<Quote> => {
-      const response = await apiClient.post<Quote>(`/quotes/${id}/client-accept`);
+    mutationFn: async (input: {
+      id: string;
+      note?: string;
+    }): Promise<Quote> => {
+      const response = await apiClient.post<Quote>(
+        `/quotes/${input.id}/client-accept`,
+        { note: input.note },
+      );
 
       return response.data;
     },
@@ -407,6 +413,9 @@ export function useRecordQuoteClientAcceptance() {
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({
         queryKey: ['lead-workspace', quote.leadId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['lead-execution', quote.leadId],
       });
     },
     onError: (error) => {
@@ -512,6 +521,54 @@ function useDownloadQuoteDocument(format: 'pdf' | 'docx') {
     },
     onError: (error) => {
       showError(getErrorMessage(error, t('quotes.downloadFailed'), messages));
+    },
+  });
+}
+
+export type ExecutionComponentKind = 'HPL' | 'FACADE' | 'INSTALLATION';
+
+export type ExecutionComponentView = {
+  kind: ExecutionComponentKind;
+  label: string;
+  required: boolean;
+  status: 'PENDING' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETED';
+  sourceRevision: number | null;
+  technicalRevision: number | null;
+  currentTechnicalRevision: number | null;
+  customerAmount: string | null;
+  currency: string | null;
+  changedAfterAcceptance: boolean;
+};
+
+export type ExecutionHandoffView = {
+  id: string;
+  dealId: string;
+  leadId: string;
+  quoteId: string;
+  quoteVersion: number;
+  acceptedAt: string;
+  acceptedBy: { id: string; name: string };
+  acceptanceNote: string | null;
+  status: 'ACTIVE' | 'SUPERSEDED';
+  revision: number;
+  active: boolean;
+  components: ExecutionComponentView[];
+};
+
+export type LeadExecutionView = {
+  active: ExecutionHandoffView | null;
+  history: ExecutionHandoffView[];
+};
+
+export function useLeadExecution(leadId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['lead-execution', leadId],
+    enabled: Boolean(leadId),
+    queryFn: async (): Promise<LeadExecutionView> => {
+      const response = await apiClient.get<LeadExecutionView>(
+        `/leads/${leadId}/execution`,
+      );
+      return response.data;
     },
   });
 }

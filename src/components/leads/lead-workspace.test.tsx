@@ -94,6 +94,11 @@ vi.mock("@/hooks/use-calculation-requests", () => ({
 
 vi.mock("@/hooks/use-quotes", () => ({
   useQuotes: (...args: unknown[]) => useQuotesMock(...args),
+  useLeadExecution: () => ({
+    data: { active: null, history: [] },
+    isLoading: false,
+    isError: false,
+  }),
   useConvertCalculationToQuote: () => ({
     mutateAsync: vi.fn(),
     isPending: false,
