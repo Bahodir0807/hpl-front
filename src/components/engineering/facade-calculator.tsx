@@ -30,7 +30,10 @@ function localizedName(
   return item.nameRu;
 }
 
-function unitLabel(unit: string, t: (key: 'engineering.facadeUnitM2' | 'engineering.facadeUnitPcs' | 'engineering.facadeUnitLm') => string) {
+function unitLabel(
+  unit: string,
+  t: (key: 'engineering.facadeUnitM2' | 'engineering.facadeUnitPcs' | 'engineering.facadeUnitLm' | 'engineering.facadeUnitLiter') => string,
+) {
   if (unit === 'M2') {
     return t('engineering.facadeUnitM2');
   }
@@ -39,6 +42,9 @@ function unitLabel(unit: string, t: (key: 'engineering.facadeUnitM2' | 'engineer
   }
   if (unit === 'LM') {
     return t('engineering.facadeUnitLm');
+  }
+  if (unit === 'LITER') {
+    return t('engineering.facadeUnitLiter');
   }
   return unit;
 }
@@ -102,7 +108,8 @@ export function FacadeCalculator({
     );
     setConfigCode(
       calculation?.configCode ??
-        workspace.configs.find((item) => item.isCalculable)?.code ??
+        workspace.configs.find((item) => item.selectable !== false && item.isCalculable)
+          ?.code ??
         workspace.configs[0]?.code ??
         '',
     );
@@ -234,9 +241,12 @@ export function FacadeCalculator({
             disabled={!canEdit}
             onChange={(event) => setConfigCode(event.target.value)}
           >
-            {workspace.configs.map((config) => (
+            {workspace.configs
+              .filter((config) => config.selectable !== false)
+              .map((config) => (
               <option key={config.id} value={config.code}>
                 {localizedName(config, locale)}
+                {config.legacy ? ` — ${t('engineering.facadeLegacy')}` : ''}
                 {config.isCalculable ? '' : ` — ${t('engineering.facadeNoNorms')}`}
               </option>
             ))}
@@ -250,6 +260,27 @@ export function FacadeCalculator({
           ? t('engineering.facadeAreaSourceQualification')
           : t('engineering.facadeAreaSourceEngineer')}
       </p>
+
+      {selectedConfig?.legacy ? (
+        <p className="mt-3 rounded border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+          {t('engineering.facadeLegacyHint')}
+        </p>
+      ) : null}
+
+      {selectedConfig?.hplThicknessMm ? (
+        <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+          {t('engineering.facadeHplThickness', { mm: String(selectedConfig.hplThicknessMm) })}
+          {selectedConfig.insulationThicknessMm
+            ? ` · ${t('engineering.facadeInsulationThickness', { mm: String(selectedConfig.insulationThicknessMm) })}`
+            : ''}
+        </p>
+      ) : null}
+
+      {calculation && selectedConfig && calculation.configCode !== selectedConfig.code ? (
+        <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+          {t('engineering.facadeConfigChange')}
+        </p>
+      ) : null}
 
       {selectedConfig && !selectedConfig.isCalculable ? (
         <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
@@ -265,7 +296,11 @@ export function FacadeCalculator({
 
       {confirmRecalc ? (
         <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-          <p>{t('engineering.facadeRecalcConfirmHint')}</p>
+          <p>
+            {calculation && selectedConfig && calculation.configCode !== selectedConfig.code
+              ? t('engineering.facadeConfigChange')
+              : t('engineering.facadeRecalcConfirmHint')}
+          </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
@@ -274,7 +309,9 @@ export function FacadeCalculator({
                 void runCalculate(true);
               }}
             >
-              {t('engineering.facadeRecalculate')}
+              {calculation && selectedConfig && calculation.configCode !== selectedConfig.code
+                ? t('engineering.facadeSwitchSystem')
+                : t('engineering.facadeRecalculate')}
             </Button>
             <Button
               type="button"
@@ -439,7 +476,12 @@ export function FacadeCalculator({
             onChange={(event) => setExtraMaterialId(event.target.value)}
           >
             <option value="">{t('engineering.facadeAddMaterial')}</option>
-            {workspace.catalog.map((material) => (
+            {workspace.catalog
+              .filter((material) => {
+                const codes = new Set((selectedConfig?.norms ?? []).map((row) => row.code));
+                return codes.size === 0 || codes.has(material.code);
+              })
+              .map((material) => (
               <option key={material.id} value={material.id}>
                 {localizedName(material, locale)}
               </option>

@@ -1055,6 +1055,13 @@ export const uz = {
     facadeUnitM2: 'm²',
     facadeUnitPcs: 'dona',
     facadeUnitLm: 'pog‘ona m',
+    facadeUnitLiter: 'l',
+    facadeHplThickness: 'HPL {mm} mm',
+    facadeInsulationThickness: 'issiqlik izolyatsiyasi {mm} mm',
+    facadeConfigChange: 'Tizimni almashtirish vedomostni shu tizim normalari bo‘yicha qayta hisoblaydi. Boshqa tizimning qo‘lda miqdorlari ko‘chirilmaydi.',
+    facadeSwitchSystem: 'Tanlangan tizim normalari bo‘yicha qayta hisoblash',
+    facadeLegacy: 'tarixiy',
+    facadeLegacyHint: 'Bu avval saqlangan asosiy konfiguratsiya. Yangi hisob uchun 6 mm quruq, 8 mm quruq yoki 4 mm yelimli montajni tanlang.',
     installationTitle: 'Montaj',
     installationSubtitle:
       'Ish turlari va hajmlar. O‘ylab topilgan mehnat normalari va avtomatik narx yo‘q.',

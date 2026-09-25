@@ -1055,6 +1055,13 @@ export const en = {
     facadeUnitM2: 'm²',
     facadeUnitPcs: 'pcs',
     facadeUnitLm: 'lm',
+    facadeUnitLiter: 'L',
+    facadeHplThickness: 'HPL {mm} mm',
+    facadeInsulationThickness: 'insulation {mm} mm',
+    facadeConfigChange: 'Changing the system rebuilds the bill from that system’s norms. Manual quantities from the other system are not carried over.',
+    facadeSwitchSystem: 'Recalculate using the selected system norms',
+    facadeLegacy: 'historical',
+    facadeLegacyHint: 'This is a previously saved base configuration. For a new calculation choose dry fixing 6 mm, dry fixing 8 mm, or adhesive fixing 4 mm.',
     installationTitle: 'Installation',
     installationSubtitle:
       'Work types and quantities. No invented labor norms and no automatic price.',

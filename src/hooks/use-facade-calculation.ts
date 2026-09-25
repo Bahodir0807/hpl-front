@@ -32,6 +32,21 @@ export type FacadeConfig = {
   panelWidthMm: number | null;
   panelHeightMm: number | null;
   panelAreaM2: string | null;
+  hplThicknessMm?: number | null;
+  insulationThicknessMm?: number | null;
+  fastening?: 'DRY' | 'ADHESIVE' | null;
+  legacy?: boolean;
+  selectable?: boolean;
+  norms?: Array<{
+    code: string;
+    nameRu: string;
+    nameEn: string;
+    nameUz: string;
+    unit: string;
+    qtyPerM2: string | null;
+    sortOrder: number;
+    category: string;
+  }>;
 };
 
 export type FacadeCalculationItem = {

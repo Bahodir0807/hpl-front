@@ -1053,6 +1053,13 @@ export const ru = {
     facadeUnitM2: 'м²',
     facadeUnitPcs: 'шт.',
     facadeUnitLm: 'п.м.',
+    facadeUnitLiter: 'л',
+    facadeHplThickness: 'HPL {mm} мм',
+    facadeInsulationThickness: 'утеплитель {mm} мм',
+    facadeConfigChange: 'Смена системы пересчитает ведомость по её нормам. Ручные количества другой системы не переносятся.',
+    facadeSwitchSystem: 'Пересчитать по нормам выбранной системы',
+    facadeLegacy: 'историческая',
+    facadeLegacyHint: 'Это ранее сохранённая базовая конфигурация. Для нового расчёта выберите сухой монтаж 6 мм, сухой монтаж 8 мм или клеевой монтаж 4 мм.',
     installationTitle: 'Монтаж',
     installationSubtitle:
       'Виды работ и объёмы. Без вымышленных норм трудозатрат и без автоматической цены.',
