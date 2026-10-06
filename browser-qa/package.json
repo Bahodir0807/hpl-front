@@ -1,0 +1,13 @@
+{
+  "name": "hpl-browser-qa",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:desktop": "playwright test --project=visual-desktop --project=isolation --project=desktop-manager --project=desktop-head --project=desktop-engineer --project=desktop-rbac --project=desktop-manager-rbac --project=desktop-admin --project=desktop-director",
+    "test:mobile": "playwright test --project=visual-mobile --project=mobile-manager",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.51.1"
+  }
+}
