@@ -211,6 +211,14 @@ export const en = {
       LOST: 'Lost',
       UNQUALIFIED: 'Unqualified',
     },
+    leadStage: {
+      intake: 'Request',
+      qualification: 'Qualification',
+      managerNote: 'Manager note',
+      calculation: 'Calculation',
+      quote: 'Quote',
+      deal: 'Deal',
+    },
     engineeringAssignment: {
       ACTIVE: 'With engineer',
       RETURNED: 'Returned to manager',
@@ -560,6 +568,13 @@ export const en = {
     createRequest: 'Create calculation request',
     waitingCopy: 'Commercial calculation is waiting for Head.',
     convertToQuote: 'Create quote draft',
+    reviewTitle: 'Calculation request review',
+    reviewSubtitle: 'Review parameters, manager note, and create a quote.',
+    reviewWarnings: 'Warnings',
+    reviewNoWarnings: 'No warnings',
+    reviewManagerNote: 'Manager note',
+    reviewItems: 'Request items',
+    reviewApprove: 'Create quote draft',
     customTypeDescription: 'Custom type description',
     customSizeHint:
       'A custom size is stored as a snapshot. The current price calculation needs a standard size.',
@@ -1059,6 +1074,11 @@ export const en = {
     facadeHplThickness: 'HPL {mm} mm',
     facadeInsulationThickness: 'insulation {mm} mm',
     facadeConfigChange: 'Changing the system rebuilds the bill from that system’s norms. Manual quantities from the other system are not carried over.',
+    facadeThicknessConflict:
+      'This order has more than one HPL thickness. Choose the system explicitly: 4 mm norms are not applied to 6/8 mm, and the reverse.',
+    facadeThicknessConfirm: 'Confirm the selected system for mixed thickness',
+    facadeUnconfirmed:
+      'Norms for 80 mm basalt board are not confirmed and are not used.',
     facadeSwitchSystem: 'Recalculate using the selected system norms',
     facadeLegacy: 'historical',
     facadeLegacyHint: 'This is a previously saved base configuration. For a new calculation choose dry fixing 6 mm, dry fixing 8 mm, or adhesive fixing 4 mm.',

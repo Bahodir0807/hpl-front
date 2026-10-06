@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CalculationRequestForm } from "@/components/calculations/calculation-request-form";
+import { HeadReviewPanel } from "@/components/calculations/head-review-panel";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
 import {
@@ -304,10 +305,10 @@ export function CalculationRequestPanel({
       </div>
 
       {requestsQuery.isLoading ? (
-        <p className="text-sm text-slate-600">{t('calculations.loading')}</p>
+        <p className="text-sm text-muted-foreground">{t('calculations.loading')}</p>
       ) : null}
       {requestsQuery.isError ? (
-        <div className="flex items-center justify-between gap-3 border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-foreground">
           <span>{t('calculations.loadFailed')}</span>
           <Button
             type="button"
@@ -320,46 +321,46 @@ export function CalculationRequestPanel({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded border border-slate-200">
-        <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50">
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="min-w-full divide-y divide-border text-sm">
+          <thead className="bg-muted">
             <tr>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">
+              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">
                 {t('calculations.date')}
               </th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">
+              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">
                 {t('calculations.status')}
               </th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">
+              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">
                 {t('calculations.author')}
               </th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">
+              <th className="px-3 py-2 text-left font-semibold text-muted-foreground">
                 {t('calculations.calculations')}
               </th>
-              <th className="px-3 py-2 text-right font-semibold text-slate-700">
+              <th className="px-3 py-2 text-right font-semibold text-muted-foreground">
                 {t('calculations.actions')}
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-border">
             {requests.map((request) => {
               const groups = unwrapRequestCalculations(request);
               return (
                 <tr key={request.id}>
-                  <td className="whitespace-nowrap px-3 py-2 text-slate-700">
+                  <td className="whitespace-nowrap px-3 py-2 text-foreground">
                     {formatDateTime(request.createdAt)}
                   </td>
-                  <td className="px-3 py-2 text-slate-700">
+                  <td className="px-3 py-2 text-foreground">
                     {calculationRequestStatusLabels[
                       request.status as keyof typeof calculationRequestStatusLabels
                     ] ?? request.status}
                   </td>
-                  <td className="px-3 py-2 text-slate-700">
+                  <td className="px-3 py-2 text-foreground">
                     {request.createdBy
                       ? formatPersonName(request.createdBy)
                       : "—"}
                   </td>
-                  <td className="px-3 py-2 text-slate-700">{groups.length}</td>
+                  <td className="px-3 py-2 text-foreground">{groups.length}</td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex justify-end gap-2">
                       <Button
@@ -386,81 +387,92 @@ export function CalculationRequestPanel({
           </tbody>
         </table>
         {!requestsQuery.isLoading && requests.length === 0 ? (
-          <p className="p-6 text-center text-sm text-slate-500">
+          <p className="p-6 text-center text-sm text-muted-foreground">
             {t('calculations.empty')}
           </p>
         ) : null}
       </div>
 
       {editingId ? (
-        <div className="space-y-3 rounded border border-slate-200 p-4">
-          {editingRequest ? (
-            <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-3">
-              <div>
-                {t('calculations.clientLabel', {
-                  name: editingRequest.client?.name ?? clientId ?? t('common.dash'),
-                })}
-              </div>
-              <div>
-                {t('calculations.leadLabel', {
-                  name: editingRequest.lead?.title ?? leadId ?? t('common.dash'),
-                })}
-              </div>
-              <div>
-                {t('calculations.authorLabel', {
-                  name: editingRequest.createdBy
-                    ? formatPersonName(editingRequest.createdBy)
-                    : t('common.dash'),
-                })}
-              </div>
-            </div>
-          ) : null}
-          <CalculationRequestForm
-            value={form}
-            onChange={setForm}
-            itemErrors={itemErrors}
-            catalogs={catalogs}
-            catalogError={catalogError}
-            readOnly={readOnly}
-            canEditSupplier={!readOnly || headReviewEditable}
-            notesReadOnly={
-              editingRequest
-                ? !isDraftCalculationRequest(editingRequest.status)
-                : false
-            }
-            notesLabel={
-              headReviewEditable || readOnly
-                ? t('calculations.managerNoteHead')
-                : t('calculations.managerNote')
-            }
-            saveLabel={headReviewEditable ? t('calculations.saveChanges') : undefined}
-            canSubmitToHead={
-              canSubmitToHead && !readOnly && !headReviewEditable
-            }
-            pending={createRequest.isPending || updateRequest.isPending}
-            submitPending={submitRequest.isPending}
-            onSaveDraft={
-              canCreate && (!readOnly || headReviewEditable)
-                ? () => void onSaveDraft()
-                : undefined
-            }
-            onSubmitToHead={
-              canSubmitToHead && !readOnly && !headReviewEditable
-                ? () => void onSubmitToHead()
-                : undefined
-            }
-          />
-          {canConvert &&
-          editingId !== "new" &&
-          editingRequest &&
-          canConvertRequestToQuote(editingRequest) ? (
-            <HeadConvertControls
-              requestId={editingId}
-              error={convertErrors[editingId]}
-              pending={convertRequest.isPending}
-              onConvert={() => void onConvert(editingId)}
+        <div className="space-y-4">
+          {headReviewEditable && editingRequest ? (
+            <HeadReviewPanel
+              request={editingRequest}
+              onConvert={() => void onConvert(editingRequest.id)}
+              convertPending={convertRequest.isPending}
+              convertError={convertErrors[editingRequest.id]}
             />
           ) : null}
+          <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+            {editingRequest ? (
+              <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
+                <div>
+                  {t('calculations.clientLabel', {
+                    name: editingRequest.client?.name ?? clientId ?? t('common.dash'),
+                  })}
+                </div>
+                <div>
+                  {t('calculations.leadLabel', {
+                    name: editingRequest.lead?.title ?? leadId ?? t('common.dash'),
+                  })}
+                </div>
+                <div>
+                  {t('calculations.authorLabel', {
+                    name: editingRequest.createdBy
+                      ? formatPersonName(editingRequest.createdBy)
+                      : t('common.dash'),
+                  })}
+                </div>
+              </div>
+            ) : null}
+            <CalculationRequestForm
+              value={form}
+              onChange={setForm}
+              itemErrors={itemErrors}
+              catalogs={catalogs}
+              catalogError={catalogError}
+              readOnly={readOnly}
+              canEditSupplier={!readOnly || headReviewEditable}
+              notesReadOnly={
+                editingRequest
+                  ? !isDraftCalculationRequest(editingRequest.status)
+                  : false
+              }
+              notesLabel={
+                headReviewEditable || readOnly
+                  ? t('calculations.managerNoteHead')
+                  : t('calculations.managerNote')
+              }
+              saveLabel={headReviewEditable ? t('calculations.saveChanges') : undefined}
+              canSubmitToHead={
+                canSubmitToHead && !readOnly && !headReviewEditable
+              }
+              pending={createRequest.isPending || updateRequest.isPending}
+              submitPending={submitRequest.isPending}
+              onSaveDraft={
+                canCreate && (!readOnly || headReviewEditable)
+                  ? () => void onSaveDraft()
+                  : undefined
+              }
+              onSubmitToHead={
+                canSubmitToHead && !readOnly && !headReviewEditable
+                  ? () => void onSubmitToHead()
+                  : undefined
+              }
+            />
+            {canConvert &&
+            !headReviewEditable &&
+            editingId !== "new" &&
+            editingRequest &&
+            canConvertRequestToQuote(editingRequest) ? (
+              <HeadConvertControls
+                requestId={editingId}
+                error={convertErrors[editingId]}
+                pending={convertRequest.isPending}
+                onConvert={() => void onConvert(editingId)}
+              />
+            ) : null}
+          </div>
         </div>
       ) : null}
 

@@ -211,6 +211,14 @@ export const uz = {
       LOST: 'Yo‘qotilgan',
       UNQUALIFIED: 'Malakadan o‘tmagan',
     },
+    leadStage: {
+      intake: 'Ariza',
+      qualification: 'Malaka',
+      managerNote: 'Menejer izohi',
+      calculation: 'Hisob-kitob',
+      quote: 'TT',
+      deal: 'Bitim',
+    },
     engineeringAssignment: {
       ACTIVE: 'Muhandisda ishda',
       RETURNED: 'Menejerga qaytarilgan',
@@ -560,6 +568,13 @@ export const uz = {
     createRequest: 'Hisob-kitob so‘rovini yaratish',
     waitingCopy: 'Tijoriy hisob-kitob rahbarni kutmoqda.',
     convertToQuote: 'Tijorat taklifi qoralamasini yaratish',
+    reviewTitle: 'Hisob-kitob so‘rovini tekshirish',
+    reviewSubtitle: 'Parametrlarni, menejer izohini tekshiring va TT yarating.',
+    reviewWarnings: 'Ogohlantirishlar',
+    reviewNoWarnings: 'Ogohlantirishlar yo‘q',
+    reviewManagerNote: 'Menejer izohi',
+    reviewItems: 'So‘rov pozitsiyalari',
+    reviewApprove: 'TT qoralama yaratish',
     customTypeDescription: 'Nostandart tur tavsifi',
     customSizeHint:
       'Nostandart o‘lcham snapshot sifatida saqlanadi. Joriy narx hisobi uchun standart o‘lcham kerak.',
@@ -1059,6 +1074,11 @@ export const uz = {
     facadeHplThickness: 'HPL {mm} mm',
     facadeInsulationThickness: 'issiqlik izolyatsiyasi {mm} mm',
     facadeConfigChange: 'Tizimni almashtirish vedomostni shu tizim normalari bo‘yicha qayta hisoblaydi. Boshqa tizimning qo‘lda miqdorlari ko‘chirilmaydi.',
+    facadeThicknessConflict:
+      'Buyurtmada turli qalinlikdagi HPL bor. Tizimni aniq tanlang: 4 mm normalari 6/8 mm ga qo‘llanilmaydi va aksincha.',
+    facadeThicknessConfirm: 'Aralash qalinlik uchun tanlangan tizimni tasdiqlash',
+    facadeUnconfirmed:
+      '80 mm bazalt plita normalari hali tasdiqlanmagan va ishlatilmaydi.',
     facadeSwitchSystem: 'Tanlangan tizim normalari bo‘yicha qayta hisoblash',
     facadeLegacy: 'tarixiy',
     facadeLegacyHint: 'Bu avval saqlangan asosiy konfiguratsiya. Yangi hisob uchun 6 mm quruq, 8 mm quruq yoki 4 mm yelimli montajni tanlang.',

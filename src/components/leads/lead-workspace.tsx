@@ -15,6 +15,10 @@ import {
 import { AssignEngineerPanel } from '@/components/leads/assign-engineer-panel';
 import { FacadeCommercialPanel } from '@/components/leads/facade-commercial-panel';
 import { InstallationCommercialPanel } from '@/components/leads/installation-commercial-panel';
+import {
+  LeadWorkflowProgress,
+  resolveLeadWorkflowStage,
+} from '@/components/leads/lead-workflow-progress';
 import { QualifyLeadModal } from '@/components/leads/qualify-lead-modal';
 import { UnqualifyLeadModal } from '@/components/leads/unqualify-lead-modal';
 import { LoseOpportunityModal } from '@/components/opportunities/lose-opportunity-modal';
@@ -138,7 +142,7 @@ const statusClassName: Record<LeadStatus, string> = {
   NEW: 'bg-blue-50 text-blue-700 border-blue-200',
   IN_PROGRESS: 'bg-yellow-50 text-yellow-800 border-yellow-200',
   QUALIFIED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  UNQUALIFIED: 'bg-slate-100 text-slate-700 border-slate-200',
+  UNQUALIFIED: 'bg-muted text-muted-foreground border-border',
   CONVERTED: 'bg-green-50 text-green-700 border-green-200',
   LOST: 'bg-red-50 text-red-700 border-red-200',
 };
@@ -234,8 +238,10 @@ function Field({
 
   return (
     <div>
-      <div className="text-xs font-medium uppercase text-slate-500">{label}</div>
-      <div className="mt-1 break-words text-sm text-slate-950">
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 break-words text-sm text-foreground">
         {display === '[object Object]' ? t('common.dash') : display}
       </div>
     </div>
@@ -850,6 +856,16 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
     [quotesQuery.data, workspace?.quotes],
   );
   const hasCalculationRequest = (requestsQuery.data ?? []).length > 0;
+  const workflowStage = resolveLeadWorkflowStage({
+    status: lead?.status ?? 'NEW',
+    hasQualification: Boolean(workspace?.qualification) || lead?.status === 'QUALIFIED',
+    hasManagerNote: Boolean(
+      lead?.managerCommercialNote ?? workspace?.lead.managerCommercialNote,
+    ),
+    hasCalculationRequest,
+    hasQuote: quotes.length > 0,
+    hasDeal: Boolean(lead?.dealId),
+  });
   const qualification = workspace?.qualification ?? null;
   const commercialQualification = workspace?.commercialQualification ?? null;
   const permissions = user?.permissions ?? [];
@@ -953,7 +969,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
 
   if (leadQuery.isLoading) {
     return (
-      <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
+      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
         {t('leads.loadingWorkspace')}
       </div>
     );
@@ -961,7 +977,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
 
   if (leadQuery.isError || !lead) {
     return (
-      <div className="rounded border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+      <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-sm text-destructive-foreground">
         {t('leads.loadOneFailed')}
       </div>
     );
@@ -971,14 +987,14 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
     <>
       <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <Link
               href="/leads"
-              className="text-sm font-medium text-slate-600 hover:text-slate-950"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
             >
               {t('leads.backToLeads')}
             </Link>
-            <h2 className="mt-2 text-xl font-semibold text-slate-950">
+            <h2 className="mt-2 text-xl font-semibold text-foreground">
               {clientName}
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -989,7 +1005,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                   {t('statuses.leadWorkflow.handedToHead')}
                 </span>
               ) : null}
-              <span className="text-sm text-slate-600">{lead.title}</span>
+              <span className="text-sm text-muted-foreground">{lead.title}</span>
             </div>
           </div>
 
@@ -1018,7 +1034,11 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto border-b border-slate-200">
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
+          <LeadWorkflowProgress stage={workflowStage} />
+        </div>
+
+        <div className="overflow-x-auto border-b border-border">
           <div className="flex w-max min-w-full gap-1">
             {TABS.map((item) => (
               <button
@@ -1027,8 +1047,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 onClick={() => setTab(item.id)}
                 className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
                   tab === item.id
-                    ? 'border-slate-900 text-slate-950'
-                    : 'border-transparent text-slate-600 hover:text-slate-950'
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {t(item.key)}
@@ -1039,8 +1059,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
 
         {tab === 'info' ? (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-            <section className="rounded border border-slate-200 bg-white p-5">
-              <h3 className="text-base font-semibold text-slate-950">{t('leads.contact')}</h3>
+            <section className="rounded-lg border border-border bg-card p-5">
+              <h3 className="text-base font-semibold text-foreground">{t('leads.contact')}</h3>
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label={t('common.client')} value={clientName} />
                 <Field
@@ -1074,8 +1094,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 />
                 <Field label={t('leads.estimatedAmount')} value={formatMoney(lead.estimatedAmount)} />
               </div>
-              <div className="mt-6 border-t border-slate-200 pt-4">
-                <h4 className="text-sm font-semibold text-slate-900">
+              <div className="mt-6 border-t border-border pt-4">
+                <h4 className="text-sm font-semibold text-foreground">
                   {t(QUALIFICATION_CONTEXT_TITLE_KEY)}
                 </h4>
                 <div className="mt-4">
@@ -1100,11 +1120,11 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               />
               ) : null}
               {commercialQualification ? (
-                <div className="mt-6 border-t border-slate-200 pt-4">
-                  <h4 className="text-sm font-semibold text-slate-900">
+                <div className="mt-6 border-t border-border pt-4">
+                  <h4 className="text-sm font-semibold text-foreground">
                     {t('leads.commercialData')}
                   </h4>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {t('leads.confirmedByHead')}
                   </p>
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1156,7 +1176,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               <FacadeCommercialPanel leadId={lead.id} />
               <InstallationCommercialPanel leadId={lead.id} />
               {canAssign ? (
-                <div className="mt-5 border-t border-slate-200 pt-4">
+                <div className="mt-5 border-t border-border pt-4">
                   {isAssignOpen ? (
                     <div className="max-w-sm space-y-3">
                       <SearchCombobox
@@ -1208,8 +1228,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               ) : null}
             </section>
 
-            <section className="rounded border border-slate-200 bg-white p-5">
-              <h3 className="text-base font-semibold text-slate-950">{t('common.status')}</h3>
+            <section className="rounded-lg border border-border bg-card p-5">
+              <h3 className="text-base font-semibold text-foreground">{t('common.status')}</h3>
               <div className="mt-4 space-y-4">
                 <Field label={t('common.created')} value={formatDateTime(lead.createdAt)} />
                 <Field label={t('common.updatedShort')} value={formatDateTime(lead.updatedAt)} />
@@ -1229,7 +1249,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                   </>
                 ) : null}
                 {waitingForCommercialCalculation ? (
-                  <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="rounded border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
                     {t('calculations.waitingCopy')}
                   </p>
                 ) : null}
@@ -1260,8 +1280,8 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
         ) : null}
 
         {tab === 'timeline' ? (
-          <section className="rounded border border-slate-200 bg-white p-5">
-            <h3 className="text-base font-semibold text-slate-950">
+          <section className="rounded-lg border border-border bg-card p-5">
+            <h3 className="text-base font-semibold text-foreground">
               {t('leads.activityHistory')}
             </h3>
             <div className="mt-4 space-y-3">
@@ -1271,7 +1291,7 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 onChange={(event) => setNoteText(event.target.value)}
                 placeholder={t('leads.newNotePlaceholder')}
                 rows={3}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                className="w-full rounded border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
               />
               <Button
                 type="button"
@@ -1294,14 +1314,14 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
                 return (
                   <div
                     key={item.id}
-                    className="flex gap-3 rounded border border-slate-200 p-3"
+                    className="flex gap-3 rounded border border-border p-3"
                   >
-                    <div className="mt-0.5 rounded border border-slate-200 bg-slate-50 p-1.5 text-slate-600">
+                    <div className="mt-0.5 rounded border border-border bg-muted p-1.5 text-muted-foreground">
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm text-slate-950">{item.description}</div>
-                      <div className="mt-1 text-xs text-slate-500">
+                      <div className="text-sm text-foreground">{item.description}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
                         {formatDateTime(item.createdAt)} · {item.actor}
                       </div>
                     </div>
@@ -1316,15 +1336,15 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
         ) : null}
 
         {tab === 'calculations' ? (
-          <section className="space-y-6 rounded border border-slate-200 bg-white p-5">
+          <section className="space-y-6 rounded-lg border border-border bg-card p-5">
             <CalculationRequestPanel
               leadId={lead.id}
               clientId={lead.clientId}
               dealId={lead.dealId}
             />
-            <div className="border-t border-slate-200 pt-4">
+            <div className="border-t border-border pt-4">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-slate-950">{t('leads.savedCalculations')}</h3>
+              <h3 className="text-base font-semibold text-foreground">{t('leads.savedCalculations')}</h3>
               {canRunCalculation ? (
                 <Button type="button" size="sm" onClick={() => setIsCalculatorOpen(true)}>
                   {t(SAVED_CALCULATION_ACTION_KEY)}
@@ -1338,36 +1358,36 @@ export function LeadWorkspace({ leadId }: { leadId: string }) {
               <p className="text-sm text-red-600">{t('leads.loadCalculationsFailed')}</p>
             ) : null}
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
+              <table className="min-w-full divide-y divide-border text-sm">
+                <thead className="bg-muted">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('common.date')}</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('leads.panelType')}</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('common.supplier')}</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('calculations.size')}</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('calculations.thickness')}</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('common.sheets')}</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-700">{t('common.total')}</th>
-                    <th className="px-3 py-2 text-right font-semibold text-slate-700">{t('common.actions')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">{t('common.date')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">{t('leads.panelType')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">{t('common.supplier')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">{t('calculations.size')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">{t('calculations.thickness')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">{t('common.sheets')}</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">{t('common.total')}</th>
+                    <th className="px-3 py-2 text-right font-semibold text-muted-foreground">{t('common.actions')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-border">
                   {calculations.map((calculation) => {
                     const summary = calculationSummary(calculation, messages, supplierDisplayNames);
 
                     return (
                       <tr key={calculation.id}>
-                        <td className="whitespace-nowrap px-3 py-2 text-slate-700">
+                        <td className="whitespace-nowrap px-3 py-2 text-foreground">
                           {formatDateTime(calculation.createdAt)}
                         </td>
-                        <td className="px-3 py-2 text-slate-700">{summary.typeName}</td>
-                        <td className="px-3 py-2 text-slate-700">{summary.supplierName}</td>
-                        <td className="px-3 py-2 text-slate-700">{summary.sizeLabel}</td>
-                        <td className="px-3 py-2 text-slate-700">{summary.thickness}</td>
-                        <td className="px-3 py-2 text-slate-700">
+                        <td className="px-3 py-2 text-foreground">{summary.typeName}</td>
+                        <td className="px-3 py-2 text-foreground">{summary.supplierName}</td>
+                        <td className="px-3 py-2 text-foreground">{summary.sizeLabel}</td>
+                        <td className="px-3 py-2 text-foreground">{summary.thickness}</td>
+                        <td className="px-3 py-2 text-foreground">
                           {formatNumber(summary.sheets)}
                         </td>
-                        <td className="px-3 py-2 font-medium text-slate-900">
+                        <td className="px-3 py-2 font-medium text-foreground">
                           {formatMoney(summary.total)}
                         </td>
                         <td className="px-3 py-2 text-right">

@@ -209,6 +209,14 @@ export const ru = {
       LOST: 'Проигран',
       UNQUALIFIED: 'Не квалифицирован',
     },
+    leadStage: {
+      intake: 'Заявка',
+      qualification: 'Квалификация',
+      managerNote: 'Примечание менеджера',
+      calculation: 'Расчёт',
+      quote: 'КП',
+      deal: 'Сделка',
+    },
     engineeringAssignment: {
       ACTIVE: 'В работе у инженера',
       RETURNED: 'Возвращён менеджеру',
@@ -558,6 +566,13 @@ export const ru = {
     createRequest: 'Создать запрос расчёта',
     waitingCopy: 'Коммерческий расчёт ожидает руководителя.',
     convertToQuote: 'Создать черновик КП',
+    reviewTitle: 'Проверка запроса расчёта',
+    reviewSubtitle: 'Проверьте параметры, примечание менеджера и создайте КП.',
+    reviewWarnings: 'Предупреждения',
+    reviewNoWarnings: 'Нет предупреждений',
+    reviewManagerNote: 'Примечание менеджера',
+    reviewItems: 'Позиции запроса',
+    reviewApprove: 'Создать черновик КП',
     customTypeDescription: 'Описание нестандартного типа',
     customSizeHint:
       'Нестандартный размер сохраняется как снимок. Для текущего расчёта цены нужен стандартный размер.',
@@ -1057,6 +1072,11 @@ export const ru = {
     facadeHplThickness: 'HPL {mm} мм',
     facadeInsulationThickness: 'утеплитель {mm} мм',
     facadeConfigChange: 'Смена системы пересчитает ведомость по её нормам. Ручные количества другой системы не переносятся.',
+    facadeThicknessConflict:
+      'В заказе есть HPL разной толщины. Выберите систему явно: нормы 4 мм не применяются к 6/8 мм и наоборот.',
+    facadeThicknessConfirm: 'Подтвердить выбранную систему для смешанной толщины',
+    facadeUnconfirmed:
+      'Нормы для базальтовой плиты 80 мм ещё не подтверждены и не используются.',
     facadeSwitchSystem: 'Пересчитать по нормам выбранной системы',
     facadeLegacy: 'историческая',
     facadeLegacyHint: 'Это ранее сохранённая базовая конфигурация. Для нового расчёта выберите сухой монтаж 6 мм, сухой монтаж 8 мм или клеевой монтаж 4 мм.',
