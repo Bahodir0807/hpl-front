@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ENGINEERING_UPDATE_TECHNICAL_PERMISSION } from '@/lib/engineering';
-import { isFacadeRecalcConfirmation } from '@/lib/engineering-errors';
+import {
+  isFacadeRecalcConfirmation,
+  isFacadeThicknessConfirmation,
+} from '@/lib/engineering-errors';
 import { useAuth } from '@/context/auth-context';
 import {
   useFacadeAddItem,
@@ -87,6 +90,7 @@ export function FacadeCalculator({
   const [extraMaterialId, setExtraMaterialId] = useState('');
   const [extraQty, setExtraQty] = useState('');
   const [confirmRecalc, setConfirmRecalc] = useState(false);
+  const [confirmThickness, setConfirmThickness] = useState(false);
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
 
   const workspace = workspaceQuery.data;
@@ -108,10 +112,11 @@ export function FacadeCalculator({
     );
     setConfigCode(
       calculation?.configCode ??
-        workspace.configs.find((item) => item.selectable !== false && item.isCalculable)
-          ?.code ??
-        workspace.configs[0]?.code ??
-        '',
+        (workspace.thicknessConflict
+          ? ''
+          : workspace.configs.find(
+              (item) => item.selectable !== false && item.isCalculable,
+            )?.code ?? ''),
     );
     setNotes(calculation?.notes ?? '');
     setDraftItems(calculation?.items ?? []);
@@ -177,20 +182,26 @@ export function FacadeCalculator({
   const selectedConfig = workspace.configs.find((item) => item.code === configCode);
   const hasManual = draftItems.some((item) => item.isManual);
 
-  async function runCalculate(confirm = false) {
+  async function runCalculate(confirm = false, confirmMixed = false) {
     try {
       await calculate.mutateAsync({
         configCode,
         claddingAreaM2: area.trim(),
         areaSource,
         confirmRecalculate: confirm || undefined,
+        confirmThicknessMismatch:
+          confirmMixed || confirmThickness || undefined,
         expectedRevision: calculation?.revision,
       });
       setConfirmRecalc(false);
+      setConfirmThickness(false);
     } catch (error) {
       if (isFacadeRecalcConfirmation(error)) {
         setConfirmRecalc(true);
         return;
+      }
+      if (isFacadeThicknessConfirmation(error)) {
+        setConfirmThickness(true);
       }
     }
   }
@@ -214,6 +225,12 @@ export function FacadeCalculator({
       {workspace.suggestedArea.ambiguous ? (
         <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
           {t('engineering.facadeAreaAmbiguous')}
+        </p>
+      ) : null}
+
+      {workspace.thicknessConflict ? (
+        <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+          {t('engineering.facadeThicknessConflict')}
         </p>
       ) : null}
 
@@ -241,6 +258,9 @@ export function FacadeCalculator({
             disabled={!canEdit}
             onChange={(event) => setConfigCode(event.target.value)}
           >
+            {configCode === '' ? (
+              <option value="">{t('engineering.facadeThicknessConfirm')}</option>
+            ) : null}
             {workspace.configs
               .filter((config) => config.selectable !== false)
               .map((config) => (
@@ -292,6 +312,22 @@ export function FacadeCalculator({
         <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
           {t('engineering.facadeUnsupportedHint')}
         </p>
+      ) : null}
+
+      {confirmThickness ? (
+        <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+          <p>{t('engineering.facadeThicknessConflict')}</p>
+          <Button
+            type="button"
+            size="sm"
+            className="mt-2"
+            onClick={() => {
+              void runCalculate(false, true);
+            }}
+          >
+            {t('engineering.facadeThicknessConfirm')}
+          </Button>
+        </div>
       ) : null}
 
       {confirmRecalc ? (

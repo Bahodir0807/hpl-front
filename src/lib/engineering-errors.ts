@@ -29,6 +29,8 @@ export function localizeEngineeringError(
     FACADE_NOT_APPLICABLE: messages.engineering.facadeNotApplicable,
     FACADE_EDIT_FORBIDDEN: messages.engineering.facadeEditForbidden,
     FACADE_CONFIG_UNKNOWN: messages.engineering.facadeConfigUnknown,
+    FACADE_CONFIG_UNCONFIRMED: messages.engineering.facadeUnconfirmed,
+    FACADE_THICKNESS_CONFIRM_REQUIRED: messages.engineering.facadeThicknessConflict,
     FACADE_AREA_INVALID: messages.engineering.facadeAreaInvalid,
     FACADE_QTY_INVALID: messages.engineering.facadeQtyInvalid,
     FACADE_MATERIAL_UNKNOWN: messages.engineering.facadeMaterialUnknown,
@@ -40,4 +42,8 @@ export function localizeEngineeringError(
 
 export function isFacadeRecalcConfirmation(error: unknown): boolean {
   return errorCode(error) === 'FACADE_RECALC_CONFIRMATION_REQUIRED';
+}
+
+export function isFacadeThicknessConfirmation(error: unknown): boolean {
+  return errorCode(error) === 'FACADE_THICKNESS_CONFIRM_REQUIRED';
 }

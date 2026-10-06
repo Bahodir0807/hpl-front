@@ -273,6 +273,99 @@ describe('FacadeCalculator', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('requires explicit confirmation when qualification has mixed HPL thickness', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: workspace({
+        thicknessConflict: true,
+        hplThicknessesMm: [6, 8],
+        suggestedArea: { value: '80', source: 'HPL_QUALIFICATION', ambiguous: false },
+        configs: [
+          {
+            id: 'cfg-6',
+            code: 'HPL_DRY_6MM_50MM',
+            nameRu: 'Сухой 6 мм / 50 мм',
+            nameEn: 'Dry 6 mm',
+            nameUz: 'Quruq 6 mm',
+            isCalculable: true,
+            panelWidthMm: 1220,
+            panelHeightMm: 3050,
+            panelAreaM2: '3.721',
+            hplThicknessMm: 6,
+            insulationThicknessMm: 50,
+            fastening: 'DRY',
+            legacy: false,
+            selectable: true,
+            norms: [],
+          },
+        ],
+        calculation: null,
+      }),
+    });
+    vi.mocked(apiClient.post).mockRejectedValue(
+      axiosError(
+        409,
+        'FACADE_THICKNESS_CONFIRM_REQUIRED',
+        'В заказе указано несколько толщин HPL.',
+      ),
+    );
+
+    render(<FacadeCalculator leadId="lead-1" />, { wrapper: createWrapper() });
+
+    expect(
+      await screen.findByText(
+        'В заказе есть HPL разной толщины. Выберите систему явно: нормы 4 мм не применяются к 6/8 мм и наоборот.',
+      ),
+    ).toBeInTheDocument();
+
+    await user.selectOptions(
+      screen.getByLabelText('Конфигурация фасада'),
+      'HPL_DRY_6MM_50MM',
+    );
+    await user.click(screen.getByRole('button', { name: 'Рассчитать автоматически' }));
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Подтвердить выбранную систему для смешанной толщины',
+      }),
+    ).toBeInTheDocument();
+
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: {
+        id: 'calc-mixed',
+        leadId: 'lead-1',
+        assignmentId: 'assign-1',
+        engineerId: 'eng-1',
+        status: 'CALCULATED',
+        revision: 1,
+        claddingAreaM2: '80',
+        areaSource: 'HPL_QUALIFICATION',
+        notes: null,
+        configCode: 'HPL_DRY_6MM_50MM',
+        configIsCalculable: true,
+        normSetCode: 'HPL_DRY_6MM_50MM_V1',
+        ready: true,
+        items: items(),
+        quoteCreated: false,
+        dealCreated: false,
+      },
+    });
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Подтвердить выбранную систему для смешанной толщины',
+      }),
+    );
+
+    expect(apiClient.post).toHaveBeenLastCalledWith(
+      '/engineering/leads/lead-1/facade/calculate',
+      expect.objectContaining({
+        configCode: 'HPL_DRY_6MM_50MM',
+        confirmThicknessMismatch: true,
+      }),
+    );
+  });
+
   it('warns that an unsupported configuration has no fake calculation', async () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.get).mockResolvedValue({ data: workspace() });

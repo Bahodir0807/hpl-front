@@ -96,6 +96,8 @@ export type FacadeWorkspace = {
     ambiguous: boolean;
     candidates?: string[];
   };
+  hplThicknessesMm?: number[];
+  thicknessConflict?: boolean;
   configs: FacadeConfig[];
   catalog: FacadeMaterial[];
   calculation: FacadeCalculation | null;
@@ -126,6 +128,7 @@ export function useFacadeCalculate(leadId: string) {
       claddingAreaM2: string;
       areaSource?: FacadeAreaSource;
       confirmRecalculate?: boolean;
+      confirmThicknessMismatch?: boolean;
       expectedRevision?: number;
     }) => {
       const response = await apiClient.post<FacadeCalculation>(
