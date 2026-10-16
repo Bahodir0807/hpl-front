@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FacadeCalculator } from './facade-calculator';
 import type {
+  FacadeCalculationArea,
   FacadeCalculationItem,
   FacadeWorkspace,
 } from '@/hooks/use-facade-calculation';
@@ -19,6 +20,7 @@ vi.mock('@/lib/api-client', () => ({
     get: vi.fn(),
     post: vi.fn(),
     patch: vi.fn(),
+    put: vi.fn(),
   },
 }));
 
@@ -106,6 +108,40 @@ function workspace(overrides: Partial<FacadeWorkspace> = {}): FacadeWorkspace {
         panelAreaM2: '3.721',
       },
       {
+        id: 'cfg-6',
+        code: 'HPL_DRY_6MM_50MM',
+        nameRu: 'Сухая система 6 мм / 50 мм',
+        nameEn: 'Dry 6 mm / 50 mm',
+        nameUz: 'Quruq 6 mm / 50 mm',
+        isCalculable: true,
+        panelWidthMm: 1220,
+        panelHeightMm: 3050,
+        panelAreaM2: '3.721',
+        hplThicknessMm: 6,
+        insulationThicknessMm: 50,
+        fastening: 'DRY',
+        legacy: false,
+        selectable: true,
+        norms: [],
+      },
+      {
+        id: 'cfg-8',
+        code: 'HPL_DRY_8MM_80MM',
+        nameRu: 'Сухая система 8 мм / 80 мм',
+        nameEn: 'Dry 8 mm / 80 mm',
+        nameUz: 'Quruq 8 mm / 80 mm',
+        isCalculable: true,
+        panelWidthMm: 1220,
+        panelHeightMm: 3050,
+        panelAreaM2: '3.721',
+        hplThicknessMm: 8,
+        insulationThicknessMm: 80,
+        fastening: 'DRY',
+        legacy: false,
+        selectable: true,
+        norms: [],
+      },
+      {
         id: 'cfg-glue',
         code: 'HPL_FACADE_GLUE',
         nameRu: 'Клеевая система (нормы не утверждены)',
@@ -138,6 +174,56 @@ function workspace(overrides: Partial<FacadeWorkspace> = {}): FacadeWorkspace {
   };
 }
 
+function confirmedArea(
+  id = 'area-1',
+  overrides: Partial<FacadeCalculationArea> = {},
+): FacadeCalculationArea {
+  return {
+    id,
+    label: id === 'area-1' ? 'Area A' : 'Area B',
+    sortOrder: id === 'area-1' ? 0 : 1,
+    hplThicknessMm: id === 'area-1' ? '6' : '8',
+    configCode: id === 'area-1' ? 'HPL_DRY_6MM_50MM' : 'HPL_DRY_8MM_80MM',
+    normSetCode: id === 'area-1' ? 'HPL_DRY_6MM_50MM_V1' : 'HPL_DRY_8MM_80MM_V1',
+    suggestedAreaM2: id === 'area-1' ? '1000' : '30',
+    suggestedAreaSource: 'HPL_QUALIFICATION' as const,
+    confirmedAreaM2: id === 'area-1' ? '1000' : '30',
+    confirmedById: 'engineer-1',
+    confirmedByRole: 'ENGINEER',
+    confirmationMethod: 'SITE_VISIT',
+    confirmedAt: '2026-10-15T10:00:00.000Z',
+    confirmed: true,
+    items: [],
+    ...overrides,
+  };
+}
+
+function calculatedWorkspace(
+  calculationOverrides: Record<string, unknown> = {},
+  areas = [confirmedArea()],
+) {
+  return workspace({
+    calculation: {
+      id: 'calc-1',
+      leadId: 'lead-1',
+      assignmentId: 'assign-1',
+      engineerId: 'eng-1',
+      status: 'CALCULATED',
+      revision: 2,
+      claddingAreaM2: '1000',
+      areaSource: 'ENGINEER_ENTERED',
+      notes: null,
+      configCode: 'HPL_DRY_6MM_50MM',
+      configIsCalculable: true,
+      normSetCode: 'HPL_DRY_6MM_50MM_V1',
+      ready: true,
+      items: [],
+      areas,
+      ...calculationOverrides,
+    },
+  });
+}
+
 function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -165,25 +251,14 @@ describe('FacadeCalculator', () => {
 
   it('calculates 18 positions for 1000 m² and keeps the original rates visible', async () => {
     const user = userEvent.setup();
-    const calculated = workspace({
-      calculation: {
-        id: 'calc-1',
-        leadId: 'lead-1',
-        assignmentId: 'assign-1',
-        engineerId: 'eng-1',
-        status: 'CALCULATED',
-        revision: 1,
-        claddingAreaM2: '1000',
-        areaSource: 'ENGINEER_ENTERED',
-        notes: null,
-        configCode: 'HPL_FACADE_BASE_1220_3050',
-        configIsCalculable: true,
-        normSetCode: 'HPL_FACADE_BASE_1220_3050_V1',
-        ready: true,
-        items: items(),
-      },
+    const opened = calculatedWorkspace({ status: 'DRAFT', ready: false });
+    const calculated = calculatedWorkspace({
+      items: items(),
+      status: 'CALCULATED',
+      revision: 3,
     });
-    vi.mocked(apiClient.get).mockResolvedValue({ data: workspace() });
+    vi.mocked(apiClient.get).mockResolvedValue({ data: opened });
+    vi.mocked(apiClient.put).mockResolvedValue({ data: opened.calculation });
     vi.mocked(apiClient.post).mockResolvedValue({ data: calculated.calculation });
 
     render(<FacadeCalculator leadId="lead-1" />, { wrapper: createWrapper() });
@@ -197,7 +272,7 @@ describe('FacadeCalculator', () => {
     expect(screen.getByDisplayValue('1060')).toBeInTheDocument();
     expect(screen.getByDisplayValue('10750')).toBeInTheDocument();
     expect(screen.getByText('Цена не задана и не считается нулевой')).toBeInTheDocument();
-    expect(screen.getByRole('table').className).toContain('md:min-w-[720px]');
+    expect(screen.getByRole('table').className).toContain('md:min-w-[800px]');
     expect(screen.getByRole('table').querySelector('tbody')?.className).toContain(
       'max-md:block',
     );
@@ -205,33 +280,14 @@ describe('FacadeCalculator', () => {
 
   it('keeps a manual quantity after reopen and asks before recalc', async () => {
     const user = userEvent.setup();
-    const opened = workspace({
-      calculation: {
-        id: 'calc-1',
-        leadId: 'lead-1',
-        assignmentId: 'assign-1',
-        engineerId: 'eng-1',
-        status: 'CALCULATED',
-        revision: 2,
-        claddingAreaM2: '1000',
-        areaSource: 'ENGINEER_ENTERED',
-        notes: null,
-        configCode: 'HPL_FACADE_BASE_1220_3050',
-        configIsCalculable: true,
-        normSetCode: 'HPL_FACADE_BASE_1220_3050_V1',
-        ready: true,
-        items: items().map((item, index) =>
-          index === 0
-            ? {
-                ...item,
-                finalQty: '1100',
-                isManual: true,
-              }
-            : item,
-        ),
-      },
+    const opened = calculatedWorkspace({
+      revision: 2,
+      items: items().map((item, index) =>
+        index === 0 ? { ...item, finalQty: '1100', isManual: true } : item,
+      ),
     });
     vi.mocked(apiClient.get).mockResolvedValue({ data: opened });
+    vi.mocked(apiClient.put).mockResolvedValue({ data: opened.calculation });
     vi.mocked(apiClient.post).mockRejectedValue(
       axiosError(
         409,
@@ -273,137 +329,141 @@ describe('FacadeCalculator', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('requires explicit confirmation when qualification has mixed HPL thickness', async () => {
+  it('shows the thickness groups and saves an engineer site-visit confirmation', async () => {
     const user = userEvent.setup();
-    vi.mocked(apiClient.get).mockResolvedValue({
-      data: workspace({
-        thicknessConflict: true,
-        hplThicknessesMm: [6, 8],
-        suggestedArea: { value: '80', source: 'HPL_QUALIFICATION', ambiguous: false },
-        configs: [
-          {
-            id: 'cfg-6',
-            code: 'HPL_DRY_6MM_50MM',
-            nameRu: 'Сухой 6 мм / 50 мм',
-            nameEn: 'Dry 6 mm',
-            nameUz: 'Quruq 6 mm',
-            isCalculable: true,
-            panelWidthMm: 1220,
-            panelHeightMm: 3050,
-            panelAreaM2: '3.721',
-            hplThicknessMm: 6,
-            insulationThicknessMm: 50,
-            fastening: 'DRY',
-            legacy: false,
-            selectable: true,
-            norms: [],
-          },
-        ],
-        calculation: null,
-      }),
+    const suggestions = workspace({
+      thicknessConflict: true,
+      hplThicknessesMm: [6, 8],
+      suggestedAreas: [
+        {
+          label: 'HPL 6 mm',
+          hplThicknessMm: 6,
+          suggestedAreaM2: '50',
+          suggestedAreaSource: 'HPL_QUALIFICATION',
+          ambiguous: false,
+          configCode: 'HPL_DRY_6MM_50MM',
+        },
+        {
+          label: 'HPL 8 mm',
+          hplThicknessMm: 8,
+          suggestedAreaM2: '30',
+          suggestedAreaSource: 'HPL_QUALIFICATION',
+          ambiguous: false,
+          configCode: 'HPL_DRY_8MM_80MM',
+        },
+      ],
+      calculation: null,
     });
-    vi.mocked(apiClient.post).mockRejectedValue(
-      axiosError(
-        409,
-        'FACADE_THICKNESS_CONFIRM_REQUIRED',
-        'В заказе указано несколько толщин HPL.',
-      ),
+    const saved = calculatedWorkspace(
+      { status: 'DRAFT', revision: 2, ready: false },
+      [
+        confirmedArea('area-1', {
+          label: 'HPL 6 mm',
+          suggestedAreaM2: '50',
+          confirmedAreaM2: null,
+          confirmed: false,
+          confirmedAt: null,
+          confirmedById: null,
+          confirmedByRole: null,
+          confirmationMethod: null,
+        }),
+        confirmedArea('area-2', {
+          label: 'HPL 8 mm',
+          suggestedAreaM2: '30',
+          confirmedAreaM2: null,
+          confirmed: false,
+          confirmedAt: null,
+          confirmedById: null,
+          confirmedByRole: null,
+          confirmationMethod: null,
+        }),
+      ],
     );
+    vi.mocked(apiClient.get).mockResolvedValue({ data: suggestions });
+    vi.mocked(apiClient.put).mockResolvedValue({ data: saved.calculation });
+    vi.mocked(apiClient.post).mockResolvedValue({ data: saved.calculation });
 
     render(<FacadeCalculator leadId="lead-1" />, { wrapper: createWrapper() });
 
-    expect(
-      await screen.findByText(
-        'В заказе есть HPL разной толщины. Выберите систему явно: нормы 4 мм не применяются к 6/8 мм и наоборот.',
-      ),
-    ).toBeInTheDocument();
-
-    await user.selectOptions(
-      screen.getByLabelText('Конфигурация фасада'),
-      'HPL_DRY_6MM_50MM',
-    );
-    await user.click(screen.getByRole('button', { name: 'Рассчитать автоматически' }));
-
-    expect(
-      await screen.findByRole('button', {
-        name: 'Подтвердить выбранную систему для смешанной толщины',
-      }),
-    ).toBeInTheDocument();
-
-    vi.mocked(apiClient.post).mockResolvedValue({
-      data: {
-        id: 'calc-mixed',
-        leadId: 'lead-1',
-        assignmentId: 'assign-1',
-        engineerId: 'eng-1',
-        status: 'CALCULATED',
-        revision: 1,
-        claddingAreaM2: '80',
-        areaSource: 'HPL_QUALIFICATION',
-        notes: null,
-        configCode: 'HPL_DRY_6MM_50MM',
-        configIsCalculable: true,
-        normSetCode: 'HPL_DRY_6MM_50MM_V1',
-        ready: true,
-        items: items(),
-        quoteCreated: false,
-        dealCreated: false,
-      },
-    });
-
+    expect(await screen.findByDisplayValue('HPL 6 mm')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('HPL 8 mm')).toBeInTheDocument();
     await user.click(
-      screen.getByRole('button', {
-        name: 'Подтвердить выбранную систему для смешанной толщины',
-      }),
+      screen.getAllByRole('button', { name: 'Подтвердить после выезда' })[0],
     );
 
-    expect(apiClient.post).toHaveBeenLastCalledWith(
-      '/engineering/leads/lead-1/facade/calculate',
+    expect(apiClient.put).toHaveBeenCalledWith(
+      '/engineering/leads/lead-1/facade/areas',
       expect.objectContaining({
-        configCode: 'HPL_DRY_6MM_50MM',
-        confirmThicknessMismatch: true,
+        areas: expect.arrayContaining([
+          expect.objectContaining({ hplThicknessMm: '6', configCode: 'HPL_DRY_6MM_50MM' }),
+          expect.objectContaining({ hplThicknessMm: '8', configCode: 'HPL_DRY_8MM_80MM' }),
+        ]),
       }),
+    );
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/engineering/leads/lead-1/facade/areas/area-1/confirm',
+      expect.objectContaining({ confirmedAreaM2: '50' }),
     );
   });
 
-  it('warns that an unsupported configuration has no fake calculation', async () => {
+  it('loads the remote reviewer workspace and confirms through the remote route', async () => {
     const user = userEvent.setup();
-    vi.mocked(apiClient.get).mockResolvedValue({ data: workspace() });
-    vi.mocked(apiClient.post).mockResolvedValue({
-      data: {
-        id: 'calc-2',
-        leadId: 'lead-1',
-        assignmentId: 'assign-1',
-        engineerId: 'eng-1',
-        status: 'UNSUPPORTED',
-        revision: 1,
-        claddingAreaM2: '1000',
-        areaSource: 'ENGINEER_ENTERED',
-        notes: null,
-        configCode: 'HPL_FACADE_GLUE',
-        configIsCalculable: false,
-        normSetCode: null,
-        ready: false,
-        items: [],
-        quoteCreated: false,
-        dealCreated: false,
-      },
+    useAuthMock.mockReturnValue({
+      user: { permissions: ['facade:confirm_area_remote'] },
     });
+    const review = calculatedWorkspace(
+      { status: 'DRAFT', revision: 4, ready: false },
+      [
+        confirmedArea('area-1', {
+          confirmedAreaM2: null,
+          confirmed: false,
+          confirmedAt: null,
+          confirmedById: null,
+          confirmedByRole: null,
+          confirmationMethod: null,
+        }),
+      ],
+    );
+    review.canEdit = false;
+    vi.mocked(apiClient.get).mockResolvedValue({ data: review });
+    vi.mocked(apiClient.post).mockResolvedValue({ data: review.calculation });
 
     render(<FacadeCalculator leadId="lead-1" />, { wrapper: createWrapper() });
 
-    await screen.findByLabelText('Конфигурация фасада');
-    await user.selectOptions(
-      screen.getByLabelText('Конфигурация фасада'),
-      'HPL_FACADE_GLUE',
+    await screen.findByRole('button', { name: 'Подтвердить удалённо' });
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/engineering/leads/lead-1/facade/remote-workspace',
     );
-    await user.click(screen.getByRole('button', { name: 'Рассчитать автоматически' }));
+    await user.click(screen.getByRole('button', { name: 'Подтвердить удалённо' }));
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/engineering/leads/lead-1/facade/areas/area-1/remote-confirm',
+      expect.objectContaining({ confirmedAreaM2: '1000' }),
+    );
+  });
 
+  it('requires reconfirmation after the confirmed area is edited', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: calculatedWorkspace({ items: items() }),
+    });
+    render(<FacadeCalculator leadId="lead-1" />, { wrapper: createWrapper() });
+
+    const calculateButton = await screen.findByRole('button', {
+      name: 'Рассчитать автоматически',
+    });
+    expect(calculateButton).toBeEnabled();
+    const confirmedAreaInput = screen.getByLabelText('Подтверждённая площадь, м²');
+    await user.clear(confirmedAreaInput);
+    await user.type(confirmedAreaInput, '900');
+    expect(calculateButton).toBeDisabled();
+  });
+
+  it('does not start a calculation without saved, confirmed area data', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: workspace() });
+    render(<FacadeCalculator leadId="lead-1" />, { wrapper: createWrapper() });
     expect(
-      await screen.findByText(
-        'Неполный расчёт не считается готовым. Автоматический расход не выдаётся.',
-      ),
-    ).toBeInTheDocument();
+      await screen.findByRole('button', { name: 'Рассчитать автоматически' }),
+    ).toBeDisabled();
   });
 
   it('renders catalog material names in the active locale, not the RU snapshot', async () => {

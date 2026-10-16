@@ -3,22 +3,70 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ENGINEERING_UPDATE_TECHNICAL_PERMISSION } from '@/lib/engineering';
-import {
-  isFacadeRecalcConfirmation,
-  isFacadeThicknessConfirmation,
-} from '@/lib/engineering-errors';
+import { isFacadeRecalcConfirmation } from '@/lib/engineering-errors';
 import { useAuth } from '@/context/auth-context';
 import {
   useFacadeAddItem,
   useFacadeCalculate,
+  useFacadeConfirmArea,
+  useFacadeSaveAreas,
   useFacadeSaveDraft,
   useFacadeWorkspace,
   type FacadeAreaSource,
+  type FacadeCalculationArea,
   type FacadeCalculationItem,
   type FacadeConfig,
   type FacadeMaterial,
 } from '@/hooks/use-facade-calculation';
 import { useI18n } from '@/i18n/provider';
+
+type AreaDraft = {
+  id?: string;
+  label: string;
+  sortOrder: number;
+  hplThicknessMm: string;
+  configCode: string;
+  suggestedAreaM2: string;
+  suggestedAreaSource: FacadeAreaSource | null;
+  confirmedAreaM2: string;
+};
+
+function areaDraftsFromWorkspace(workspace: {
+  calculation: {
+    areas?: FacadeCalculationArea[];
+  } | null;
+  suggestedAreas?: Array<{
+    label: string;
+    hplThicknessMm: number | null;
+    configCode: string | null;
+    suggestedAreaM2: string | null;
+    suggestedAreaSource: FacadeAreaSource | null;
+  }>;
+}): AreaDraft[] {
+  const persisted = workspace.calculation?.areas ?? [];
+  if (persisted.length) {
+    return persisted.map((area, index) => ({
+      ...(area.id ? { id: area.id } : {}),
+      label: area.label,
+      sortOrder: area.sortOrder ?? index,
+      hplThicknessMm: area.hplThicknessMm ?? '',
+      configCode: area.configCode,
+      suggestedAreaM2: area.suggestedAreaM2 ?? '',
+      suggestedAreaSource: area.suggestedAreaSource,
+      confirmedAreaM2: area.confirmedAreaM2 ?? area.suggestedAreaM2 ?? '',
+    }));
+  }
+
+  return (workspace.suggestedAreas ?? []).map((area, index) => ({
+    label: area.label,
+    sortOrder: index,
+    hplThicknessMm: area.hplThicknessMm?.toString() ?? '',
+    configCode: area.configCode ?? '',
+    suggestedAreaM2: area.suggestedAreaM2 ?? '',
+    suggestedAreaSource: area.suggestedAreaSource,
+    confirmedAreaM2: area.suggestedAreaM2 ?? '',
+  }));
+}
 
 function localizedName(
   item: { nameRu: string; nameEn: string; nameUz: string },
@@ -73,8 +121,17 @@ export function FacadeCalculator({
 }) {
   const { t, locale } = useI18n();
   const { user } = useAuth();
-  const workspaceQuery = useFacadeWorkspace(leadId);
+  const remoteConfirmation = (user?.permissions ?? []).includes(
+    'facade:confirm_area_remote',
+  );
+  const workspaceQuery = useFacadeWorkspace(
+    leadId,
+    true,
+    remoteConfirmation,
+  );
   const calculate = useFacadeCalculate(leadId);
+  const saveAreas = useFacadeSaveAreas(leadId);
+  const confirmArea = useFacadeConfirmArea(leadId, remoteConfirmation);
   const saveDraft = useFacadeSaveDraft(leadId);
   const addItem = useFacadeAddItem(leadId);
 
@@ -82,15 +139,16 @@ export function FacadeCalculator({
     ENGINEERING_UPDATE_TECHNICAL_PERMISSION,
   );
 
+  const [areaDrafts, setAreaDrafts] = useState<AreaDraft[]>([]);
+  const [notes, setNotes] = useState('');
+  const [draftItems, setDraftItems] = useState<FacadeCalculationItem[]>([]);
   const [area, setArea] = useState('');
   const [areaSource, setAreaSource] = useState<FacadeAreaSource>('ENGINEER_ENTERED');
   const [configCode, setConfigCode] = useState('');
-  const [notes, setNotes] = useState('');
-  const [draftItems, setDraftItems] = useState<FacadeCalculationItem[]>([]);
   const [extraMaterialId, setExtraMaterialId] = useState('');
   const [extraQty, setExtraQty] = useState('');
   const [confirmRecalc, setConfirmRecalc] = useState(false);
-  const [confirmThickness, setConfirmThickness] = useState(false);
+  const [confirmThickness] = useState(false);
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
 
   const workspace = workspaceQuery.data;
@@ -103,21 +161,26 @@ export function FacadeCalculator({
       : null;
 
   if (workspace && syncKey && syncKey !== hydratedKey) {
-    const suggested = workspace.suggestedArea.value ?? '';
-    setArea(calculation?.claddingAreaM2 ?? suggested);
+    const drafts = areaDraftsFromWorkspace(workspace);
+    if (drafts.length === 0 && calculation?.claddingAreaM2) {
+      drafts.push({
+        label: 'Area A',
+        sortOrder: 0,
+        hplThicknessMm: workspace.hplThicknessesMm?.length === 1
+          ? String(workspace.hplThicknessesMm[0])
+          : '',
+        configCode: '',
+        suggestedAreaM2: calculation.claddingAreaM2,
+        suggestedAreaSource: calculation.areaSource,
+        confirmedAreaM2: calculation.claddingAreaM2,
+      });
+    }
+    setAreaDrafts(drafts);
+    setArea(drafts[0]?.suggestedAreaM2 ?? '');
     setAreaSource(
-      calculation?.areaSource ??
-        workspace.suggestedArea.source ??
-        'ENGINEER_ENTERED',
+      drafts[0]?.suggestedAreaSource ?? 'ENGINEER_ENTERED',
     );
-    setConfigCode(
-      calculation?.configCode ??
-        (workspace.thicknessConflict
-          ? ''
-          : workspace.configs.find(
-              (item) => item.selectable !== false && item.isCalculable,
-            )?.code ?? ''),
-    );
+    setConfigCode(drafts[0]?.configCode ?? '');
     setNotes(calculation?.notes ?? '');
     setDraftItems(calculation?.items ?? []);
     setHydratedKey(syncKey);
@@ -125,12 +188,33 @@ export function FacadeCalculator({
 
   const dirty = useMemo(() => {
     if (!calculation) {
-      return area.trim().length > 0 || notes.trim().length > 0;
+      return areaDrafts.length > 0 || notes.trim().length > 0;
     }
     if ((calculation.notes ?? '') !== notes) {
       return true;
     }
     if (draftItems.length !== calculation.items.length) {
+      return true;
+    }
+    const savedAreas = calculation.areas ?? [];
+    if (areaDrafts.length !== savedAreas.length) {
+      return true;
+    }
+    if (
+      areaDrafts.some((area, index) => {
+        const saved = savedAreas[index];
+        return (
+          !saved ||
+          (saved.id ?? undefined) !== area.id ||
+          saved.label !== area.label ||
+          saved.hplThicknessMm !== area.hplThicknessMm ||
+          saved.configCode !== area.configCode ||
+          (saved.suggestedAreaM2 ?? '') !== area.suggestedAreaM2 ||
+          saved.suggestedAreaSource !== area.suggestedAreaSource ||
+          (saved.confirmedAreaM2 ?? '') !== area.confirmedAreaM2
+        );
+      })
+    ) {
       return true;
     }
     return draftItems.some((item, index) => {
@@ -140,7 +224,7 @@ export function FacadeCalculator({
         (item.note ?? '') !== (original.note ?? '')
       );
     });
-  }, [area, notes, draftItems, calculation]);
+  }, [areaDrafts, notes, draftItems, calculation]);
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -179,30 +263,93 @@ export function FacadeCalculator({
     );
   }
 
-  const selectedConfig = workspace.configs.find((item) => item.code === configCode);
+  const selectedConfig = workspace.configs.find(
+    (item) => item.code === areaDrafts[0]?.configCode,
+  );
   const hasManual = draftItems.some((item) => item.isManual);
+  const isRemoteReviewer = remoteConfirmation && !canEdit;
+  const areaConfirmationDraftChanged = areaDrafts.some((draft, index) => {
+    const savedArea = calculation?.areas?.[index];
+    return Boolean(
+      savedArea?.confirmed &&
+        savedArea.confirmedAreaM2 !== draft.confirmedAreaM2,
+    );
+  });
 
-  async function runCalculate(confirm = false, confirmMixed = false) {
+  async function runCalculate(confirm = false) {
     try {
+      const saved = await saveAreas.mutateAsync({
+        expectedRevision: calculation?.revision ?? 1,
+        areas: areaDrafts.map((area) => ({
+          ...(area.id ? { id: area.id } : {}),
+          label: area.label,
+          sortOrder: area.sortOrder,
+          hplThicknessMm: area.hplThicknessMm,
+          configCode: area.configCode,
+          suggestedAreaM2: area.suggestedAreaM2 || null,
+          ...(area.suggestedAreaSource
+            ? { suggestedAreaSource: area.suggestedAreaSource }
+            : {}),
+        })),
+      });
+      const savedAreas = saved.areas ?? [];
+      if (
+        savedAreas.length === 0 ||
+        savedAreas.some((item) => !item.confirmed || !item.confirmedAreaM2)
+      ) {
+        return;
+      }
+      const firstArea = savedAreas[0];
       await calculate.mutateAsync({
-        configCode,
-        claddingAreaM2: area.trim(),
-        areaSource,
+        configCode: firstArea.configCode,
+        claddingAreaM2: firstArea.confirmedAreaM2!,
         confirmRecalculate: confirm || undefined,
-        confirmThicknessMismatch:
-          confirmMixed || confirmThickness || undefined,
-        expectedRevision: calculation?.revision,
+        expectedRevision: saved.revision,
       });
       setConfirmRecalc(false);
-      setConfirmThickness(false);
     } catch (error) {
       if (isFacadeRecalcConfirmation(error)) {
         setConfirmRecalc(true);
         return;
       }
-      if (isFacadeThicknessConfirmation(error)) {
-        setConfirmThickness(true);
+    }
+  }
+
+  async function submitAreaConfirm(draft: AreaDraft, remote = false) {
+    try {
+      const current = remote
+        ? calculation
+        : await saveAreas.mutateAsync({
+            expectedRevision: calculation?.revision ?? 1,
+            areas: areaDrafts.map((area) => ({
+              ...(area.id ? { id: area.id } : {}),
+              label: area.label,
+              sortOrder: area.sortOrder,
+              hplThicknessMm: area.hplThicknessMm,
+              configCode: area.configCode,
+              suggestedAreaM2: area.suggestedAreaM2 || null,
+              ...(area.suggestedAreaSource
+                ? { suggestedAreaSource: area.suggestedAreaSource }
+                : {}),
+            })),
+          });
+      if (!current) {
+        return;
       }
+      const saved = current;
+      const savedArea = (saved.areas ?? []).find(
+        (candidate) => candidate.label === draft.label,
+      );
+      if (!savedArea?.id) {
+        return;
+      }
+      await confirmArea.mutateAsync({
+        areaId: savedArea.id,
+        confirmedAreaM2: draft.confirmedAreaM2,
+        expectedRevision: current.revision,
+      });
+    } catch {
+      // Mutations report their own translated error messages.
     }
   }
 
@@ -222,6 +369,246 @@ export function FacadeCalculator({
         </p>
       </div>
 
+      <div className="mt-4 space-y-3" aria-label={t('engineering.facadeAreas')}>
+        {areaDrafts.map((draft, index) => {
+          const thicknessOptions = [
+            ...new Set(
+              workspace.configs
+                .filter((config) => config.isCalculable && !config.legacy)
+                .map((config) => config.hplThicknessMm)
+                .filter((value): value is number => value != null),
+            ),
+          ].sort((left, right) => left - right);
+          const matchingConfigs = workspace.configs.filter(
+            (config) =>
+              config.isCalculable &&
+              !config.legacy &&
+              config.hplThicknessMm === Number(draft.hplThicknessMm),
+          );
+          const savedArea = (calculation?.areas ?? []).find(
+            (item) => item.id === draft.id,
+          );
+          return (
+            <article
+              key={draft.id ?? `${draft.label}-${index}`}
+              className="rounded border border-slate-200 p-3 dark:border-slate-700"
+            >
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {draft.label || `${t('engineering.facadeArea')} ${index + 1}`}
+              </h4>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="block text-sm text-slate-700 dark:text-slate-200">
+                  {t('engineering.facadeAreaName')}
+                  <input
+                    className="mt-1 w-full rounded border border-slate-300 p-2 text-sm dark:border-slate-600 dark:bg-slate-950"
+                    value={draft.label}
+                    disabled={!canEdit}
+                    onChange={(event) =>
+                      setAreaDrafts((current) =>
+                        current.map((row, position) =>
+                          position === index
+                            ? { ...row, label: event.target.value }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="block text-sm text-slate-700 dark:text-slate-200">
+                  {t('engineering.facadeThicknessLabel')}
+                  <select
+                    className="mt-1 w-full rounded border border-slate-300 p-2 text-sm dark:border-slate-600 dark:bg-slate-950"
+                    value={draft.hplThicknessMm}
+                    disabled={!canEdit}
+                    onChange={(event) => {
+                      const nextThickness = event.target.value;
+                      const matching = workspace.configs.find(
+                        (config) =>
+                          config.isCalculable &&
+                          config.hplThicknessMm === Number(nextThickness),
+                      );
+                      setAreaDrafts((current) =>
+                        current.map((row, position) =>
+                          position === index
+                            ? {
+                                ...row,
+                                hplThicknessMm: nextThickness,
+                                configCode: matching?.code ?? '',
+                              }
+                            : row,
+                        ),
+                      );
+                    }}
+                  >
+                    <option value="">{t('engineering.facadeClarifyArea')}</option>
+                    {thicknessOptions.map((thickness) => (
+                      <option key={thickness} value={thickness}>
+                        {thickness} mm
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-700 dark:text-slate-200">
+                  {t('engineering.facadeConfig')}
+                  <select
+                    className="mt-1 w-full rounded border border-slate-300 p-2 text-sm dark:border-slate-600 dark:bg-slate-950"
+                    value={draft.configCode}
+                    disabled={!canEdit || matchingConfigs.length <= 1}
+                    onChange={(event) =>
+                      setAreaDrafts((current) =>
+                        current.map((row, position) =>
+                          position === index
+                            ? { ...row, configCode: event.target.value }
+                            : row,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="">{t('engineering.facadeConfig')}</option>
+                    {matchingConfigs.map((config) => (
+                      <option key={config.id} value={config.code}>
+                        {localizedName(config, locale)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-700 dark:text-slate-200">
+                  {t('engineering.facadeSuggestedArea')}
+                  <input
+                    className="mt-1 w-full rounded border border-slate-300 p-2 text-sm dark:border-slate-600 dark:bg-slate-950"
+                    inputMode="decimal"
+                    value={draft.suggestedAreaM2}
+                    disabled={!canEdit}
+                    onChange={(event) =>
+                      setAreaDrafts((current) =>
+                        current.map((row, position) =>
+                          position === index
+                            ? {
+                                ...row,
+                                suggestedAreaM2: event.target.value,
+                                suggestedAreaSource: 'ENGINEER_ENTERED',
+                              }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                {t('engineering.facadeAreaSource')}:{' '}
+                {draft.suggestedAreaSource === 'HPL_QUALIFICATION'
+                  ? t('engineering.facadeAreaSourceQualification')
+                  : t('engineering.facadeAreaSourceEngineer')}
+                {draft.hplThicknessMm ? ` · ${draft.hplThicknessMm} mm` : ''}
+                {draft.configCode
+                  ? ` · ${workspace.configs.find((config) => config.code === draft.configCode)?.norms?.length ?? 0} ${t('engineering.facadeNorms')}`
+                  : ''}
+              </p>
+
+              {(canEdit || isRemoteReviewer) ? (
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <label className="block flex-1 text-sm text-slate-700 dark:text-slate-200">
+                    {t('engineering.facadeConfirmedArea')}
+                    <input
+                      className="mt-1 w-full rounded border border-slate-300 p-2 text-sm dark:border-slate-600 dark:bg-slate-950"
+                      inputMode="decimal"
+                      value={draft.confirmedAreaM2}
+                      onChange={(event) =>
+                        setAreaDrafts((current) =>
+                          current.map((row, position) =>
+                            position === index
+                              ? { ...row, confirmedAreaM2: event.target.value }
+                              : row,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    disabled={
+                      !draft.confirmedAreaM2.trim() ||
+                      !draft.hplThicknessMm ||
+                      !draft.configCode ||
+                      (isRemoteReviewer && !draft.id) ||
+                      saveAreas.isPending ||
+                      confirmArea.isPending
+                    }
+                    onClick={() =>
+                      void submitAreaConfirm(draft, remoteConfirmation)
+                    }
+                  >
+                    {remoteConfirmation
+                      ? t('engineering.facadeConfirmRemote')
+                      : t('engineering.facadeConfirmSiteVisit')}
+                  </Button>
+                </div>
+              ) : null}
+              {savedArea?.confirmed ? (
+                <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300" role="status">
+                  {t('engineering.facadeAreaConfirmed')} · {savedArea.confirmationMethod}
+                  {savedArea.confirmedByRole ? ` · ${savedArea.confirmedByRole}` : ''}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                  {t('engineering.facadeAreaNeedsConfirmation')}
+                </p>
+              )}
+            </article>
+          );
+        })}
+      </div>
+
+      {canEdit ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={areaDrafts.length === 0 || saveAreas.isPending}
+            onClick={() =>
+              void saveAreas.mutateAsync({
+                expectedRevision: calculation?.revision ?? 1,
+                areas: areaDrafts.map((row) => ({
+                  ...(row.id ? { id: row.id } : {}),
+                  label: row.label,
+                  sortOrder: row.sortOrder,
+                  hplThicknessMm: row.hplThicknessMm,
+                  configCode: row.configCode,
+                  suggestedAreaM2: row.suggestedAreaM2 || null,
+                  ...(row.suggestedAreaSource
+                    ? { suggestedAreaSource: row.suggestedAreaSource }
+                    : {}),
+                })),
+              })
+            }
+          >
+            {t('engineering.facadeSaveAreas')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setAreaDrafts((current) => [
+                ...current,
+                {
+                  label: `Area ${current.length + 1}`,
+                  sortOrder: current.length,
+                  hplThicknessMm: '',
+                  configCode: '',
+                  suggestedAreaM2: '',
+                  suggestedAreaSource: null,
+                  confirmedAreaM2: '',
+                },
+              ])
+            }
+          >
+            {t('engineering.facadeAddArea')}
+          </Button>
+        </div>
+      ) : null}
+
+      <div className="hidden">
       {workspace.suggestedArea.ambiguous ? (
         <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
           {t('engineering.facadeAreaAmbiguous')}
@@ -280,6 +667,7 @@ export function FacadeCalculator({
           ? t('engineering.facadeAreaSourceQualification')
           : t('engineering.facadeAreaSourceEngineer')}
       </p>
+      </div>
 
       {selectedConfig?.legacy ? (
         <p className="mt-3 rounded border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
@@ -322,7 +710,7 @@ export function FacadeCalculator({
             size="sm"
             className="mt-2"
             onClick={() => {
-              void runCalculate(false, true);
+              void runCalculate(false);
             }}
           >
             {t('engineering.facadeThicknessConfirm')}
@@ -365,7 +753,13 @@ export function FacadeCalculator({
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <Button
             type="button"
-            disabled={calculate.isPending || !area.trim() || !configCode}
+            disabled={
+              calculate.isPending ||
+              saveAreas.isPending ||
+              !calculation?.areas?.length ||
+              calculation.areas.some((item) => !item.confirmed) ||
+              areaConfirmationDraftChanged
+            }
             onClick={() => {
               void runCalculate(false);
             }}
@@ -403,9 +797,10 @@ export function FacadeCalculator({
       ) : null}
 
       <div className="mt-4 max-w-full overflow-x-auto">
-        <table className="w-full min-w-0 text-left text-sm md:min-w-[720px]">
+        <table className="w-full min-w-0 text-left text-sm md:min-w-[800px]">
           <thead>
             <tr className="border-b border-slate-200 text-xs text-slate-500 max-md:hidden dark:border-slate-700">
+              <th className="px-3 py-2 font-medium">{t('engineering.facadeAreaName')}</th>
               <th className="px-3 py-2 font-medium">{t('engineering.facadeMaterial')}</th>
               <th className="px-3 py-2 font-medium">{t('engineering.facadeUnit')}</th>
               <th className="px-3 py-2 font-medium">{t('engineering.facadeNorm')}</th>
@@ -419,11 +814,17 @@ export function FacadeCalculator({
           <tbody className="max-md:block max-md:space-y-3">
             {draftItems.map((item, index) => {
               const name = displayMaterialName(item, workspace.catalog, locale);
+              const itemArea = (calculation?.areas ?? []).find(
+                (area) => area.id === (item.areaId ?? null),
+              );
               return (
               <tr
                 key={item.id}
                 className="border-b border-slate-100 max-md:block max-md:rounded max-md:border max-md:border-slate-200 max-md:p-3 dark:border-slate-800 dark:max-md:border-slate-700"
               >
+                <td className="px-3 py-2 max-md:flex max-md:items-center max-md:justify-between max-md:px-0">
+                  {itemArea?.label ?? t('common.dash')}
+                </td>
                 <td className="px-3 py-2 max-md:block max-md:px-0">
                   <p>{name}</p>
                   {item.isManual ? (

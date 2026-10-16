@@ -7,6 +7,7 @@ import { showError, showSuccess } from '../lib/toast';
 import { useI18n } from '@/i18n/provider';
 
 export type FacadeAreaSource = 'ENGINEER_ENTERED' | 'HPL_QUALIFICATION';
+export type FacadeAreaConfirmationMethod = 'SITE_VISIT' | 'REMOTE';
 export type FacadeCalculationStatus = 'DRAFT' | 'CALCULATED' | 'UNSUPPORTED';
 
 export type FacadeMaterial = {
@@ -20,6 +21,33 @@ export type FacadeMaterial = {
   spec: Record<string, unknown> | null;
   hasPrice: boolean;
   price: string | null;
+};
+
+export type FacadeCalculationArea = {
+  id: string | null;
+  label: string;
+  sortOrder: number;
+  hplThicknessMm: string | null;
+  configCode: string;
+  normSetCode: string | null;
+  suggestedAreaM2: string | null;
+  suggestedAreaSource: FacadeAreaSource | null;
+  confirmedAreaM2: string | null;
+  confirmedById: string | null;
+  confirmedByRole: string | null;
+  confirmationMethod: FacadeAreaConfirmationMethod | null;
+  confirmedAt: string | null;
+  confirmed: boolean;
+  items: FacadeCalculationItem[];
+};
+
+export type FacadeAreaSuggestion = {
+  label: string;
+  hplThicknessMm: number | null;
+  suggestedAreaM2: string | null;
+  suggestedAreaSource: FacadeAreaSource | null;
+  ambiguous: boolean;
+  configCode: string | null;
 };
 
 export type FacadeConfig = {
@@ -51,6 +79,7 @@ export type FacadeConfig = {
 
 export type FacadeCalculationItem = {
   id: string;
+  areaId?: string | null;
   materialId: string | null;
   materialCode: string;
   materialName: string;
@@ -81,6 +110,7 @@ export type FacadeCalculation = {
   normSetCode: string | null;
   ready: boolean;
   items: FacadeCalculationItem[];
+  areas?: FacadeCalculationArea[];
   quoteCreated?: boolean;
   dealCreated?: boolean;
 };
@@ -96,6 +126,8 @@ export type FacadeWorkspace = {
     ambiguous: boolean;
     candidates?: string[];
   };
+  suggestedAreas?: FacadeAreaSuggestion[];
+  canConfirmRemote?: boolean;
   hplThicknessesMm?: number[];
   thicknessConflict?: boolean;
   configs: FacadeConfig[];
@@ -105,16 +137,87 @@ export type FacadeWorkspace = {
   dealCreated: boolean;
 };
 
-export function useFacadeWorkspace(leadId: string, enabled = true) {
+export function useFacadeWorkspace(
+  leadId: string,
+  enabled = true,
+  remoteConfirmation = false,
+) {
   return useQuery({
     queryKey: ['engineering', 'facade', leadId],
     queryFn: async () => {
       const response = await apiClient.get<FacadeWorkspace>(
-        `/engineering/leads/${leadId}/facade`,
+        `/engineering/leads/${leadId}/facade${remoteConfirmation ? '/remote-workspace' : ''}`,
       );
       return response.data;
     },
     enabled: enabled && Boolean(leadId),
+  });
+}
+
+export function useFacadeSaveAreas(leadId: string) {
+  const queryClient = useQueryClient();
+  const { t } = useI18n();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      expectedRevision: number;
+      areas: Array<{
+        id?: string;
+        label: string;
+        hplThicknessMm: string;
+        configCode: string;
+        suggestedAreaM2?: string | null;
+        suggestedAreaSource?: FacadeAreaSource;
+        sortOrder?: number;
+      }>;
+    }) => {
+      const response = await apiClient.put<FacadeCalculation>(
+        `/engineering/leads/${leadId}/facade/areas`,
+        payload,
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData<FacadeWorkspace>(
+        ['engineering', 'facade', leadId],
+        (current) => (current ? { ...current, calculation: data } : current),
+      );
+      showSuccess(t('engineering.facadeSaved'));
+    },
+    onError: (error) => showError(getErrorMessage(error)),
+  });
+}
+
+export function useFacadeConfirmArea(
+  leadId: string,
+  remote = false,
+) {
+  const queryClient = useQueryClient();
+  const { t } = useI18n();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      areaId: string;
+      confirmedAreaM2: string;
+      expectedRevision: number;
+    }) => {
+      const response = await apiClient.post<FacadeCalculation>(
+        `/engineering/leads/${leadId}/facade/areas/${payload.areaId}/${remote ? 'remote-confirm' : 'confirm'}`,
+        {
+          confirmedAreaM2: payload.confirmedAreaM2,
+          expectedRevision: payload.expectedRevision,
+        },
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData<FacadeWorkspace>(
+        ['engineering', 'facade', leadId],
+        (current) => (current ? { ...current, calculation: data } : current),
+      );
+      showSuccess(t('engineering.facadeAreaConfirmed'));
+    },
+    onError: (error) => showError(getErrorMessage(error)),
   });
 }
 
