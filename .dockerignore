@@ -1,2 +1,11 @@
-# Standalone Playwright package — not part of production Next.js image
+node_modules
+.next
+.git
+.env*
+!.env.example
 browser-qa
+coverage
+test-results
+playwright-report
+.auth
+*.md

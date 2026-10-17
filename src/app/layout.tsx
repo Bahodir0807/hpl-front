@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { AppProviders } from '../providers/app-providers';
 import {
   LOCALE_COOKIE,
@@ -26,6 +26,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   const locale = parseLocale(cookieStore.get(LOCALE_COOKIE)?.value);
   const theme = parseTheme(cookieStore.get(THEME_COOKIE)?.value);
 
@@ -36,7 +37,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
       </head>
       <body>
         <AppProviders initialLocale={locale} initialTheme={theme}>

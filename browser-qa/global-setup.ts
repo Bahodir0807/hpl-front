@@ -1,4 +1,4 @@
-import { chromium, type Browser, type FullConfig } from '@playwright/test';
+import { chromium, type Browser } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { apiURL, authDir, baseURL, LOGIN_SPACING_MS } from './helpers/env';
@@ -24,7 +24,21 @@ async function storageStateValid(
   return me.ok();
 }
 
-async function globalSetup(_config: FullConfig): Promise<void> {
+function assertLocalTarget(name: string, value: string): void {
+  const url = new URL(value);
+  if (
+    url.protocol !== 'http:' ||
+    !['localhost', '127.0.0.1', '::1'].includes(url.hostname)
+  ) {
+    throw new Error(
+      `Browser QA blocked: ${name} must use a local HTTP target (got ${url.origin}).`,
+    );
+  }
+}
+
+async function globalSetup(): Promise<void> {
+  assertLocalTarget('BROWSER_QA_BASE_URL', baseURL);
+  assertLocalTarget('BROWSER_QA_API_URL', apiURL);
   fs.mkdirSync(authDir, { recursive: true });
 
   const health = await fetch(`${apiURL}/health`);

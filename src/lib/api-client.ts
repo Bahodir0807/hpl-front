@@ -31,7 +31,7 @@ const isOnLoginPage = (): boolean =>
 
 const redirectToLogin = (): void => {
   if (!isOnLoginPage()) {
-    window.location.assign('/login');
+    window.location.assign(new URL('/login', window.location.origin).href);
   }
 };
 
